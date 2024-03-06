@@ -1,0 +1,44 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+class CreateProsettaQueueTable extends Migration {
+    /**
+     * Run the migrations.
+     *
+     * @return void
+     */
+    public function up(): void {
+        Schema::create(config('prosetta.tableNames.queue'), function (Blueprint $table) {
+            $table->id();
+            $table->string('key');
+            $table->string('path');
+            $table->string('lang');
+            $table->string('method', 25);
+            $table->string('model');
+            $table->text('model_description')->nullable();
+            $table->text('context')->nullable();
+            $table->string('base_lang')->nullable();
+            $table->text('original_value')->nullable();
+            $table->text('base_original_value')->nullable();
+            $table->text('base_value')->nullable();
+            $table->json('attributes')->nullable();
+            $table->unsignedBigInteger('creator_id')->nullable();
+            $table->foreign('creator_id')
+                ->references('id')
+                ->on('users')
+                ->onDelete('cascade');
+            $table->tinyInteger('rank')->default(1);
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void {
+        Schema::dropIfExists('prosetta_queue');
+    }
+}

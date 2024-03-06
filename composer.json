@@ -1,0 +1,48 @@
+{
+  "name": "andrewkhartley/prosetta",
+  "description": "Prosetta key management is a Laravel package for managing key-based translations.",
+  "type": "project",
+  "license": "MIT",
+
+  "homepage": "https://github.com/andrewkhartley/prosetta",
+  "authors": [
+    {
+      "name": "Andrew K. Hartley",
+      "homepage": "https://andrewkhartley.com",
+      "email": "andrew@andrewkhartley.com",
+      "role": "Creator"
+    }
+  ],
+
+  "require": {
+    "php": "^8.1.0",
+    "ezyang/htmlpurifier": "^4.17"
+  },
+  "require-dev": {
+    "orchestra/testbench": "^8.21.1",
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "Prosetta\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Prosetta\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Prosetta\\Providers\\ProsettaServiceProvider"
+      ],
+      "branch-alias": {
+        "dev-master": "1.0-dev"
+      }
+    }
+  },
+  "scripts": {
+    "test": "vendor/bin/phpunit"
+  }
+}
