@@ -1,13 +1,13 @@
 <?php
 
-namespace Prosetta\Services;
+namespace LonelyLights\Prosetta\Services;
 
 use Exception;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use Prosetta\Models\Queue;
+use LonelyLights\Prosetta\Queue;
 use RuntimeException;
 
 class LangKeyService {

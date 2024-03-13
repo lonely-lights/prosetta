@@ -1,15 +1,21 @@
 <?php
 
-namespace Prosetta\Models\Traits;
+namespace LonelyLights\Prosetta\Traits;
 
 use Closure;
 use Exception;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use Prosetta\Services\LangKeyService;
+use LonelyLights\Prosetta\Services\LangKeyService;
 
 # Runs During Form Updates
+
+/**
+ * @method static updated(Closure $param)
+ * @method static deleting(Closure $param)
+ * @method static created(Closure $param)
+ */
 trait ProsettaEntries {
     protected static string|array $languageKeys;
     protected static Closure|string $languagePath;

@@ -1,10 +1,11 @@
 <?php
 
-namespace Prosetta\Models;
+namespace LonelyLights\Prosetta;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LonelyLights\Prosetta\Models\User;
 
 /**
  * Queue Model

@@ -1,10 +1,10 @@
 <?php
 
-namespace Prosetta\Providers;
+namespace LonelyLights\Prosetta\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Prosetta\Models\Locale;
-use Prosetta\Services\LangKeyService;
+use LonelyLights\Prosetta\Locale;
+use LonelyLights\Prosetta\Services\LangKeyService;
 
 class ProsettaServiceProvider extends ServiceProvider {
     /**

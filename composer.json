@@ -1,5 +1,5 @@
 {
-  "name": "andrewkhartley/prosetta",
+  "name": "lonely-lights/prosetta",
   "description": "Prosetta key management is a Laravel package for managing key-based translations.",
   "type": "project",
   "license": "MIT",
@@ -24,21 +24,21 @@
   },
   "autoload": {
     "psr-4": {
-      "Prosetta\\": "src/"
+      "LonelyLights\\Prosetta\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Prosetta\\Tests\\": "tests/"
+      "LonelyLights\\Prosetta\\Tests\\": "tests/"
     }
   },
   "extra": {
     "laravel": {
       "providers": [
-        "Prosetta\\Providers\\ProsettaServiceProvider"
+        "LonelyLights\\Prosetta\\Providers\\ProsettaServiceProvider"
       ],
       "branch-alias": {
-        "dev-master": "1.0-dev"
+        "dev-main": "1.0-dev"
       }
     }
   },

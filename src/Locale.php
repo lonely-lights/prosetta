@@ -1,6 +1,6 @@
 <?php
 
-namespace Prosetta\Models;
+namespace LonelyLights\Prosetta;
 
 use Exception;
 use Illuminate\Database\Eloquent\Model;
@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use LonelyLights\Prosetta\Models\User;
+use function LonelyLights\Prosetta\Models\DebugLog;
 
 /**
  * @property string $locale_initials
