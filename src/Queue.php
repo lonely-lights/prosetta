@@ -4,8 +4,6 @@ namespace LonelyLights\Prosetta;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use LonelyLights\Prosetta\Models\User;
 
 /**
  * Queue Model
@@ -23,7 +21,6 @@ use LonelyLights\Prosetta\Models\User;
  * @property array|null $attributes
  * @property int $creator_id
  * @property int|null $rank
- * @property-read User $creator
  *
  * @method static Builder|Queue where(string $column, mixed $operator = null, mixed $value = null, string $boolean = 'and')
  * @method static Builder|Queue create(array $attributes = [])
@@ -67,13 +64,4 @@ class Queue extends Model {
         'creator_id',
         'rank'
     ];
-
-    ###########################################################
-    # Relationships
-    ###########################################################
-
-    # Creator
-    public function creator(): BelongsTo {
-        return $this->belongsTo(User::class, 'creator_id');
-    }
 }

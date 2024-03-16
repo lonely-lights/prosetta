@@ -1,9 +1,9 @@
 <?php
 
-namespace LonelyLights\Prosetta\Providers;
+namespace LonelyLights\Prosetta;
 
 use Illuminate\Support\ServiceProvider;
-use LonelyLights\Prosetta\Locale;
+use LonelyLights\Prosetta\Locale as ProsettaLocale;
 use LonelyLights\Prosetta\Services\LangKeyService;
 
 class ProsettaServiceProvider extends ServiceProvider {
@@ -13,11 +13,11 @@ class ProsettaServiceProvider extends ServiceProvider {
     public function register(): void {
 
         # Installation Configuration
-        $this->mergeConfigFrom(__DIR__.'/../../config/prosetta.php', 'prosetta.php');
+        $this->mergeConfigFrom(__DIR__.'/../config/prosetta.php', 'prosetta.php');
 
         # Set Active Locales
         $this->app->singleton('activeLocales', function() {
-            return Locale::getActiveLocales();
+            return ProsettaLocale::getActiveLocales();
         });
 
         # LangKey Service
@@ -34,13 +34,13 @@ class ProsettaServiceProvider extends ServiceProvider {
 
             # Config
             $this->publishes([
-                __DIR__.'/../../config/prosetta.php' => config_path('prosetta.php'),
+                __DIR__.'/../config/prosetta.php' => config_path('prosetta.php'),
             ], 'config');
 
             # Migrations
             $this->publishes([
-                __DIR__ . '/../../database/migrations/create_locales_table.php.stub' => database_path('migrations/' . date('Y_m_d_His', time()) . '_create_locales_table.php'),
-                __DIR__ . '/../../database/migrations/create_prosetta_queue_table.php.stub' => database_path('migrations/' . date('Y_m_d_His', time()) . '_create_prosetta_queue_table.php')
+                __DIR__ . '/../database/migrations/create_locales_table.php.stub' => database_path('migrations/' . date('Y_m_d_His', time()) . '_create_locales_table.php'),
+                __DIR__ . '/../database/migrations/create_prosetta_queue_table.php.stub' => database_path('migrations/' . date('Y_m_d_His', time()) . '_create_prosetta_queue_table.php')
             ], 'migrations');
         }
     }

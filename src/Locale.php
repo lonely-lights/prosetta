@@ -4,12 +4,9 @@ namespace LonelyLights\Prosetta;
 
 use Exception;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
-use LonelyLights\Prosetta\Models\User;
-use function LonelyLights\Prosetta\Models\DebugLog;
 
 /**
  * @property string $locale_initials
@@ -31,16 +28,11 @@ class Locale extends Model {
     public static function getActiveLocales(): array {
         return Cache::remember('activeLocales', 60, function() {
             try {
-                $locales = self::where('active', true)
+                return self::where('active', true)
                     ->select(['locale_initials', 'english_name', 'native_name'])
                     ->get()
                     ->keyBy('locale_initials')
                     ->toArray();
-
-                # Debug
-                DebugLog('info', '[MD|QY - Locale] Successfully fetched and cached active locales.', ['locales' => $locales], 'init');
-
-                return $locales;
             } catch (Exception $e) {
                 # Debug
                 Log::channel('init')->error('[MD|QY - Locale] Failed to fetch active locales. Defaulting to English.', ['error' => $e->getMessage()]);
@@ -182,15 +174,5 @@ class Locale extends Model {
             'value' => $value,
             'file_path' => $filePath
         ]);
-    }
-
-
-    ###########################################################
-    # Relationships
-    ###########################################################
-
-    # User
-    public function users(): HasMany {
-        return $this->hasMany(User::class, 'locale', 'locale_initials');
     }
 }
