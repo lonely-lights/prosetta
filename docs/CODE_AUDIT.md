@@ -179,10 +179,10 @@ Queue Model (for non-base locales)
 
 ## Recommended Refactor Order
 
-1. **P0.1** - Remove ChatGPT links, fix typos, clean up TODOs
-2. **P0.2** - Set up Pest PHP testing with Orchestra Testbench
-3. **P0.3** - Split LangKeyService into focused services
-4. **P0.4** - Add basic tests for existing functionality
+1. **P0.1** - Remove ChatGPT links, fix typos, clean up TODOs ✅ **COMPLETED**
+2. **P0.2** - Set up Pest PHP testing with Orchestra Testbench ✅ **COMPLETED**
+3. **P0.3** - Split LangKeyService into focused services ✅ **COMPLETED**
+4. **P0.4** - Add basic tests for existing functionality ✅ **COMPLETED** (47 tests passing)
 5. **P1.1** - Create new database models
 6. **P1.2-P1.4** - Build scanner, synchronizer, exporter services
 7. **P1.5** - Create Prosetta facade
@@ -203,7 +203,7 @@ Queue Model (for non-base locales)
 ### Replace Entirely
 - `src/Locale.php` → `src/Models/Locale.php` (new structure)
 - `src/Queue.php` → Remove (replaced by new models)
-- `src/Services/LangKeyService.php` → Split into multiple services
+- `src/Services/LangKeyService.php` → Split into multiple services ✅ **DONE**
 - `src/Traits/ProsettaEntries.php` → `src/Traits/HasTranslations.php`
 - `src/Jobs/ProcessEntries.php` → New job structure
 
@@ -214,14 +214,15 @@ Queue Model (for non-base locales)
 - `src/Models/Translation.php`
 - `src/Models/TranslationReview.php`
 - `src/Services/FileScanner.php`
-- `src/Services/FileSynchronizer.php`
-- `src/Services/FileExporter.php`
-- `src/Services/KeyManager.php`
+- `src/Services/FileSynchronizer.php` ✅ **CREATED**
+- `src/Services/FileExporter.php` ✅ **CREATED**
+- `src/Services/KeyManager.php` ✅ **CREATED**
+- `src/Services/TranslationService.php` ✅ **CREATED**
 - `src/Http/Controllers/*.php`
 - `src/Commands/*.php`
 - `resources/views/**/*.blade.php`
 - `routes/prosetta.php`
-- `tests/**/*.php`
+- `tests/**/*.php` ✅ **CREATED** (47 tests)
 
 ---
 

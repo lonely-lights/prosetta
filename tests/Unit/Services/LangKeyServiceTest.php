@@ -2,16 +2,16 @@
 
 use LonelyLights\Prosetta\Services\LangKeyService;
 
-describe('LangKeyService', function () {
+describe('LangKeyService (Deprecated)', function () {
     describe('generatePrefixedKeys', function () {
-        it('returns keys unchanged when no affix provided', function () {
+        it('delegates to KeyManager and returns keys unchanged when no affix provided', function () {
             $keys = ['title', 'description'];
             $result = LangKeyService::generatePrefixedKeys($keys);
 
             expect($result)->toBe(['title', 'description']);
         });
 
-        it('applies string affix as prefix by default', function () {
+        it('delegates to KeyManager and applies string affix as prefix by default', function () {
             config(['prosetta.affixationType' => '.']);
             config(['prosetta.affixationDefault' => 'prefix']);
 
@@ -23,7 +23,7 @@ describe('LangKeyService', function () {
     });
 
     describe('mapToValues', function () {
-        it('extracts values from model attributes', function () {
+        it('delegates to TranslationService and extracts values from model attributes', function () {
             $model = new class extends \Illuminate\Database\Eloquent\Model {
                 protected $attributes = [
                     'title' => 'Test Title',
@@ -35,6 +35,19 @@ describe('LangKeyService', function () {
             $result = LangKeyService::mapToValues($keys, $model);
 
             expect($result)->toBe(['Test Title', 'Test Description']);
+        });
+    });
+
+    describe('backward compatibility', function () {
+        it('maintains the same API as before splitting', function () {
+            // Verify methods exist and are callable
+            expect(method_exists(LangKeyService::class, 'setConfig'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'manageLanguageFileEntry'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'generatePrefixedKeys'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'mapToValues'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'processKeyValue'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'removeKeys'))->toBeTrue();
+            expect(method_exists(LangKeyService::class, 'updateLangEntries'))->toBeTrue();
         });
     });
 });
