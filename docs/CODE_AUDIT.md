@@ -205,8 +205,8 @@ Queue Model (for non-base locales)
 - `database/seeders/LocaleSeeder.php` - Keep as-is
 
 ### Replace Entirely
-- `src/Locale.php` → `src/Models/Locale.php` (new structure) ✅ **DONE** (legacy kept for backward compat)
-- `src/Queue.php` → Remove (replaced by new models) - *pending cleanup*
+- `src/Locale.php` → ✅ **DELETED** (replaced by `src/Models/Locale.php`)
+- `src/Queue.php` → ✅ **DELETED** (legacy queue system removed)
 - `src/Services/LangKeyService.php` → Split into multiple services ✅ **DONE**
 - `src/Traits/ProsettaEntries.php` → ✅ **DELETED** (will create HasTranslations when needed)
 - `src/Jobs/ProcessEntries.php` → ✅ **DELETED** (was broken, never used)

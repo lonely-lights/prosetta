@@ -3,7 +3,6 @@
 namespace LonelyLights\Prosetta\Services;
 
 use Illuminate\Support\Facades\Log;
-use LonelyLights\Prosetta\Queue;
 
 /**
  * Key Manager Service
@@ -120,18 +119,6 @@ class KeyManager {
     ): void {
         $reason = $reason ?? 'Entry Deleted';
         $keysToRemove = self::generatePrefixedKeys(is_array($keys) ? $keys : [$keys], $affix);
-
-        // Remove from the queue
-        foreach ($keysToRemove as $affixedKey) {
-            Queue::where('key', $affixedKey)
-                ->where('path', $filePath)
-                ->delete();
-
-            Log::channel(config('prosetta.logChannel', 'default'))->info('Queue entry removed.', [
-                'key' => $affixedKey,
-                'path' => $filePath,
-            ]);
-        }
 
         // Construct the full path
         $localPath = "lang/$languageCode/$filePath.php";

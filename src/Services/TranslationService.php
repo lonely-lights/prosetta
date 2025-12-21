@@ -4,13 +4,11 @@ namespace LonelyLights\Prosetta\Services;
 
 use Exception;
 use Illuminate\Database\Eloquent\Model;
-use LonelyLights\Prosetta\Queue;
 
 /**
  * Translation Service
  *
- * Handles translation queue management, model metadata extraction,
- * and visibility checks for translatable content.
+ * Handles model metadata extraction and visibility checks for translatable content.
  *
  * @package LonelyLights\Prosetta\Services
  */
@@ -127,7 +125,9 @@ class TranslationService {
     }
 
     /**
-     * Enqueue a translation task into the prosetta_queue.
+     * Enqueue a translation task.
+     *
+     * @deprecated Queue system removed. This method is now a no-op.
      *
      * @param Model $model The model associated with the translation task.
      * @param string $method The operation method (create/update).
@@ -145,41 +145,8 @@ class TranslationService {
         string $languageCode,
         string $filePath
     ): void {
-        $modelDetails = self::getModelDetails($model, $keyValuePair['originalKey']);
-        $oldValue = '';
-        $oldBaseValue = !empty($keyValuePair['oldValue']) ? $keyValuePair['oldValue'] : '';
-
-        if ($method === 'update') {
-            // Default to existing pair, if available (Full Update)
-            $oldValue = !empty($keyValuePair[$languageCode]) ? $keyValuePair[$languageCode] : '';
-
-            // If not set, check language file (Partial Update)
-            if (empty($oldValue)) {
-                $languageFilePath = base_path("lang/$languageCode/$filePath.php");
-                if (file_exists($languageFilePath)) {
-                    $languageData = include $languageFilePath;
-                    $affixedKey = $keyValuePair['affixedKey'];
-                    if (isset($languageData[$affixedKey])) {
-                        $oldValue = $languageData[$affixedKey];
-                    }
-                }
-            }
-        }
-
-        Queue::create([
-            'key' => $keyValuePair['affixedKey'],
-            'path' => $filePath,
-            'lang' => $languageCode,
-            'method' => $method,
-            'model' => get_class($model),
-            'model_description' => $modelDetails['description'],
-            'context' => null,
-            'base_lang' => $baseLanguage,
-            'original_value' => $oldValue,
-            'base_original_value' => $oldBaseValue,
-            'base_value' => $keyValuePair['value'],
-            'creator_id' => auth()->id() ?? null,
-        ]);
+        // Queue system removed - this is now a no-op
+        // Future: integrate with new database-driven translation system
     }
 
     /**
