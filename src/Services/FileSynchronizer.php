@@ -14,8 +14,7 @@ use InvalidArgumentException;
  *
  * @package LonelyLights\Prosetta\Services
  */
-class FileSynchronizer
-{
+class FileSynchronizer {
     /**
      * Manage language file entry for a model.
      *
@@ -35,15 +34,15 @@ class FileSynchronizer
      * @throws Exception
      */
     public static function manageLanguageFileEntry(
-        mixed $model,
-        string $filePath,
-        string $languageCode,
-        array $keys,
-        string $localeOperation,
-        ?string $method = null,
+        mixed             $model,
+        string            $filePath,
+        string            $languageCode,
+        array             $keys,
+        string            $localeOperation,
+        ?string           $method = null,
         string|array|null $affix = null,
         string|array|null $oldAffix = null,
-        array $capturedData = []
+        array             $capturedData = []
     ): void {
         // Validate paths
         if (!preg_match('/^[a-zA-Z0-9-_\/]+$/', $filePath)) {
@@ -158,12 +157,12 @@ class FileSynchronizer
      * @return void
      */
     private static function processKeyValuePairs(
-        Model $model,
-        array $keyValuePairs,
-        array &$langData,
-        string $languageCode,
-        string $filePath,
-        bool $fullUpdateNeeded,
+        Model   $model,
+        array   $keyValuePairs,
+        array   &$langData,
+        string  $languageCode,
+        string  $filePath,
+        bool    $fullUpdateNeeded,
         ?string $localeOperation = null,
         ?string $baseLanguage = null,
         ?string $method = null
@@ -239,8 +238,7 @@ class FileSynchronizer
      * @param string|array $oldAffix The affix to be applied to the keys.
      * @return array An associative array of captured data by locale.
      */
-    public static function captureLocaleData(array $keys, string $filePath, string|array $oldAffix): array
-    {
+    public static function captureLocaleData(array $keys, string $filePath, string|array $oldAffix): array {
         $capturedData = [];
         $activeLocales = config('prosetta.locales');
 
@@ -279,14 +277,14 @@ class FileSynchronizer
      * @throws Exception
      */
     public static function updateLangEntries(
-        mixed $model,
-        string $filePath,
-        string $languageCode,
-        array $keys,
-        string $localeOperation,
-        ?string $method = null,
+        mixed             $model,
+        string            $filePath,
+        string            $languageCode,
+        array             $keys,
+        string            $localeOperation,
+        ?string           $method = null,
         array|string|null $affix = null,
-        mixed $oldAffix = null
+        mixed             $oldAffix = null
     ): void {
         $capturedData = [];
 

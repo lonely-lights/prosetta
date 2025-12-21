@@ -2,6 +2,8 @@
 
 namespace LonelyLights\Prosetta\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,8 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $previous_value   Value before edit
  * @property string|null $new_value        Value after edit
  * @property string|null $notes            Reviewer comments
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  *
  * @property-read Translation $translation
  *
@@ -53,6 +55,8 @@ class TranslationReview extends Model
 
     /**
      * Action constants.
+     *
+     * @api
      */
     public const ACTION_APPROVED = 'approved';
     public const ACTION_REJECTED = 'rejected';
@@ -71,42 +75,43 @@ class TranslationReview extends Model
     /**
      * Scope to filter by action type.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $action
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeAction($query, string $action)
-    {
+    public function scopeAction(Builder $query, string $action): Builder {
         return $query->where('action', $action);
     }
 
     /**
      * Scope to filter by reviewer.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param int $reviewerId
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeByReviewer($query, int $reviewerId)
-    {
+    public function scopeByReviewer(Builder $query, int $reviewerId): Builder {
         return $query->where('reviewer_id', $reviewerId);
     }
 
     /**
      * Scope to get recent reviews.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param int $days
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeRecent($query, int $days = 7)
-    {
+    public function scopeRecent(Builder $query, int $days = 7): Builder {
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
     /**
      * Check if this was an edit action.
      *
+     * @api
      * @return bool
      */
     public function isEdit(): bool
@@ -117,6 +122,7 @@ class TranslationReview extends Model
     /**
      * Check if this was an approval action.
      *
+     * @api
      * @return bool
      */
     public function isApproval(): bool
@@ -127,6 +133,7 @@ class TranslationReview extends Model
     /**
      * Check if this was a rejection action.
      *
+     * @api
      * @return bool
      */
     public function isRejection(): bool
@@ -137,6 +144,7 @@ class TranslationReview extends Model
     /**
      * Get a human-readable description of the action.
      *
+     * @api
      * @return string
      */
     public function getActionDescription(): string

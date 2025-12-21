@@ -16,16 +16,14 @@ use LonelyLights\Prosetta\Models\TranslationFile;
  *
  * @package LonelyLights\Prosetta\Http\Controllers
  */
-class FileController extends Controller
-{
+class FileController extends Controller {
     /**
      * Display a listing of translation files.
      *
      * @param Request $request
      * @return View
      */
-    public function index(Request $request): View
-    {
+    public function index(Request $request): View {
         $locales = Prosetta::locales();
         $currentLocale = $request->get('locale', $locales->first()?->locale_initials ?? 'en');
 
@@ -39,9 +37,9 @@ class FileController extends Controller
         // Search
         if ($search = $request->get('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('path', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                $q->where('path', 'like', "%$search%")
+                    ->orWhere('name', 'like', "%$search%")
+                    ->orWhere('description', 'like', "%$search%");
             });
         }
 
@@ -72,8 +70,7 @@ class FileController extends Controller
      *
      * @return View
      */
-    public function create(): View
-    {
+    public function create(): View {
         $categories = TranslationFile::distinct()->whereNotNull('category')->pluck('category');
 
         return view('prosetta::files.create', [
@@ -87,8 +84,7 @@ class FileController extends Controller
      * @param Request $request
      * @return RedirectResponse
      */
-    public function store(Request $request): RedirectResponse
-    {
+    public function store(Request $request): RedirectResponse {
         $validated = $request->validate([
             'path' => 'required|string|max:255|unique:' . config('prosetta.tableNames.files', 'prosetta_files') . ',path',
             'name' => 'required|string|max:255',
@@ -99,7 +95,7 @@ class FileController extends Controller
         $file = TranslationFile::create($validated);
 
         return redirect()->route('prosetta.files.show', $file)
-            ->with('success', "File '{$file->name}' created successfully.");
+            ->with('success', "File '$file->name' created successfully.");
     }
 
     /**
@@ -109,8 +105,7 @@ class FileController extends Controller
      * @param TranslationFile $file
      * @return View
      */
-    public function show(Request $request, TranslationFile $file): View
-    {
+    public function show(Request $request, TranslationFile $file): View {
         $locales = Prosetta::locales();
         $currentLocale = $request->get('locale', $locales->first()?->locale_initials ?? 'en');
         $compareLocale = $request->get('compare');
@@ -143,7 +138,7 @@ class FileController extends Controller
 
         // Search keys
         if ($search = $request->get('search')) {
-            $query->where('key', 'like', "%{$search}%");
+            $query->where('key', 'like', "%$search%");
         }
 
         $keys = $query->orderBy('key')->paginate(50);
@@ -168,8 +163,7 @@ class FileController extends Controller
      * @param TranslationFile $file
      * @return View
      */
-    public function edit(TranslationFile $file): View
-    {
+    public function edit(TranslationFile $file): View {
         $categories = TranslationFile::distinct()->whereNotNull('category')->pluck('category');
 
         return view('prosetta::files.edit', [
@@ -185,8 +179,7 @@ class FileController extends Controller
      * @param TranslationFile $file
      * @return RedirectResponse
      */
-    public function update(Request $request, TranslationFile $file): RedirectResponse
-    {
+    public function update(Request $request, TranslationFile $file): RedirectResponse {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -196,7 +189,7 @@ class FileController extends Controller
         $file->update($validated);
 
         return redirect()->route('prosetta.files.show', $file)
-            ->with('success', "File '{$file->name}' updated successfully.");
+            ->with('success', "File '$file->name' updated successfully.");
     }
 
     /**
@@ -205,12 +198,11 @@ class FileController extends Controller
      * @param TranslationFile $file
      * @return RedirectResponse
      */
-    public function destroy(TranslationFile $file): RedirectResponse
-    {
+    public function destroy(TranslationFile $file): RedirectResponse {
         $name = $file->name;
         $file->delete();
 
         return redirect()->route('prosetta.files.index')
-            ->with('success', "File '{$name}' deleted successfully.");
+            ->with('success', "File '$name' deleted successfully.");
     }
 }

@@ -2,6 +2,7 @@
 
 namespace LonelyLights\Prosetta;
 
+use Exception;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Console\Commands\ExportCommand;
@@ -109,7 +110,7 @@ class ProsettaServiceProvider extends ServiceProvider
             // Try database first, fall back to config
             try {
                 return Locale::getActiveCodes();
-            } catch (\Exception $e) {
+            } catch (Exception) {
                 return config('prosetta.locales', ['en']);
             }
         });

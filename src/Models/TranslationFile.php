@@ -2,6 +2,9 @@
 
 namespace LonelyLights\Prosetta\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -19,14 +22,22 @@ use LonelyLights\Prosetta\Events\TranslationFileCreated;
  * @property string|null $category         Category grouping (e.g., 'User Account', 'Core')
  * @property array|null $metadata          Additional structured data
  * @property bool $is_system               Whether this is a system file
- * @property \Carbon\Carbon|null $last_synced_at
- * @property \Carbon\Carbon|null $last_exported_at
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
- * @property \Carbon\Carbon|null $deleted_at
+ * @property Carbon|null $last_synced_at
+ * @property Carbon|null $last_exported_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property Carbon|null $deleted_at
  *
- * @property-read \Illuminate\Database\Eloquent\Collection|TranslationKey[] $keys
+ * @property-read Collection|TranslationKey[] $keys
  * @property-read int|null $keys_count
+ *
+ * @method static Builder|static category(string $category)
+ * @method static Builder|static system(bool $isSystem = true)
+ * @method static Builder|static needsSync()
+ * @method static Builder|static create(array $attributes = [])
+ * @method static Builder|static distinct()
+ *
+ * @mixin Builder
  *
  * @package LonelyLights\Prosetta\Models
  */
@@ -88,7 +99,7 @@ class TranslationFile extends Model
     /**
      * Get the translation keys for this file.
      *
-     * @return HasMany
+     * @return HasMany<TranslationKey, $this>
      */
     public function keys(): HasMany
     {
@@ -98,35 +109,35 @@ class TranslationFile extends Model
     /**
      * Scope to filter by category.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $category
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeCategory($query, string $category)
-    {
+    public function scopeCategory(Builder $query, string $category): Builder {
         return $query->where('category', $category);
     }
 
     /**
      * Scope to filter system files.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param bool $isSystem
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeSystem($query, bool $isSystem = true)
-    {
+    public function scopeSystem(Builder $query, bool $isSystem = true): Builder {
         return $query->where('is_system', $isSystem);
     }
 
     /**
      * Scope to find files that need syncing.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @api
+     * @param Builder $query
+     * @return Builder
      */
-    public function scopeNeedsSync($query)
-    {
+    public function scopeNeedsSync(Builder $query): Builder {
         return $query->whereNull('last_synced_at')
             ->orWhere('last_synced_at', '<', now()->subDay());
     }
@@ -189,6 +200,6 @@ class TranslationFile extends Model
      */
     public function getFullPath(string $locale): string
     {
-        return lang_path("{$locale}/{$this->path}.php");
+        return lang_path("$locale/$this->path.php");
     }
 }

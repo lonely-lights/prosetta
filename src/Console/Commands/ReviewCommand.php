@@ -3,7 +3,6 @@
 namespace LonelyLights\Prosetta\Console\Commands;
 
 use Illuminate\Console\Command;
-use LonelyLights\Prosetta\Facades\Prosetta;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 
@@ -57,28 +56,28 @@ class ReviewCommand extends Command
             $rejected = true;
         }
 
-        $this->info("Translation Review for: {$locale}");
+        $this->info("Translation Review for: $locale");
         $this->newLine();
 
         $hasItems = false;
 
-        if ($needsReview) {
-            $hasItems = $this->showNeedsReview($locale, $file, $limit) || $hasItems;
+        if ($needsReview && $this->showNeedsReview($locale, $file, $limit)) {
+            $hasItems = true;
         }
 
-        if ($missing) {
-            $hasItems = $this->showMissing($locale, $file, $limit) || $hasItems;
+        if ($missing && $this->showMissing($locale, $file, $limit)) {
+            $hasItems = true;
         }
 
-        if ($rejected) {
-            $hasItems = $this->showRejected($locale, $file, $limit) || $hasItems;
+        if ($rejected && $this->showRejected($locale, $file, $limit)) {
+            $hasItems = true;
         }
 
         if (!$hasItems) {
             $this->info('No items need attention!');
         }
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**

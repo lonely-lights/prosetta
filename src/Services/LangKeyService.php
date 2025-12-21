@@ -2,6 +2,7 @@
 
 namespace LonelyLights\Prosetta\Services;
 
+use Exception;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -58,6 +59,7 @@ class LangKeyService
      * @param string|array|null $oldAffix Optional old affix.
      * @param array $capturedData Optional captured data.
      * @return void
+     * @throws Exception
      * @deprecated Use FileSynchronizer::manageLanguageFileEntry() instead.
      */
     public static function manageLanguageFileEntry(
@@ -180,6 +182,7 @@ class LangKeyService
      * @param array|string|null $affix Current affix.
      * @param mixed $oldAffix Old affix.
      * @return void
+     * @throws Exception
      * @deprecated Use FileSynchronizer::updateLangEntries() instead.
      */
     public static function updateLangEntries(

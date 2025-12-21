@@ -2,6 +2,9 @@
 
 namespace LonelyLights\Prosetta\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,25 +26,29 @@ use LonelyLights\Prosetta\Events\TranslationUpdated;
  * @property string $source                Translation source (manual, ai, imported)
  * @property float|null $confidence        AI confidence score (0.0-1.0)
  * @property int|null $reviewed_by         User ID who reviewed
- * @property \Carbon\Carbon|null $reviewed_at
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon|null $reviewed_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  *
  * @property-read TranslationKey $key
- * @property-read \Illuminate\Database\Eloquent\Collection|TranslationReview[] $reviews
+ * @property-read Collection|TranslationReview[] $reviews
  * @property-read int|null $reviews_count
+ *
+ * @method static Builder|static needsReview()
+ * @method static Builder|static status(string $status)
+ * @method static Builder|static locale(string $locale)
+ *
+ * @mixin Builder
  *
  * @package LonelyLights\Prosetta\Models
  */
-class Translation extends Model
-{
+class Translation extends Model {
     /**
      * Create a new model instance.
      *
      * @param array $attributes
      */
-    public function __construct(array $attributes = [])
-    {
+    public function __construct(array $attributes = []) {
         parent::__construct($attributes);
         $this->table = config('prosetta.tableNames.translations', 'prosetta_translations');
     }
@@ -74,6 +81,8 @@ class Translation extends Model
 
     /**
      * Status constants.
+     *
+     * @api
      */
     public const STATUS_DRAFT = 'draft';
     public const STATUS_NEEDS_REVIEW = 'needs_review';
@@ -82,6 +91,8 @@ class Translation extends Model
 
     /**
      * Source constants.
+     *
+     * @api
      */
     public const SOURCE_MANUAL = 'manual';
     public const SOURCE_AI = 'ai';
@@ -92,8 +103,7 @@ class Translation extends Model
      *
      * @return BelongsTo
      */
-    public function key(): BelongsTo
-    {
+    public function key(): BelongsTo {
         return $this->belongsTo(TranslationKey::class, 'key_id');
     }
 
@@ -102,78 +112,77 @@ class Translation extends Model
      *
      * @return HasMany
      */
-    public function reviews(): HasMany
-    {
+    public function reviews(): HasMany {
         return $this->hasMany(TranslationReview::class, 'translation_id');
     }
 
     /**
      * Scope to filter by status.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $status
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeStatus($query, string $status)
-    {
+    public function scopeStatus(Builder $query, string $status): Builder {
         return $query->where('status', $status);
     }
 
     /**
      * Scope to filter by source.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $source
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeSource($query, string $source)
-    {
+    public function scopeSource(Builder $query, string $source): Builder {
         return $query->where('source', $source);
     }
 
     /**
      * Scope to filter by locale.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $locale
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeLocale($query, string $locale)
-    {
+    public function scopeLocale(Builder $query, string $locale): Builder {
         return $query->where('locale', $locale);
     }
 
     /**
      * Scope to get translations needing review.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @api
+     * @param Builder $query
+     * @return Builder
      */
-    public function scopeNeedsReview($query)
-    {
+    public function scopeNeedsReview(Builder $query): Builder {
         return $query->where('status', self::STATUS_NEEDS_REVIEW);
     }
 
     /**
      * Scope to get AI-generated translations.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @api
+     * @param Builder $query
+     * @return Builder
      */
-    public function scopeAiGenerated($query)
-    {
+    public function scopeAiGenerated(Builder $query): Builder {
         return $query->where('source', self::SOURCE_AI);
     }
 
     /**
      * Scope to get translations with low confidence.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param float $threshold
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeLowConfidence($query, float $threshold = 0.7)
-    {
+    public function scopeLowConfidence(Builder $query, float $threshold = 0.7): Builder {
         return $query->whereNotNull('confidence')
             ->where('confidence', '<', $threshold);
     }
@@ -181,11 +190,11 @@ class Translation extends Model
     /**
      * Submit this translation for review.
      *
+     * @api
      * @param string|null $reason
      * @return bool
      */
-    public function submitForReview(?string $reason = null): bool
-    {
+    public function submitForReview(?string $reason = null): bool {
         $updated = $this->update(['status' => self::STATUS_NEEDS_REVIEW]);
 
         if ($updated) {
@@ -202,8 +211,7 @@ class Translation extends Model
      * @param string|null $notes
      * @return bool
      */
-    public function approve(?int $userId = null, ?string $notes = null): bool
-    {
+    public function approve(?int $userId = null, ?string $notes = null): bool {
         $reviewerId = $userId ?? auth()->id();
 
         $updated = $this->update([
@@ -232,8 +240,7 @@ class Translation extends Model
      * @param string|null $notes
      * @return bool
      */
-    public function reject(?int $userId = null, ?string $notes = null): bool
-    {
+    public function reject(?int $userId = null, ?string $notes = null): bool {
         $reviewerId = $userId ?? auth()->id();
 
         $updated = $this->update([
@@ -263,8 +270,7 @@ class Translation extends Model
      * @param string|null $notes
      * @return bool
      */
-    public function edit(string $newValue, ?int $userId = null, ?string $notes = null): bool
-    {
+    public function edit(string $newValue, ?int $userId = null, ?string $notes = null): bool {
         $previousValue = $this->value;
         $reviewerId = $userId ?? auth()->id();
 
@@ -294,40 +300,40 @@ class Translation extends Model
     /**
      * Check if this is an AI-generated translation.
      *
+     * @api
      * @return bool
      */
-    public function isAiGenerated(): bool
-    {
+    public function isAiGenerated(): bool {
         return $this->source === self::SOURCE_AI;
     }
 
     /**
      * Check if this translation needs review.
      *
+     * @api
      * @return bool
      */
-    public function needsReview(): bool
-    {
+    public function needsReview(): bool {
         return $this->status === self::STATUS_NEEDS_REVIEW;
     }
 
     /**
      * Check if this translation is approved.
      *
+     * @api
      * @return bool
      */
-    public function isApproved(): bool
-    {
+    public function isApproved(): bool {
         return $this->status === self::STATUS_APPROVED;
     }
 
     /**
      * Get confidence level as a descriptive string.
      *
+     * @api
      * @return string|null
      */
-    public function getConfidenceLevel(): ?string
-    {
+    public function getConfidenceLevel(): ?string {
         if ($this->confidence === null) {
             return null;
         }

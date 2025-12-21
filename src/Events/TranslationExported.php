@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Models\TranslationFile;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationExported
-{
+class TranslationExported {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -52,8 +51,7 @@ class TranslationExported
      * @param string $exportedPath
      * @param int $keyCount
      */
-    public function __construct(TranslationFile $file, string $locale, string $exportedPath, int $keyCount)
-    {
+    public function __construct(TranslationFile $file, string $locale, string $exportedPath, int $keyCount) {
         $this->file = $file;
         $this->locale = $locale;
         $this->exportedPath = $exportedPath;

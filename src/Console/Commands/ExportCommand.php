@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Facades\Prosetta;
  *
  * @package LonelyLights\Prosetta\Console\Commands
  */
-class ExportCommand extends Command
-{
+class ExportCommand extends Command {
     /**
      * The name and signature of the console command.
      *
@@ -36,15 +35,14 @@ class ExportCommand extends Command
      *
      * @return int
      */
-    public function handle(): int
-    {
+    public function handle(): int {
         $locale = $this->argument('locale');
         $exportAll = $this->option('all');
         $file = $this->option('file');
 
         if (!$locale && !$exportAll) {
             $this->error('Please specify a locale or use --all to export all locales.');
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         if ($exportAll) {
@@ -61,13 +59,12 @@ class ExportCommand extends Command
      * @param string|null $file
      * @return int
      */
-    protected function exportLocale(string $locale, ?string $file = null): int
-    {
+    protected function exportLocale(string $locale, ?string $file = null): int {
         if ($file) {
             return $this->exportSingleFile($locale, $file);
         }
 
-        $this->info("Exporting all files for locale: {$locale}...");
+        $this->info("Exporting all files for locale: $locale...");
 
         $results = Prosetta::exportAll($locale);
         $success = 0;
@@ -75,10 +72,10 @@ class ExportCommand extends Command
 
         foreach ($results as $filePath => $result) {
             if ($result) {
-                $this->line("  <info>+</info> {$filePath}");
+                $this->line("  <info>+</info> $filePath");
                 $success++;
             } else {
-                $this->line("  <error>!</error> {$filePath}");
+                $this->line("  <error>!</error> $filePath");
                 $failed++;
             }
         }
@@ -86,13 +83,13 @@ class ExportCommand extends Command
         $this->newLine();
 
         if ($failed > 0) {
-            $this->error("Exported {$success} files, {$failed} failed.");
-            return Command::FAILURE;
+            $this->error("Exported $success files, $failed failed.");
+            return self::FAILURE;
         }
 
-        $this->info("Successfully exported {$success} files.");
+        $this->info("Successfully exported $success files.");
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -102,19 +99,18 @@ class ExportCommand extends Command
      * @param string $file
      * @return int
      */
-    protected function exportSingleFile(string $locale, string $file): int
-    {
-        $this->info("Exporting {$file} for locale: {$locale}...");
+    protected function exportSingleFile(string $locale, string $file): int {
+        $this->info("Exporting $file for locale: $locale...");
 
         $result = Prosetta::export($locale, $file);
 
         if ($result) {
-            $this->info("Successfully exported {$file}.");
-            return Command::SUCCESS;
+            $this->info("Successfully exported $file.");
+            return self::SUCCESS;
         }
 
-        $this->error("Failed to export {$file}. File may not exist in the database.");
-        return Command::FAILURE;
+        $this->error("Failed to export $file. File may not exist in the database.");
+        return self::FAILURE;
     }
 
     /**
@@ -123,13 +119,12 @@ class ExportCommand extends Command
      * @param string|null $file
      * @return int
      */
-    protected function exportAllLocales(?string $file = null): int
-    {
+    protected function exportAllLocales(?string $file = null): int {
         $locales = Prosetta::locales();
 
         if ($locales->isEmpty()) {
             $this->error('No active locales found. Please configure locales first.');
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         $this->info('Exporting translations for all active locales...');
@@ -139,23 +134,23 @@ class ExportCommand extends Command
 
         foreach ($locales as $locale) {
             $localeCode = $locale->locale_initials ?? $locale->code ?? $locale->id;
-            $this->line("<comment>Locale: {$localeCode}</comment>");
+            $this->line("<comment>Locale: $localeCode</comment>");
 
             if ($file) {
                 $result = Prosetta::export($localeCode, $file);
                 if ($result) {
-                    $this->line("  <info>+</info> {$file}");
+                    $this->line("  <info>+</info> $file");
                 } else {
-                    $this->line("  <error>!</error> {$file}");
+                    $this->line("  <error>!</error> $file");
                     $hasErrors = true;
                 }
             } else {
                 $results = Prosetta::exportAll($localeCode);
                 foreach ($results as $filePath => $result) {
                     if ($result) {
-                        $this->line("  <info>+</info> {$filePath}");
+                        $this->line("  <info>+</info> $filePath");
                     } else {
-                        $this->line("  <error>!</error> {$filePath}");
+                        $this->line("  <error>!</error> $filePath");
                         $hasErrors = true;
                     }
                 }
@@ -166,11 +161,11 @@ class ExportCommand extends Command
 
         if ($hasErrors) {
             $this->error('Export completed with errors.');
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         $this->info('All exports completed successfully!');
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 }

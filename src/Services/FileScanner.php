@@ -2,9 +2,11 @@
 
 namespace LonelyLights\Prosetta\Services;
 
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
 /**
  * File Scanner Service
@@ -13,16 +15,14 @@ use Exception;
  *
  * @package LonelyLights\Prosetta\Services
  */
-class FileScanner
-{
+class FileScanner {
     /**
      * Scan a locale directory and return information about all translation files.
      *
      * @param string $locale The locale to scan (e.g., 'en')
      * @return array Array of file information
      */
-    public function scan(string $locale): array
-    {
+    public function scan(string $locale): array {
         $langPath = lang_path($locale);
 
         if (!is_dir($langPath)) {
@@ -31,9 +31,9 @@ class FileScanner
 
         $files = [];
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($langPath, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($langPath, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
         );
 
         foreach ($iterator as $file) {
@@ -56,8 +56,7 @@ class FileScanner
      * @param string $locale Locale code
      * @return array|null File information or null if invalid
      */
-    protected function analyzeFile(string $fullPath, string $langPath, string $locale): ?array
-    {
+    protected function analyzeFile(string $fullPath, string $langPath, string $locale): ?array {
         try {
             // Calculate relative path without extension
             $relativePath = str_replace(
@@ -107,8 +106,7 @@ class FileScanner
      * @param string $fullPath
      * @return array|null
      */
-    protected function loadFile(string $fullPath): ?array
-    {
+    protected function loadFile(string $fullPath): ?array {
         if (!file_exists($fullPath)) {
             return null;
         }
@@ -137,12 +135,11 @@ class FileScanner
      * @param string $prefix
      * @return array Flat array of dot-notation keys with their values
      */
-    public function extractKeys(array $content, string $prefix = ''): array
-    {
+    public function extractKeys(array $content, string $prefix = ''): array {
         $keys = [];
 
         foreach ($content as $key => $value) {
-            $fullKey = $prefix ? "{$prefix}.{$key}" : $key;
+            $fullKey = $prefix ? "$prefix.$key" : $key;
 
             if (is_array($value)) {
                 // Recursively extract nested keys
@@ -163,8 +160,7 @@ class FileScanner
      * @param int $currentDepth
      * @return int
      */
-    protected function calculateNestedDepth(array $content, int $currentDepth = 0): int
-    {
+    protected function calculateNestedDepth(array $content, int $currentDepth = 0): int {
         $maxDepth = $currentDepth;
 
         foreach ($content as $value) {
@@ -183,25 +179,24 @@ class FileScanner
      * @param string $fullPath
      * @return array
      */
-    protected function extractMetadata(string $fullPath): array
-    {
+    protected function extractMetadata(string $fullPath): array {
         $content = file_get_contents($fullPath);
 
         // Look for the Prosetta header block
         $metadata = [];
 
         // Match title from: | Title Here
-        if (preg_match('/\|\s*\n\|\s*(.+?)\s*\n\|[-]+/', $content, $matches)) {
+        if (preg_match('/\|\s*\n\|\s*(.+?)\s*\n\|-+/', $content, $matches)) {
             $metadata['name'] = trim($matches[1]);
         }
 
         // Match category from: | Category: Something
-        if (preg_match('/Category:\s*(.+?)(?:\n|\*)/', $content, $matches)) {
+        if (preg_match('/Category:\s*(.+?)[\n*]/', $content, $matches)) {
             $metadata['category'] = trim($matches[1]);
         }
 
         // Match description block
-        if (preg_match('/\|[-]+\|\s*\n\|\s*\n\|\s*(.+?)(?=\|\s*\n\|\s*Category:|\|\s*\n\|\s*Last)/s', $content, $matches)) {
+        if (preg_match('/\|-+\|\s*\n\|\s*\n\|\s*(.+?)(?=\|\s*\n\|\s*Category:|\|\s*\n\|\s*Last)/s', $content, $matches)) {
             $description = trim($matches[1]);
             // Clean up the description
             $description = preg_replace('/^\|\s*/m', '', $description);
@@ -216,8 +211,7 @@ class FileScanner
      *
      * @return array Array of locale codes
      */
-    public function getAvailableLocales(): array
-    {
+    public function getAvailableLocales(): array {
         $langPath = lang_path();
 
         if (!is_dir($langPath)) {
@@ -250,9 +244,9 @@ class FileScanner
      * @param string $baseLocale
      * @param string $compareLocale
      * @return array
+     * @api
      */
-    public function compareLocales(string $baseLocale, string $compareLocale): array
-    {
+    public function compareLocales(string $baseLocale, string $compareLocale): array {
         $baseFiles = $this->scan($baseLocale);
         $compareFiles = $this->scan($compareLocale);
 
@@ -304,9 +298,9 @@ class FileScanner
      *
      * @param string $locale
      * @return array
+     * @api
      */
-    public function getStatistics(string $locale): array
-    {
+    public function getStatistics(string $locale): array {
         $files = $this->scan($locale);
 
         $totalKeys = 0;

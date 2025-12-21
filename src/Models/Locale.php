@@ -2,6 +2,7 @@
 
 namespace LonelyLights\Prosetta\Models;
 
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -23,20 +24,24 @@ use Illuminate\Support\Facades\Log;
  * @property bool $active                  Whether locale is active
  * @property bool $is_default              Whether this is the default locale
  * @property int $sort_order               Display order
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ *
+ * @method static Builder|static active()
+ * @method static Builder|static default()
+ * @method static Builder|static ordered()
+ *
+ * @mixin Builder
  *
  * @package LonelyLights\Prosetta\Models
  */
-class Locale extends Model
-{
+class Locale extends Model {
     /**
      * Create a new model instance.
      *
      * @param array $attributes
      */
-    public function __construct(array $attributes = [])
-    {
+    public function __construct(array $attributes = []) {
         parent::__construct($attributes);
         $this->table = config('prosetta.tableNames.locales', 'prosetta_locales');
     }
@@ -72,33 +77,33 @@ class Locale extends Model
     /**
      * Scope to get active locales.
      *
+     * @api
      * @param Builder $query
      * @return Builder
      */
-    public function scopeActive(Builder $query): Builder
-    {
+    public function scopeActive(Builder $query): Builder {
         return $query->where('active', true);
     }
 
     /**
      * Scope to get the default locale.
      *
+     * @api
      * @param Builder $query
      * @return Builder
      */
-    public function scopeDefault(Builder $query): Builder
-    {
+    public function scopeDefault(Builder $query): Builder {
         return $query->where('is_default', true);
     }
 
     /**
      * Scope to order by sort order.
      *
+     * @api
      * @param Builder $query
      * @return Builder
      */
-    public function scopeOrdered(Builder $query): Builder
-    {
+    public function scopeOrdered(Builder $query): Builder {
         return $query->orderBy('sort_order')->orderBy('english_name');
     }
 
@@ -107,8 +112,7 @@ class Locale extends Model
      *
      * @return array
      */
-    public static function getActiveCodes(): array
-    {
+    public static function getActiveCodes(): array {
         return static::active()->ordered()->pluck('locale_initials')->toArray();
     }
 
@@ -117,10 +121,10 @@ class Locale extends Model
      *
      * This is the legacy method for backward compatibility.
      *
+     * @api
      * @return array
      */
-    public static function getActiveLocales(): array
-    {
+    public static function getActiveLocales(): array {
         return Cache::remember('activeLocales', 60, function () {
             try {
                 return static::where('active', true)
@@ -144,39 +148,38 @@ class Locale extends Model
      *
      * @return static|null
      */
-    public static function getDefault(): ?static
-    {
+    public static function getDefault(): ?static {
         return static::default()->first();
     }
 
     /**
      * Get the default locale code.
      *
+     * @api
      * @return string|null
      */
-    public static function getDefaultCode(): ?string
-    {
+    public static function getDefaultCode(): ?string {
         return static::getDefault()?->locale_initials;
     }
 
     /**
      * Find a locale by its code.
      *
+     * @api
      * @param string $code
      * @return static|null
      */
-    public static function findByCode(string $code): ?static
-    {
+    public static function findByCode(string $code): ?static {
         return static::where('locale_initials', $code)->first();
     }
 
     /**
      * Set this locale as the default.
      *
+     * @api
      * @return bool
      */
-    public function setAsDefault(): bool
-    {
+    public function setAsDefault(): bool {
         // Remove default from other locales
         static::where('is_default', true)
             ->where('id', '!=', $this->id)
@@ -188,10 +191,10 @@ class Locale extends Model
     /**
      * Toggle the active status.
      *
+     * @api
      * @return bool
      */
-    public function toggleActive(): bool
-    {
+    public function toggleActive(): bool {
         // Can't deactivate the default locale
         if ($this->is_default && $this->active) {
             return false;
@@ -203,54 +206,54 @@ class Locale extends Model
     /**
      * Get the locale code (alias for locale_initials).
      *
+     * @api
      * @return string
      */
-    public function getCodeAttribute(): string
-    {
+    public function getCodeAttribute(): string {
         return $this->locale_initials;
     }
 
     /**
      * Get the display name (native name with English in parentheses if different).
      *
+     * @api
      * @return string
      */
-    public function getDisplayName(): string
-    {
+    public function getDisplayName(): string {
         if ($this->native_name === $this->english_name) {
             return $this->english_name;
         }
 
-        return "{$this->native_name} ({$this->english_name})";
+        return "$this->native_name ($this->english_name)";
     }
 
     /**
      * Check if this is a right-to-left locale.
      *
+     * @api
      * @return bool
      */
-    public function isRtl(): bool
-    {
+    public function isRtl(): bool {
         return $this->rtl;
     }
 
     /**
      * Get the direction for CSS/HTML.
      *
+     * @api
      * @return string
      */
-    public function getDirection(): string
-    {
+    public function getDirection(): string {
         return $this->rtl ? 'rtl' : 'ltr';
     }
 
     /**
      * Clear the active locales cache.
      *
+     * @api
      * @return void
      */
-    public static function clearCache(): void
-    {
+    public static function clearCache(): void {
         Cache::forget('activeLocales');
     }
 }

@@ -13,8 +13,7 @@ use LonelyLights\Prosetta\Models\TranslationReview;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationApproved
-{
+class TranslationApproved {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -45,8 +44,7 @@ class TranslationApproved
      * @param TranslationReview $review
      * @param int|null $reviewerId
      */
-    public function __construct(Translation $translation, TranslationReview $review, ?int $reviewerId = null)
-    {
+    public function __construct(Translation $translation, TranslationReview $review, ?int $reviewerId = null) {
         $this->translation = $translation;
         $this->review = $review;
         $this->reviewerId = $reviewerId;

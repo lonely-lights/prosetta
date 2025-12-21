@@ -45,7 +45,12 @@ class Locale extends Model {
     # Model Functions
     ###########################################################
 
-    # Get Active Locales - 60 Minute Cache
+    /**
+     * Get Active Locales - 60 Minute Cache.
+     *
+     * @api
+     * @return array
+     */
     public static function getActiveLocales(): array {
         return Cache::remember('activeLocales', 60, function() {
             try {
@@ -71,6 +76,7 @@ class Locale extends Model {
      * Supports both single and bulk operations by accepting keys and values as either
      * strings or arrays.
      *
+     * @api
      * @param string $type          Type of the operation ('update' or 'destroy').
      * @param string $filePath      Path to the language file relative to the 'lang' directory.
      * @param string $languageCode  Language code representing the target language file.
@@ -81,7 +87,6 @@ class Locale extends Model {
      *
      * @deprecated Use LangKeyService methods instead. This will be removed in v0.4.
      */
-
     public static function manageLanguageFileEntry(
         string       $type,
         string       $filePath,

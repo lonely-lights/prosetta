@@ -17,8 +17,7 @@ use LonelyLights\Prosetta\Models\Translation;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationNeedsReview
-{
+class TranslationNeedsReview {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -41,8 +40,7 @@ class TranslationNeedsReview
      * @param Translation $translation
      * @param string|null $reason
      */
-    public function __construct(Translation $translation, ?string $reason = null)
-    {
+    public function __construct(Translation $translation, ?string $reason = null) {
         $this->translation = $translation;
         $this->reason = $reason;
     }

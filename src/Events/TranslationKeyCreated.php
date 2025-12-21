@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationKeyCreated
-{
+class TranslationKeyCreated {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -28,8 +27,7 @@ class TranslationKeyCreated
      *
      * @param TranslationKey $key
      */
-    public function __construct(TranslationKey $key)
-    {
+    public function __construct(TranslationKey $key) {
         $this->key = $key;
     }
 }

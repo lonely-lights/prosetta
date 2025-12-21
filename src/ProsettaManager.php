@@ -2,6 +2,9 @@
 
 namespace LonelyLights\Prosetta;
 
+use Exception;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use LonelyLights\Prosetta\Events\TranslationExported;
 use LonelyLights\Prosetta\Models\Locale;
@@ -10,7 +13,7 @@ use LonelyLights\Prosetta\Models\TranslationFile;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Services\FileExporter;
 use LonelyLights\Prosetta\Services\FileScanner;
-use LonelyLights\Prosetta\Services\FileSynchronizer;
+use Throwable;
 
 /**
  * Prosetta Manager
@@ -20,8 +23,7 @@ use LonelyLights\Prosetta\Services\FileSynchronizer;
  *
  * @package LonelyLights\Prosetta
  */
-class ProsettaManager
-{
+class ProsettaManager {
     /**
      * @var FileScanner
      */
@@ -37,8 +39,7 @@ class ProsettaManager
      *
      * @param FileScanner $scanner
      */
-    public function __construct(FileScanner $scanner)
-    {
+    public function __construct(FileScanner $scanner) {
         $this->scanner = $scanner;
     }
 
@@ -47,9 +48,9 @@ class ProsettaManager
      *
      * @param string $locale Locale to sync
      * @return array Sync report
+     * @throws Throwable
      */
-    public function sync(string $locale): array
-    {
+    public function sync(string $locale): array {
         $files = $this->scanner->scan($locale);
 
         $report = [
@@ -71,7 +72,7 @@ class ProsettaManager
             }
 
             DB::commit();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
             $report['errors'][] = $e->getMessage();
         }
@@ -83,9 +84,9 @@ class ProsettaManager
      * Sync all locales.
      *
      * @return array Combined sync report
+     * @throws Throwable
      */
-    public function syncAll(): array
-    {
+    public function syncAll(): array {
         $locales = $this->scanner->getAvailableLocales();
         $reports = [];
 
@@ -103,8 +104,7 @@ class ProsettaManager
      * @param string $locale
      * @return array
      */
-    protected function syncFile(array $fileInfo, string $locale): array
-    {
+    protected function syncFile(array $fileInfo, string $locale): array {
         $result = [
             'new_files' => [],
             'new_keys' => [],
@@ -112,6 +112,7 @@ class ProsettaManager
         ];
 
         // Find or create the file record
+        /** @var TranslationFile $file */
         $file = TranslationFile::firstOrCreate(
             ['path' => $fileInfo['path']],
             [
@@ -149,9 +150,9 @@ class ProsettaManager
      * @param string $locale
      * @return array
      */
-    protected function syncKey(TranslationFile $file, string $key, string $value, string $locale): array
-    {
+    protected function syncKey(TranslationFile $file, string $key, string $value, string $locale): array {
         // Find or create the key
+        /** @var TranslationKey $translationKey */
         $translationKey = TranslationKey::firstOrCreate(
             ['file_id' => $file->id, 'key' => $key],
             ['description' => null]
@@ -195,10 +196,9 @@ class ProsettaManager
     /**
      * Get all translation files.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return EloquentCollection<int, TranslationFile>
      */
-    public function files()
-    {
+    public function files(): EloquentCollection {
         return TranslationFile::orderBy('path')->get();
     }
 
@@ -208,20 +208,19 @@ class ProsettaManager
      * @param string $path
      * @return TranslationFile|null
      */
-    public function file(string $path): ?TranslationFile
-    {
+    public function file(string $path): ?TranslationFile {
         return TranslationFile::where('path', $path)->first();
     }
 
     /**
      * Create a new translation file.
      *
+     * @api
      * @param string $path
      * @param array $attributes
      * @return TranslationFile
      */
-    public function createFile(string $path, array $attributes = []): TranslationFile
-    {
+    public function createFile(string $path, array $attributes = []): TranslationFile {
         return TranslationFile::create(array_merge(
             ['path' => $path],
             $attributes
@@ -232,10 +231,9 @@ class ProsettaManager
      * Get all keys for a file.
      *
      * @param string $filePath
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return EloquentCollection<int, TranslationKey>|Collection<int, TranslationKey>
      */
-    public function keys(string $filePath)
-    {
+    public function keys(string $filePath): EloquentCollection|Collection {
         $file = $this->file($filePath);
 
         if (!$file) {
@@ -254,8 +252,7 @@ class ProsettaManager
      * @param string $source
      * @return Translation|null
      */
-    public function set(string $fullKey, string $value, string $locale, string $source = 'manual'): ?Translation
-    {
+    public function set(string $fullKey, string $value, string $locale, string $source = 'manual'): ?Translation {
         // Parse the full key into file path and key
         $parts = explode('.', $fullKey, 2);
 
@@ -266,12 +263,14 @@ class ProsettaManager
         [$filePath, $key] = $parts;
 
         // Find or create the file
+        /** @var TranslationFile $file */
         $file = TranslationFile::firstOrCreate(
             ['path' => $filePath],
             ['name' => ucfirst($filePath)]
         );
 
         // Find or create the key
+        /** @var TranslationKey $translationKey */
         $translationKey = TranslationKey::firstOrCreate(
             ['file_id' => $file->id, 'key' => $key]
         );
@@ -288,8 +287,7 @@ class ProsettaManager
      * @param string|null $fallback
      * @return string|null
      */
-    public function get(string $fullKey, string $locale, ?string $fallback = null): ?string
-    {
+    public function get(string $fullKey, string $locale, ?string $fallback = null): ?string {
         $parts = explode('.', $fullKey, 2);
 
         if (count($parts) < 2) {
@@ -321,8 +319,7 @@ class ProsettaManager
      * @param string $fullKey
      * @return bool
      */
-    public function delete(string $fullKey): bool
-    {
+    public function delete(string $fullKey): bool {
         $parts = explode('.', $fullKey, 2);
 
         if (count($parts) < 2) {
@@ -354,9 +351,9 @@ class ProsettaManager
      * @param string $locale
      * @param string $filePath
      * @return bool
+     * @throws Exception
      */
-    public function export(string $locale, string $filePath): bool
-    {
+    public function export(string $locale, string $filePath): bool {
         $file = $this->file($filePath);
 
         if (!$file) {
@@ -371,12 +368,10 @@ class ProsettaManager
 
         // Build the language array
         $langData = [];
+        /** @var Translation $translation */
         foreach ($translations as $translation) {
             $this->setNestedValue($langData, $translation->key->key, $translation->value);
         }
-
-        // Get statistics
-        $stats = $file->getStatistics($locale);
 
         // Generate file content with header
         $content = FileExporter::formatWithHeader(
@@ -387,7 +382,7 @@ class ProsettaManager
 
         // Write to disk
         $fullPath = $file->getFullPath($locale);
-        FileExporter::ensureFileExists($fullPath, "lang/{$locale}/{$file->path}.php");
+        FileExporter::ensureFileExists($fullPath, "lang/$locale/$file->path.php");
 
         $result = file_put_contents($fullPath, $content) !== false;
 
@@ -404,9 +399,9 @@ class ProsettaManager
      *
      * @param string $locale
      * @return array Results for each file
+     * @throws Exception
      */
-    public function exportAll(string $locale): array
-    {
+    public function exportAll(string $locale): array {
         $files = $this->files();
         $results = [];
 
@@ -423,8 +418,7 @@ class ProsettaManager
      * @param string $locale
      * @return array
      */
-    public function statistics(string $locale): array
-    {
+    public function statistics(string $locale): array {
         $totalKeys = TranslationKey::count();
 
         $translated = Translation::where('locale', $locale)->count();
@@ -453,10 +447,9 @@ class ProsettaManager
     /**
      * Get all active locales.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return Collection
      */
-    public function locales()
-    {
+    public function locales(): Collection {
         return Locale::active()->ordered()->get();
     }
 
@@ -465,8 +458,7 @@ class ProsettaManager
      *
      * @return Locale|null
      */
-    public function defaultLocale(): ?Locale
-    {
+    public function defaultLocale(): ?Locale {
         return Locale::getDefault();
     }
 
@@ -478,8 +470,7 @@ class ProsettaManager
      * @param mixed $value
      * @return void
      */
-    protected function setNestedValue(array &$array, string $key, mixed $value): void
-    {
+    protected function setNestedValue(array &$array, string $key, mixed $value): void {
         $keys = explode('.', $key);
         $current = &$array;
 

@@ -16,8 +16,7 @@ use Illuminate\Support\Facades\Log;
  *
  * @package LonelyLights\Prosetta\Services
  */
-class FileExporter
-{
+class FileExporter {
     /**
      * Ensure that the directory and file for language data exist.
      *
@@ -28,8 +27,7 @@ class FileExporter
      * @return void
      * @throws Exception If file or directory cannot be created.
      */
-    public static function ensureFileExists(string $fullPath, string $localPath): void
-    {
+    public static function ensureFileExists(string $fullPath, string $localPath): void {
         try {
             $directoryPath = dirname($fullPath);
             $localDirectoryPath = dirname($localPath);
@@ -66,8 +64,7 @@ class FileExporter
      * @return void
      * @throws RuntimeException If the file cannot be written.
      */
-    public static function writeToFile(string $filePath, array $langData): void
-    {
+    public static function writeToFile(string $filePath, array $langData): void {
         $backupFilePath = $filePath . '.bak';
         $output = "<?php\n\nreturn " . var_export($langData, true) . ";\n";
 
@@ -122,7 +119,7 @@ class FileExporter
     public static function processKeyValue(
         string $key,
         string $value,
-        array &$langData,
+        array  &$langData,
         string $languageCode,
         string $filePath
     ): void {
@@ -161,7 +158,7 @@ class FileExporter
      * @return string The formatted PHP file content.
      */
     public static function formatWithHeader(
-        array $langData,
+        array   $langData,
         ?string $title = null,
         ?string $description = null
     ): string {

@@ -13,8 +13,7 @@ use LonelyLights\Prosetta\Queue;
  *
  * @package LonelyLights\Prosetta\Services
  */
-class KeyManager
-{
+class KeyManager {
     /**
      * Generate an array of prefixed keys.
      *
@@ -24,8 +23,7 @@ class KeyManager
      * @param array|string|null $affix Affix to be applied to each key (optional).
      * @return array Array of (prefixed/suffixed) keys.
      */
-    public static function generatePrefixedKeys(array $keys, array|string $affix = null): array
-    {
+    public static function generatePrefixedKeys(array $keys, array|string $affix = null): array {
         return array_map(
             fn($key) => $affix !== null ? self::applyAffixation($affix, $key) : $key,
             $keys
@@ -40,12 +38,11 @@ class KeyManager
      * it handles 'only', 'prefix', and 'suffix' types.
      *
      * @param string|array $affix The affix to be applied. Can be a string or array.
-     *                            If array, expects two elements: the affix and its position.
+     *                            If arrayed, expects two elements: the affix and its position.
      * @param string $key The key to which the affix is to be applied.
      * @return string The key with the affix applied.
      */
-    public static function applyAffixation(string|array $affix, string $key): string
-    {
+    public static function applyAffixation(string|array $affix, string $key): string {
         $affixationType = config('prosetta.affixationType', '.');
         $affixationDefault = config('prosetta.affixationDefault', 'prefix');
 
@@ -86,8 +83,7 @@ class KeyManager
      * @param string|array|null $affixAttribute The attribute(s) to check for changes.
      * @return bool True if any affix attribute has changed.
      */
-    public static function hasAffixChanged(mixed $model, string|array|null $affixAttribute): bool
-    {
+    public static function hasAffixChanged(mixed $model, string|array|null $affixAttribute): bool {
         if ($affixAttribute === null) {
             return false;
         }
@@ -115,12 +111,12 @@ class KeyManager
      * @return void
      */
     public static function removeKeys(
-        string $filePath,
-        string $languageCode,
-        array|string $keys,
+        string            $filePath,
+        string            $languageCode,
+        array|string      $keys,
         array|string|null $affix = null,
-        ?string $reason = null,
-        string $localeOperation = 'all-keep'
+        ?string           $reason = null,
+        string            $localeOperation = 'all-keep'
     ): void {
         $reason = $reason ?? 'Entry Deleted';
         $keysToRemove = self::generatePrefixedKeys(is_array($keys) ? $keys : [$keys], $affix);

@@ -13,8 +13,7 @@ use LonelyLights\Prosetta\Models\Locale;
  *
  * @package LonelyLights\Prosetta\Console\Commands
  */
-class InstallCommand extends Command
-{
+class InstallCommand extends Command {
     /**
      * The name and signature of the console command.
      *
@@ -47,8 +46,7 @@ class InstallCommand extends Command
      *
      * @return int
      */
-    public function handle(): int
-    {
+    public function handle(): int {
         $this->info('');
         $this->info('  ____                     _   _        ');
         $this->info(' |  _ \ _ __ ___  ___  ___| |_| |_ __ _ ');
@@ -84,7 +82,7 @@ class InstallCommand extends Command
         // Done!
         $this->displayCompletionMessage($stack);
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -92,8 +90,7 @@ class InstallCommand extends Command
      *
      * @return void
      */
-    protected function publishConfig(): void
-    {
+    protected function publishConfig(): void {
         $this->components->task('Publishing configuration', function () {
             Artisan::call('vendor:publish', [
                 '--tag' => 'prosetta-config',
@@ -108,8 +105,7 @@ class InstallCommand extends Command
      *
      * @return void
      */
-    protected function runMigrations(): void
-    {
+    protected function runMigrations(): void {
         $this->components->task('Publishing migrations', function () {
             Artisan::call('vendor:publish', [
                 '--tag' => 'prosetta-migrations',
@@ -134,8 +130,7 @@ class InstallCommand extends Command
      *
      * @return string
      */
-    protected function getStackChoice(): string
-    {
+    protected function getStackChoice(): string {
         $stack = $this->option('stack');
 
         if ($this->input->isInteractive()) {
@@ -152,7 +147,7 @@ class InstallCommand extends Command
 
         // Validate stack
         if (!in_array($stack, ['blade', 'livewire', 'filament'])) {
-            $this->warn("Unknown stack '{$stack}', defaulting to 'blade'.");
+            $this->warn("Unknown stack '$stack', defaulting to 'blade'.");
             $stack = 'blade';
         }
 
@@ -181,8 +176,7 @@ class InstallCommand extends Command
      * @param string $stack
      * @return void
      */
-    protected function updateConfigStack(string $stack): void
-    {
+    protected function updateConfigStack(string $stack): void {
         $configPath = config_path('prosetta.php');
 
         if (!file_exists($configPath)) {
@@ -195,7 +189,7 @@ class InstallCommand extends Command
             // Replace the stack value in the config
             $contents = preg_replace(
                 "/'stack'\s*=>\s*'[a-z]+'/",
-                "'stack' => '{$stack}'",
+                "'stack' => '$stack'",
                 $contents
             );
 
@@ -211,8 +205,7 @@ class InstallCommand extends Command
      * @param string $stack
      * @return void
      */
-    protected function publishViews(string $stack): void
-    {
+    protected function publishViews(string $stack): void {
         // Check for --publish-views option or ask interactively
         $publishViews = $this->option('publish-views');
 
@@ -220,7 +213,7 @@ class InstallCommand extends Command
             $this->newLine();
             $this->line('  <comment>Note:</comment> Prosetta includes built-in views that work out of the box.');
             $this->line('  Publishing views is only needed if you want to customize them.');
-            $publishViews = $this->confirm('Would you like to publish the views for customization?', false);
+            $publishViews = $this->confirm('Would you like to publish the views for customization?');
         }
 
         if (!$publishViews) {
@@ -265,8 +258,7 @@ class InstallCommand extends Command
      *
      * @return void
      */
-    protected function createDefaultLocales(): void
-    {
+    protected function createDefaultLocales(): void {
         $this->components->task('Creating default locales', function () {
             foreach ($this->defaultLocales as $localeData) {
                 Locale::firstOrCreate(
@@ -279,7 +271,7 @@ class InstallCommand extends Command
 
         // Offer to add more locales
         if ($this->input->isInteractive()) {
-            $addMore = $this->confirm('Would you like to add more locales?', false);
+            $addMore = $this->confirm('Would you like to add more locales?');
 
             if ($addMore) {
                 $this->addAdditionalLocales();
@@ -292,8 +284,7 @@ class InstallCommand extends Command
      *
      * @return void
      */
-    protected function addAdditionalLocales(): void
-    {
+    protected function addAdditionalLocales(): void {
         $commonLocales = [
             'es' => ['english_name' => 'Spanish', 'native_name' => 'Espanol'],
             'fr' => ['english_name' => 'French', 'native_name' => 'Francais'],
@@ -309,7 +300,7 @@ class InstallCommand extends Command
 
         $choices = ['skip' => 'Skip - no additional locales'];
         foreach ($commonLocales as $code => $data) {
-            $choices[$code] = "{$code} - {$data['english_name']}";
+            $choices[$code] = "$code - {$data['english_name']}";
         }
         $choices['custom'] = 'Enter a custom locale';
 
@@ -335,7 +326,7 @@ class InstallCommand extends Command
                 $code = $this->ask('Enter locale code (e.g., "nl" for Dutch)');
                 $englishName = $this->ask('Enter English name');
                 $nativeName = $this->ask('Enter native name');
-                $rtl = $this->confirm('Is this a right-to-left language?', false);
+                $rtl = $this->confirm('Is this a right-to-left language?');
 
                 Locale::firstOrCreate(
                     ['locale_initials' => $code],
@@ -348,7 +339,7 @@ class InstallCommand extends Command
                     ]
                 );
 
-                $this->info("  Added locale: {$code}");
+                $this->info("  Added locale: $code");
             } elseif (isset($commonLocales[$code])) {
                 $data = $commonLocales[$code];
                 Locale::firstOrCreate(
@@ -362,7 +353,7 @@ class InstallCommand extends Command
                     ]
                 );
 
-                $this->info("  Added locale: {$code} - {$data['english_name']}");
+                $this->info("  Added locale: $code - {$data['english_name']}");
             }
         }
     }
@@ -372,8 +363,7 @@ class InstallCommand extends Command
      *
      * @return void
      */
-    protected function offerInitialSync(): void
-    {
+    protected function offerInitialSync(): void {
         $runSync = !$this->input->isInteractive() || $this->confirm('Run initial sync of language files?', true);
 
         if ($runSync) {
@@ -390,8 +380,7 @@ class InstallCommand extends Command
      * @param string $stack
      * @return void
      */
-    protected function displayCompletionMessage(string $stack): void
-    {
+    protected function displayCompletionMessage(string $stack): void {
         $this->newLine();
         $this->info('Prosetta has been installed successfully!');
         $this->newLine();
@@ -410,7 +399,7 @@ class InstallCommand extends Command
         $this->newLine();
 
         if ($stack !== 'blade') {
-            $this->line("<comment>Stack: {$stack}</comment>");
+            $this->line("<comment>Stack: $stack</comment>");
             if ($stack === 'livewire') {
                 $this->line('  Livewire components are available for enhanced interactivity.');
             } elseif ($stack === 'filament') {

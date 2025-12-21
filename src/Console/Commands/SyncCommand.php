@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Facades\Prosetta;
  *
  * @package LonelyLights\Prosetta\Console\Commands
  */
-class SyncCommand extends Command
-{
+class SyncCommand extends Command {
     /**
      * The name and signature of the console command.
      *
@@ -35,14 +34,13 @@ class SyncCommand extends Command
      *
      * @return int
      */
-    public function handle(): int
-    {
+    public function handle(): int {
         $locale = $this->argument('locale');
         $syncAll = $this->option('all');
 
         if (!$locale && !$syncAll) {
             $this->error('Please specify a locale or use --all to sync all locales.');
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         if ($syncAll) {
@@ -58,22 +56,21 @@ class SyncCommand extends Command
      * @param string $locale
      * @return int
      */
-    protected function syncLocale(string $locale): int
-    {
-        $this->info("Syncing locale: {$locale}...");
+    protected function syncLocale(string $locale): int {
+        $this->info("Syncing locale: $locale...");
 
         $report = Prosetta::sync($locale);
 
         $this->displayReport($report);
 
         if (!empty($report['errors'])) {
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         $this->newLine();
-        $this->info("Sync completed for locale: {$locale}");
+        $this->info("Sync completed for locale: $locale");
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -81,8 +78,7 @@ class SyncCommand extends Command
      *
      * @return int
      */
-    protected function syncAll(): int
-    {
+    protected function syncAll(): int {
         $this->info('Syncing all locales...');
         $this->newLine();
 
@@ -90,7 +86,7 @@ class SyncCommand extends Command
         $hasErrors = false;
 
         foreach ($reports as $locale => $report) {
-            $this->line("<comment>Locale: {$locale}</comment>");
+            $this->line("<comment>Locale: $locale</comment>");
             $this->displayReport($report);
             $this->newLine();
 
@@ -101,12 +97,12 @@ class SyncCommand extends Command
 
         if ($hasErrors) {
             $this->error('Sync completed with errors. Check the output above.');
-            return Command::FAILURE;
+            return self::FAILURE;
         }
 
         $this->info('All locales synced successfully!');
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -115,13 +111,12 @@ class SyncCommand extends Command
      * @param array $report
      * @return void
      */
-    protected function displayReport(array $report): void
-    {
+    protected function displayReport(array $report): void {
         // New files
         if (!empty($report['new_files'])) {
             $this->line('  <info>New files:</info>');
             foreach ($report['new_files'] as $file) {
-                $this->line("    + {$file}");
+                $this->line("    + $file");
             }
         }
 
@@ -130,7 +125,7 @@ class SyncCommand extends Command
             $this->line('  <info>New keys:</info> ' . count($report['new_keys']));
             if ($this->getOutput()->isVerbose()) {
                 foreach ($report['new_keys'] as $key) {
-                    $this->line("    + {$key}");
+                    $this->line("    + $key");
                 }
             }
         }
@@ -140,7 +135,7 @@ class SyncCommand extends Command
             $this->line('  <info>Updated keys:</info> ' . count($report['updated_keys']));
             if ($this->getOutput()->isVerbose()) {
                 foreach ($report['updated_keys'] as $key) {
-                    $this->line("    ~ {$key}");
+                    $this->line("    ~ $key");
                 }
             }
         }
@@ -149,7 +144,7 @@ class SyncCommand extends Command
         if (!empty($report['errors'])) {
             $this->line('  <error>Errors:</error>');
             foreach ($report['errors'] as $error) {
-                $this->line("    ! {$error}");
+                $this->line("    ! $error");
             }
         }
 

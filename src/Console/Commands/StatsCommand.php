@@ -4,7 +4,6 @@ namespace LonelyLights\Prosetta\Console\Commands;
 
 use Illuminate\Console\Command;
 use LonelyLights\Prosetta\Facades\Prosetta;
-use LonelyLights\Prosetta\Models\TranslationFile;
 
 /**
  * Prosetta Stats Command
@@ -13,8 +12,7 @@ use LonelyLights\Prosetta\Models\TranslationFile;
  *
  * @package LonelyLights\Prosetta\Console\Commands
  */
-class StatsCommand extends Command
-{
+class StatsCommand extends Command {
     /**
      * The name and signature of the console command.
      *
@@ -36,8 +34,7 @@ class StatsCommand extends Command
      *
      * @return int
      */
-    public function handle(): int
-    {
+    public function handle(): int {
         $locale = $this->argument('locale');
         $byFile = $this->option('by-file');
 
@@ -53,13 +50,12 @@ class StatsCommand extends Command
      *
      * @return int
      */
-    protected function showAllLocalesStats(): int
-    {
+    protected function showAllLocalesStats(): int {
         $locales = Prosetta::locales();
 
         if ($locales->isEmpty()) {
             $this->warn('No active locales found.');
-            return Command::SUCCESS;
+            return self::SUCCESS;
         }
 
         $this->info('Translation Statistics');
@@ -87,7 +83,7 @@ class StatsCommand extends Command
             $rows
         );
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -97,11 +93,10 @@ class StatsCommand extends Command
      * @param bool $byFile
      * @return int
      */
-    protected function showLocaleStats(string $locale, bool $byFile = false): int
-    {
+    protected function showLocaleStats(string $locale, bool $byFile = false): int {
         $stats = Prosetta::statistics($locale);
 
-        $this->info("Translation Statistics for: {$locale}");
+        $this->info("Translation Statistics for: $locale");
         $this->newLine();
 
         // Summary statistics
@@ -122,7 +117,7 @@ class StatsCommand extends Command
             $this->showFileStats($locale);
         }
 
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**
@@ -131,8 +126,7 @@ class StatsCommand extends Command
      * @param string $locale
      * @return void
      */
-    protected function showFileStats(string $locale): void
-    {
+    protected function showFileStats(string $locale): void {
         $this->line('<comment>Statistics by File:</comment>');
         $this->newLine();
 
@@ -173,14 +167,13 @@ class StatsCommand extends Command
      * @param float $percentage
      * @return string
      */
-    protected function formatPercentage(float $percentage): string
-    {
+    protected function formatPercentage(float $percentage): string {
         if ($percentage >= 100) {
-            return "<info>{$percentage}%</info>";
+            return "<info>$percentage%</info>";
         } elseif ($percentage >= 75) {
-            return "<comment>{$percentage}%</comment>";
+            return "<comment>$percentage%</comment>";
         } else {
-            return "{$percentage}%";
+            return "$percentage%";
         }
     }
 }

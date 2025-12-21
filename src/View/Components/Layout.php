@@ -12,8 +12,7 @@ use Illuminate\View\View;
  *
  * @package LonelyLights\Prosetta\View\Components
  */
-class Layout extends Component
-{
+class Layout extends Component {
     /**
      * The page title.
      *
@@ -26,7 +25,7 @@ class Layout extends Component
      *
      * @var mixed
      */
-    public $locales;
+    public mixed $locales;
 
     /**
      * Current locale.
@@ -39,11 +38,10 @@ class Layout extends Component
      * Create a new component instance.
      *
      * @param string|null $title
-     * @param mixed $locales
+     * @param mixed|null $locales
      * @param string|null $currentLocale
      */
-    public function __construct(?string $title = null, $locales = null, ?string $currentLocale = null)
-    {
+    public function __construct(?string $title = null, mixed $locales = null, ?string $currentLocale = null) {
         $this->title = $title;
         $this->locales = $locales;
         $this->currentLocale = $currentLocale;
@@ -54,8 +52,7 @@ class Layout extends Component
      *
      * @return View
      */
-    public function render(): View
-    {
+    public function render(): View {
         return view('prosetta::layouts.app');
     }
 }

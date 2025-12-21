@@ -14,8 +14,7 @@ use LonelyLights\Prosetta\Queue;
  *
  * @package LonelyLights\Prosetta\Services
  */
-class TranslationService
-{
+class TranslationService {
     /**
      * Service configuration - affix attribute(s) to watch.
      *
@@ -29,8 +28,7 @@ class TranslationService
      * @param array $config Configuration parameters.
      * @return void
      */
-    public static function setConfig(array $config): void
-    {
+    public static function setConfig(array $config): void {
         static::$languageAffixAttribute = $config['affixAttribute'] ?? null;
     }
 
@@ -39,8 +37,7 @@ class TranslationService
      *
      * @return string|array|null
      */
-    public static function getAffixAttribute(): string|array|null
-    {
+    public static function getAffixAttribute(): string|array|null {
         return static::$languageAffixAttribute;
     }
 
@@ -51,8 +48,7 @@ class TranslationService
      * @param Model $model Model instance to fetch values from.
      * @return array Mapped values.
      */
-    public static function mapToValues(array $keys, Model $model): array
-    {
+    public static function mapToValues(array $keys, Model $model): array {
         return array_map(fn($key) => $model->{$key}, $keys);
     }
 
@@ -65,8 +61,7 @@ class TranslationService
      * @param string $key The key for which details are needed.
      * @return array Array containing model details.
      */
-    public static function getModelDetails(Model $model, string $key): array
-    {
+    public static function getModelDetails(Model $model, string $key): array {
         $modelDetails = [];
 
         if (property_exists($model, 'modelDescription')) {
@@ -93,10 +88,10 @@ class TranslationService
      * @throws Exception
      */
     public static function checkVisibility(
-        Model $model,
+        Model  $model,
         string $filePath,
         string $languageCode,
-        array $keyValuePairs
+        array  $keyValuePairs
     ): array {
         $fullUpdateNeeded = false;
         $earlyExit = false;
@@ -143,9 +138,9 @@ class TranslationService
      * @return void
      */
     public static function enqueueTranslationTask(
-        Model $model,
+        Model  $model,
         string $method,
-        array $keyValuePair,
+        array  $keyValuePair,
         string $baseLanguage,
         string $languageCode,
         string $filePath
@@ -198,11 +193,11 @@ class TranslationService
      * @return array Array of key-value pairs with metadata.
      */
     public static function buildKeyValuePairs(
-        array $keys,
-        Model $model,
+        array             $keys,
+        Model             $model,
         string|array|null $affix,
         string|array|null $oldAffix,
-        array $capturedData = []
+        array             $capturedData = []
     ): array {
         return array_map(function ($key) use ($model, $affix, $oldAffix, $capturedData) {
             $affixedKey = $affix !== null ? KeyManager::applyAffixation($affix, $key) : $key;

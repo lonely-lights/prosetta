@@ -15,16 +15,14 @@ use LonelyLights\Prosetta\Facades\Prosetta;
  *
  * @package LonelyLights\Prosetta\Http\Controllers
  */
-class DashboardController extends Controller
-{
+class DashboardController extends Controller {
     /**
      * Display the dashboard.
      *
      * @param Request $request
      * @return View
      */
-    public function index(Request $request): View
-    {
+    public function index(Request $request): View {
         $locales = Prosetta::locales();
         $currentLocale = $request->get('locale', $locales->first()?->locale_initials ?? 'en');
 
@@ -52,13 +50,12 @@ class DashboardController extends Controller
      * @param Request $request
      * @return RedirectResponse
      */
-    public function sync(Request $request): RedirectResponse
-    {
+    public function sync(Request $request): RedirectResponse {
         $locale = $request->input('locale');
 
         if ($locale) {
             $report = Prosetta::sync($locale);
-            $message = "Synced locale '{$locale}': " .
+            $message = "Synced locale '$locale': " .
                 count($report['new_files']) . ' new files, ' .
                 count($report['new_keys']) . ' new keys, ' .
                 count($report['updated_keys']) . ' updated keys.';
@@ -70,7 +67,7 @@ class DashboardController extends Controller
                 $totalFiles += count($report['new_files']);
                 $totalKeys += count($report['new_keys']);
             }
-            $message = "Synced all locales: {$totalFiles} new files, {$totalKeys} new keys.";
+            $message = "Synced all locales: $totalFiles new files, $totalKeys new keys.";
         }
 
         return redirect()->route('prosetta.dashboard')
@@ -83,8 +80,7 @@ class DashboardController extends Controller
      * @param Request $request
      * @return RedirectResponse
      */
-    public function export(Request $request): RedirectResponse
-    {
+    public function export(Request $request): RedirectResponse {
         $locale = $request->input('locale');
 
         if (!$locale) {
@@ -96,9 +92,9 @@ class DashboardController extends Controller
         $success = count(array_filter($results));
         $failed = count($results) - $success;
 
-        $message = "Exported {$success} files for locale '{$locale}'.";
+        $message = "Exported $success files for locale '$locale'.";
         if ($failed > 0) {
-            $message .= " {$failed} files failed.";
+            $message .= " $failed files failed.";
         }
 
         return redirect()->route('prosetta.dashboard')

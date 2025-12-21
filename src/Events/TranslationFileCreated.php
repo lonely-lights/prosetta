@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Models\TranslationFile;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationFileCreated
-{
+class TranslationFileCreated {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -28,8 +27,7 @@ class TranslationFileCreated
      *
      * @param TranslationFile $file
      */
-    public function __construct(TranslationFile $file)
-    {
+    public function __construct(TranslationFile $file) {
         $this->file = $file;
     }
 }

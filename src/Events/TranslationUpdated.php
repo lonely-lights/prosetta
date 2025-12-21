@@ -12,8 +12,7 @@ use LonelyLights\Prosetta\Models\Translation;
  *
  * @package LonelyLights\Prosetta\Events
  */
-class TranslationUpdated
-{
+class TranslationUpdated {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     /**
@@ -44,8 +43,7 @@ class TranslationUpdated
      * @param string|null $previousValue
      * @param string $newValue
      */
-    public function __construct(Translation $translation, ?string $previousValue, string $newValue)
-    {
+    public function __construct(Translation $translation, ?string $previousValue, string $newValue) {
         $this->translation = $translation;
         $this->previousValue = $previousValue;
         $this->newValue = $newValue;

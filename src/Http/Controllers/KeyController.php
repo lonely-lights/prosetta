@@ -16,17 +16,14 @@ use LonelyLights\Prosetta\Models\TranslationKey;
  *
  * @package LonelyLights\Prosetta\Http\Controllers
  */
-class KeyController extends Controller
-{
+class KeyController extends Controller {
     /**
      * Display the specified key with all its translations.
      *
-     * @param Request $request
      * @param TranslationKey $key
      * @return View
      */
-    public function show(Request $request, TranslationKey $key): View
-    {
+    public function show(TranslationKey $key): View {
         $key->load(['file', 'translations.reviews' => function ($q) {
             $q->latest()->limit(5);
         }]);
@@ -53,8 +50,7 @@ class KeyController extends Controller
      * @param TranslationKey $key
      * @return View
      */
-    public function edit(TranslationKey $key): View
-    {
+    public function edit(TranslationKey $key): View {
         $key->load('file');
 
         return view('prosetta::keys.edit', [
@@ -69,8 +65,7 @@ class KeyController extends Controller
      * @param TranslationKey $key
      * @return RedirectResponse
      */
-    public function update(Request $request, TranslationKey $key): RedirectResponse
-    {
+    public function update(Request $request, TranslationKey $key): RedirectResponse {
         $validated = $request->validate([
             'description' => 'nullable|string',
             'context' => 'nullable|string',
@@ -92,13 +87,12 @@ class KeyController extends Controller
      * @param TranslationKey $key
      * @return RedirectResponse
      */
-    public function destroy(TranslationKey $key): RedirectResponse
-    {
+    public function destroy(TranslationKey $key): RedirectResponse {
         $file = $key->file;
         $keyName = $key->key;
         $key->delete();
 
         return redirect()->route('prosetta.files.show', $file)
-            ->with('success', "Key '{$keyName}' deleted successfully.");
+            ->with('success', "Key '$keyName' deleted successfully.");
     }
 }

@@ -2,6 +2,9 @@
 
 namespace LonelyLights\Prosetta\Models;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,13 +25,20 @@ use LonelyLights\Prosetta\Events\TranslationKeyCreated;
  * @property int|null $max_length          UI constraint for length
  * @property bool $is_html                 Whether value contains HTML markup
  * @property bool $is_deprecated           Whether key is deprecated
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
- * @property \Carbon\Carbon|null $deleted_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property Carbon|null $deleted_at
  *
  * @property-read TranslationFile $file
- * @property-read \Illuminate\Database\Eloquent\Collection|Translation[] $translations
+ * @property-read Collection|Translation[] $translations
  * @property-read int|null $translations_count
+ *
+ * @method static Builder|static missingTranslation(string $locale)
+ * @method static Builder|static deprecated(bool $deprecated = true)
+ * @method static Builder|static withPlaceholders()
+ * @method static Builder|static html()
+ *
+ * @mixin Builder
  *
  * @package LonelyLights\Prosetta\Models
  */
@@ -110,63 +120,66 @@ class TranslationKey extends Model
     /**
      * Scope to filter deprecated keys.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param bool $deprecated
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeDeprecated($query, bool $deprecated = true)
-    {
+    public function scopeDeprecated(Builder $query, bool $deprecated = true): Builder {
         return $query->where('is_deprecated', $deprecated);
     }
 
     /**
      * Scope to filter keys with placeholders.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @api
+     * @param Builder $query
+     * @return Builder
      */
-    public function scopeWithPlaceholders($query)
-    {
+    public function scopeWithPlaceholders(Builder $query): Builder {
         return $query->whereNotNull('placeholders');
     }
 
     /**
      * Scope to filter HTML-enabled keys.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @api
+     * @param Builder $query
+     * @return Builder
      */
-    public function scopeHtml($query)
-    {
+    public function scopeHtml(Builder $query): Builder {
         return $query->where('is_html', true);
     }
 
     /**
      * Scope to find keys missing translation for a locale.
      *
-     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @api
+     * @param Builder $query
      * @param string $locale
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
      */
-    public function scopeMissingTranslation($query, string $locale)
-    {
+    public function scopeMissingTranslation(Builder $query, string $locale): Builder {
         return $query->whereDoesntHave('translations', fn($q) => $q->where('locale', $locale));
     }
 
     /**
      * Get the translation for a specific locale.
      *
+     * @api
      * @param string $locale
      * @return Translation|null
      */
     public function getTranslation(string $locale): ?Translation
     {
+        /** @var Translation|null */
         return $this->translations()->where('locale', $locale)->first();
     }
 
     /**
      * Get the translated value for a specific locale.
      *
+     * @api
      * @param string $locale
      * @param string|null $fallback
      * @return string|null
@@ -181,6 +194,7 @@ class TranslationKey extends Model
     /**
      * Set the translation value for a specific locale.
      *
+     * @api
      * @param string $locale
      * @param string $value
      * @param string $source
@@ -188,6 +202,7 @@ class TranslationKey extends Model
      */
     public function setTranslation(string $locale, string $value, string $source = 'manual'): Translation
     {
+        /** @var Translation */
         return $this->translations()->updateOrCreate(
             ['locale' => $locale],
             ['value' => $value, 'source' => $source]
@@ -197,6 +212,7 @@ class TranslationKey extends Model
     /**
      * Get the full key identifier (file.key format).
      *
+     * @api
      * @return string
      */
     public function getFullKey(): string
@@ -207,6 +223,7 @@ class TranslationKey extends Model
     /**
      * Mark this key as deprecated.
      *
+     * @api
      * @return bool
      */
     public function deprecate(): bool
@@ -217,6 +234,7 @@ class TranslationKey extends Model
     /**
      * Validate that a value contains all required placeholders.
      *
+     * @api
      * @param string $value
      * @return array Missing placeholders
      */

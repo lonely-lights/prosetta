@@ -16,8 +16,7 @@ use LonelyLights\Prosetta\Models\Translation;
  *
  * @package LonelyLights\Prosetta\Http\Controllers
  */
-class TranslationController extends Controller
-{
+class TranslationController extends Controller {
     /**
      * Update the specified translation.
      *
@@ -25,8 +24,7 @@ class TranslationController extends Controller
      * @param Translation $translation
      * @return JsonResponse|RedirectResponse
      */
-    public function update(Request $request, Translation $translation): JsonResponse|RedirectResponse
-    {
+    public function update(Request $request, Translation $translation): JsonResponse|RedirectResponse {
         $validated = $request->validate([
             'value' => 'required|string',
         ]);
@@ -57,8 +55,7 @@ class TranslationController extends Controller
      * @param Translation $translation
      * @return JsonResponse|RedirectResponse
      */
-    public function approve(Request $request, Translation $translation): JsonResponse|RedirectResponse
-    {
+    public function approve(Request $request, Translation $translation): JsonResponse|RedirectResponse {
         $notes = $request->input('notes');
 
         $translation->approve(auth()->id(), $notes);
@@ -85,8 +82,7 @@ class TranslationController extends Controller
      * @param Translation $translation
      * @return JsonResponse|RedirectResponse
      */
-    public function reject(Request $request, Translation $translation): JsonResponse|RedirectResponse
-    {
+    public function reject(Request $request, Translation $translation): JsonResponse|RedirectResponse {
         $validated = $request->validate([
             'notes' => 'required|string|max:1000',
         ]);
