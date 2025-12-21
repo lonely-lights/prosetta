@@ -22,9 +22,9 @@ class InstallCommand extends Command
      */
     protected $signature = 'prosetta:install
         {--stack=blade : UI stack to use (blade, livewire, filament)}
+        {--publish-views : Publish views for customization}
         {--skip-migrations : Skip running migrations}
-        {--skip-locales : Skip creating default locales}
-        {--no-interaction : Run without prompts}';
+        {--skip-locales : Skip creating default locales}';
 
     /**
      * The console command description.
@@ -117,7 +117,7 @@ class InstallCommand extends Command
             return true;
         });
 
-        $runMigrations = $this->option('no-interaction') || $this->confirm('Run database migrations now?', true);
+        $runMigrations = !$this->input->isInteractive() || $this->confirm('Run database migrations now?', true);
 
         if ($runMigrations) {
             $this->components->task('Running migrations', function () {
@@ -138,7 +138,7 @@ class InstallCommand extends Command
     {
         $stack = $this->option('stack');
 
-        if (!$this->option('no-interaction')) {
+        if ($this->input->isInteractive()) {
             $stack = $this->choice(
                 'Which UI stack would you like to use?',
                 [
@@ -169,7 +169,40 @@ class InstallCommand extends Command
             $stack = 'blade';
         }
 
+        // Update the config file with the selected stack
+        $this->updateConfigStack($stack);
+
         return $stack;
+    }
+
+    /**
+     * Update the published config file with the selected stack.
+     *
+     * @param string $stack
+     * @return void
+     */
+    protected function updateConfigStack(string $stack): void
+    {
+        $configPath = config_path('prosetta.php');
+
+        if (!file_exists($configPath)) {
+            return;
+        }
+
+        $this->components->task('Configuring UI stack', function () use ($configPath, $stack) {
+            $contents = file_get_contents($configPath);
+
+            // Replace the stack value in the config
+            $contents = preg_replace(
+                "/'stack'\s*=>\s*'[a-z]+'/",
+                "'stack' => '{$stack}'",
+                $contents
+            );
+
+            file_put_contents($configPath, $contents);
+
+            return true;
+        });
     }
 
     /**
@@ -180,7 +213,23 @@ class InstallCommand extends Command
      */
     protected function publishViews(string $stack): void
     {
-        // Always publish base Blade views
+        // Check for --publish-views option or ask interactively
+        $publishViews = $this->option('publish-views');
+
+        if (!$publishViews && $this->input->isInteractive()) {
+            $this->newLine();
+            $this->line('  <comment>Note:</comment> Prosetta includes built-in views that work out of the box.');
+            $this->line('  Publishing views is only needed if you want to customize them.');
+            $publishViews = $this->confirm('Would you like to publish the views for customization?', false);
+        }
+
+        if (!$publishViews) {
+            $this->info('  Using built-in package views. You can publish later with:');
+            $this->line('  <info>php artisan vendor:publish --tag=prosetta-views</info>');
+            return;
+        }
+
+        // Publish base Blade views
         $this->components->task('Publishing Blade views', function () {
             Artisan::call('vendor:publish', [
                 '--tag' => 'prosetta-views',
@@ -229,7 +278,7 @@ class InstallCommand extends Command
         });
 
         // Offer to add more locales
-        if (!$this->option('no-interaction')) {
+        if ($this->input->isInteractive()) {
             $addMore = $this->confirm('Would you like to add more locales?', false);
 
             if ($addMore) {
@@ -258,19 +307,31 @@ class InstallCommand extends Command
             'ru' => ['english_name' => 'Russian', 'native_name' => 'Russkiy'],
         ];
 
-        $choices = array_map(fn($code, $data) => "{$code} - {$data['english_name']}", array_keys($commonLocales), $commonLocales);
+        $choices = ['skip' => 'Skip - no additional locales'];
+        foreach ($commonLocales as $code => $data) {
+            $choices[$code] = "{$code} - {$data['english_name']}";
+        }
         $choices['custom'] = 'Enter a custom locale';
 
         $selected = $this->choice(
-            'Select locales to add (comma-separated for multiple)',
+            'Select locales to add (comma-separated for multiple, or press Enter to skip)',
             $choices,
-            null,
+            'skip',
             null,
             true
         );
 
-        foreach ($selected as $selection) {
-            if ($selection === 'custom') {
+        // Handle skip selection
+        if (in_array('skip', $selected) || empty($selected)) {
+            return;
+        }
+
+        foreach ($selected as $code) {
+            if ($code === 'skip') {
+                continue;
+            }
+
+            if ($code === 'custom') {
                 $code = $this->ask('Enter locale code (e.g., "nl" for Dutch)');
                 $englishName = $this->ask('Enter English name');
                 $nativeName = $this->ask('Enter native name');
@@ -288,24 +349,20 @@ class InstallCommand extends Command
                 );
 
                 $this->info("  Added locale: {$code}");
-            } else {
-                // Parse the selection to get the code
-                $code = trim(explode(' - ', $selection)[0]);
-                if (isset($commonLocales[$code])) {
-                    $data = $commonLocales[$code];
-                    Locale::firstOrCreate(
-                        ['locale_initials' => $code],
-                        [
-                            'locale_initials' => $code,
-                            'english_name' => $data['english_name'],
-                            'native_name' => $data['native_name'],
-                            'rtl' => $data['rtl'] ?? false,
-                            'active' => true,
-                        ]
-                    );
+            } elseif (isset($commonLocales[$code])) {
+                $data = $commonLocales[$code];
+                Locale::firstOrCreate(
+                    ['locale_initials' => $code],
+                    [
+                        'locale_initials' => $code,
+                        'english_name' => $data['english_name'],
+                        'native_name' => $data['native_name'],
+                        'rtl' => $data['rtl'] ?? false,
+                        'active' => true,
+                    ]
+                );
 
-                    $this->info("  Added locale: {$code} - {$data['english_name']}");
-                }
+                $this->info("  Added locale: {$code} - {$data['english_name']}");
             }
         }
     }
@@ -317,7 +374,7 @@ class InstallCommand extends Command
      */
     protected function offerInitialSync(): void
     {
-        $runSync = $this->option('no-interaction') || $this->confirm('Run initial sync of language files?', true);
+        $runSync = !$this->input->isInteractive() || $this->confirm('Run initial sync of language files?', true);
 
         if ($runSync) {
             $this->components->task('Syncing language files', function () {

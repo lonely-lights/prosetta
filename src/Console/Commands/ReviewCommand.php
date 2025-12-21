@@ -91,7 +91,8 @@ class ReviewCommand extends Command
      */
     protected function showNeedsReview(string $locale, ?string $file, int $limit): bool
     {
-        $query = Translation::needsReview()
+        $query = Translation::query()
+            ->needsReview()
             ->where('locale', $locale)
             ->with('key.file');
 
@@ -134,7 +135,8 @@ class ReviewCommand extends Command
      */
     protected function showMissing(string $locale, ?string $file, int $limit): bool
     {
-        $query = TranslationKey::missingTranslation($locale)
+        $query = TranslationKey::query()
+            ->missingTranslation($locale)
             ->with('file');
 
         if ($file) {
@@ -175,7 +177,8 @@ class ReviewCommand extends Command
      */
     protected function showRejected(string $locale, ?string $file, int $limit): bool
     {
-        $query = Translation::status(Translation::STATUS_REJECTED)
+        $query = Translation::query()
+            ->status(Translation::STATUS_REJECTED)
             ->where('locale', $locale)
             ->with(['key.file', 'reviews' => fn($q) => $q->latest()->limit(1)]);
 

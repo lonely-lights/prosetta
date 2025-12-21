@@ -182,4 +182,38 @@ return [
 
     'logChannel' => 'prosetta',
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Route Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These settings control the routes for Prosetta's admin UI. You can
+    | customize the prefix, middleware, and enable/disable the routes.
+    |
+    */
+
+    'routes' => [
+        'enabled' => true,
+        'prefix' => 'prosetta',
+        'middleware' => ['web', 'auth'],
+    ],
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | UI Stack
+    |--------------------------------------------------------------------------
+    |
+    | This setting defines the UI stack used by Prosetta. Options are:
+    | - 'blade': Standard Blade + Alpine.js (works everywhere)
+    | - 'livewire': Livewire components (requires livewire/livewire)
+    | - 'filament': Filament resources (requires Filament admin panel)
+    |
+    | This is set automatically during installation but can be changed here.
+    |
+    */
+
+    'stack' => 'blade',
+
 ];

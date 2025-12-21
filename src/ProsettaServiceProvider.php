@@ -2,6 +2,7 @@
 
 namespace LonelyLights\Prosetta;
 
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Console\Commands\ExportCommand;
 use LonelyLights\Prosetta\Console\Commands\InstallCommand;
@@ -15,6 +16,7 @@ use LonelyLights\Prosetta\Services\FileSynchronizer;
 use LonelyLights\Prosetta\Services\KeyManager;
 use LonelyLights\Prosetta\Services\LangKeyService;
 use LonelyLights\Prosetta\Services\TranslationService;
+use LonelyLights\Prosetta\View\Components\Layout;
 
 /**
  * Prosetta Service Provider
@@ -138,6 +140,9 @@ class ProsettaServiceProvider extends ServiceProvider
 
         // Load views
         $this->loadViews();
+
+        // Register Blade components
+        $this->registerComponents();
     }
 
     /**
@@ -172,6 +177,8 @@ class ProsettaServiceProvider extends ServiceProvider
                 => database_path("migrations/{$timestamp}_04_create_prosetta_translations_table.php"),
             __DIR__ . '/../database/migrations/create_prosetta_reviews_table.php.stub'
                 => database_path("migrations/{$timestamp}_05_create_prosetta_reviews_table.php"),
+            __DIR__ . '/../database/migrations/create_prosetta_queue_table.php.stub'
+                => database_path("migrations/{$timestamp}_06_create_prosetta_queue_table.php"),
         ], 'prosetta-migrations');
     }
 
@@ -221,6 +228,25 @@ class ProsettaServiceProvider extends ServiceProvider
                 $viewsPath => resource_path('views/vendor/prosetta'),
             ], 'prosetta-views');
         }
+    }
+
+    /**
+     * Register Blade components.
+     *
+     * @return void
+     */
+    protected function registerComponents(): void
+    {
+        // Register class-based components
+        Blade::component('prosetta::layout', Layout::class);
+
+        // Register anonymous component namespace
+        // This allows <x-prosetta::component-name> to resolve to
+        // resources/views/components/component-name.blade.php
+        Blade::anonymousComponentPath(
+            __DIR__ . '/../resources/views/components',
+            'prosetta'
+        );
     }
 
     /**
