@@ -1,10 +1,11 @@
 {
   "name": "lonely-lights/prosetta",
-  "description": "Prosetta key management is a Laravel package for managing key-based translations.",
-  "type": "project",
+  "description": "A Laravel package for managing translations with database-driven UI management, AI assistance, and human review workflows.",
+  "type": "library",
   "license": "MIT",
+  "keywords": ["laravel", "translation", "i18n", "localization", "prosetta"],
 
-  "homepage": "https://github.com/andrewkhartley/prosetta",
+  "homepage": "https://github.com/lonely-lights/prosetta",
   "authors": [
     {
       "name": "Andrew K. Hartley",
@@ -16,12 +17,15 @@
 
   "require": {
     "php": "^8.2",
-    "laravel/framework": "^10.0|^11.0",
+    "illuminate/contracts": "^10.0|^11.0|^12.0",
+    "illuminate/database": "^10.0|^11.0|^12.0",
+    "illuminate/support": "^10.0|^11.0|^12.0",
     "ezyang/htmlpurifier": "^4.17"
   },
   "require-dev": {
-    "orchestra/testbench": "^8.0|^9.0",
-    "phpunit/phpunit": "^10.5"
+    "orchestra/testbench": "^8.0|^9.0|^10.0",
+    "pestphp/pest": "^2.0|^3.0",
+    "pestphp/pest-plugin-laravel": "^2.0|^3.0"
   },
   "autoload": {
     "psr-4": {
@@ -34,7 +38,8 @@
     }
   },
   "scripts": {
-    "test": "vendor/bin/phpunit"
+    "test": "vendor/bin/pest",
+    "test-coverage": "vendor/bin/pest --coverage"
   },
   "config": {
     "sort-packages": true,
@@ -46,10 +51,7 @@
     "laravel": {
       "providers": [
         "LonelyLights\\Prosetta\\ProsettaServiceProvider"
-      ],
-      "branch-alias": {
-        "dev-main": "1.0-dev"
-      }
+      ]
     }
   },
   "minimum-stability": "dev",

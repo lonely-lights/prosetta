@@ -13,7 +13,7 @@ class ProsettaServiceProvider extends ServiceProvider {
     public function register(): void {
 
         # Installation Configuration
-        $this->mergeConfigFrom(__DIR__.'/../config/prosetta.php', 'prosetta.php');
+        $this->mergeConfigFrom(__DIR__.'/../config/prosetta.php', 'prosetta');
 
         # Set Active Locales
         $this->app->singleton('activeLocales', function() {

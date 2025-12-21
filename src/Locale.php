@@ -20,6 +20,27 @@ use InvalidArgumentException;
  */
 class Locale extends Model {
 
+    /**
+     * The primary key associated with the table.
+     *
+     * @var string
+     */
+    protected $primaryKey = 'locale_initials';
+
+    /**
+     * Indicates if the model's ID is auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = false;
+
+    /**
+     * The "type" of the primary key.
+     *
+     * @var string
+     */
+    protected $keyType = 'string';
+
     ###########################################################
     # Model Functions
     ###########################################################
@@ -34,8 +55,7 @@ class Locale extends Model {
                     ->keyBy('locale_initials')
                     ->toArray();
             } catch (Exception $e) {
-                # Debug
-                Log::channel('init')->error('[MD|QY - Locale] Failed to fetch active locales. Defaulting to English.', ['error' => $e->getMessage()]);
+                Log::channel(config('prosetta.logChannel', 'default'))->error('[Prosetta] Failed to fetch active locales. Defaulting to English.', ['error' => $e->getMessage()]);
 
                 # Fallback to English
                 return ['en' => ['english_name' => 'English', 'native_name' => 'English']];
@@ -46,11 +66,9 @@ class Locale extends Model {
 
     /**
      * Language File Management
-     * https://chat.openai.com/c/7c9f7eba-a97e-4a3e-ae2d-1dcb1b59e580
-     * https://chat.openai.com/c/9e1ad4bb-d34b-49c0-86db-2568178bb5fb
      *
-     * This function handles updating or deleting entries in a language file.
-     * It supports both single and bulk operations by accepting keys and values as either
+     * Handles updating or deleting entries in a language file.
+     * Supports both single and bulk operations by accepting keys and values as either
      * strings or arrays.
      *
      * @param string $type          Type of the operation ('update' or 'destroy').
@@ -60,6 +78,8 @@ class Locale extends Model {
      * @param array|string $value   Value(s) to be set (optional for 'update').
      * @return void
      * @throws Exception
+     *
+     * @deprecated Use LangKeyService methods instead. This will be removed in v0.4.
      */
 
     public static function manageLanguageFileEntry(

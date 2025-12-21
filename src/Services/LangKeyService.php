@@ -26,24 +26,10 @@ class LangKeyService {
 
     /**
      * Language File Management
-     * https://chat.openai.com/c/7c9f7eba-a97e-4a3e-ae2d-1dcb1b59e580
-     * https://chat.openai.com/c/9e1ad4bb-d34b-49c0-86db-2568178bb5fb
-     * https://chat.openai.com/c/74697819-0a38-48d8-a5ef-b0d8941c37f3
-     * https://chat.openai.com/c/db59239a-e0ac-499c-b9ff-87cd3c16483d
-     * https://chat.openai.com/c/eafa9d44-7597-4b00-9f08-5a54ddc25d08
      *
-     * This function handles updating or deleting entries in a language file.
-     * It supports both single and bulk operations by accepting keys and values as either
+     * Handles updating or deleting entries in a language file.
+     * Supports both single and bulk operations by accepting keys and values as either
      * strings or arrays.
-     *
-     * TODO: Add support for updating multiple language files at once.
-     * When new key is created, it should create keys in all language files that don't already have them.
-     * If slug changes, it should update all existing keys, but retain their values (except for the current language).
-     * An entry should be made into a changes database table for each key that is updated.
-     *
-     * TODO: Review Scaling Factors
-     * TODO: Review Targeted Caching from this Conversation
-     * https://chat.openai.com/c/b2fb7d12-5a0d-41a2-9f77-519fded0bb19
      *
      * @param mixed $model The model instance from which values are extracted for language entries.
      * @param string $filePath Path to the language file relative to the 'lang' directory.
