@@ -1,0 +1,45 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        $tableName = config('prosetta.tableNames.keys', 'prosetta_keys');
+        $filesTable = config('prosetta.tableNames.files', 'prosetta_files');
+
+        Schema::create($tableName, function (Blueprint $table) use ($filesTable) {
+            $table->id();
+            $table->foreignId('file_id')
+                ->constrained($filesTable)
+                ->cascadeOnDelete();
+            $table->string('key');                         // 'settings.save_button'
+            $table->text('description')->nullable();       // Developer notes about this key
+            $table->text('context')->nullable();           // Usage context for translators
+            $table->json('placeholders')->nullable();      // [':name', ':count'] - dynamic values
+            $table->integer('max_length')->nullable();     // UI constraint
+            $table->boolean('is_html')->default(false);    // Contains HTML markup
+            $table->boolean('is_deprecated')->default(false);
+            $table->timestamps();
+            $table->softDeletes();
+
+            $table->unique(['file_id', 'key']);
+            $table->index('is_deprecated');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        $tableName = config('prosetta.tableNames.keys', 'prosetta_keys');
+        Schema::dropIfExists($tableName);
+    }
+};

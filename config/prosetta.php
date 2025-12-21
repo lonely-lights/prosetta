@@ -107,6 +107,32 @@ return [
     'tableNames' => [
         'queue' => 'prosetta_queue',
         'locales' => 'prosetta_locales',
+        'files' => 'prosetta_files',
+        'keys' => 'prosetta_keys',
+        'translations' => 'prosetta_translations',
+        'reviews' => 'prosetta_reviews',
+    ],
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prosetta Model Classes
+    |--------------------------------------------------------------------------
+    |
+    | These settings allow you to specify custom model classes for Prosetta.
+    | This is useful if you want to extend the default models or use your
+    | own models that implement the required functionality.
+    |
+    | Set to null to use Prosetta's default models.
+    |
+    */
+
+    'models' => [
+        'locale' => null, // e.g., App\Models\Prosetta\Locale::class
+        'file' => null,
+        'key' => null,
+        'translation' => null,
+        'review' => null,
     ],
 
 
