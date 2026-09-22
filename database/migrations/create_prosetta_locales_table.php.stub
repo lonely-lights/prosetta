@@ -15,17 +15,19 @@ return new class extends Migration
 
         Schema::create($tableName, function (Blueprint $table) {
             $table->id();
-            $table->string('locale_initials', 10)->unique();  // 'en', 'es', 'fr'
+            $table->string('locale_initials', 35)->unique();  // 'en', 'es', 'en_GB' (RFC 5646 length)
             $table->string('english_name');                    // 'English', 'Spanish'
             $table->string('native_name');                     // 'English', 'Español'
             $table->string('script')->nullable();              // 'Latin', 'Arabic', 'Cyrillic'
             $table->boolean('rtl')->default(false);            // Right-to-left
-            $table->boolean('active')->default(false);         // Is locale active
+            $table->boolean('active')->default(false);         // Offered to members
+            $table->boolean('translated')->default(false);     // Maintained by Prosetta even when not offered
             $table->boolean('is_default')->default(false);     // Is default locale
             $table->integer('sort_order')->default(0);         // Display order
             $table->timestamps();
 
             $table->index('active');
+            $table->index('translated');
             $table->index('is_default');
         });
     }

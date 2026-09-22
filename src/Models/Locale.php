@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\Log;
  * @property string $native_name           Native name (e.g., 'English', 'Español')
  * @property string|null $script           Writing script (e.g., 'Latin', 'Arabic')
  * @property bool $rtl                     Whether locale is right-to-left
- * @property bool $active                  Whether locale is active
+ * @property bool $active                  Whether locale is offered to members
+ * @property bool $translated              Whether Prosetta maintains translations for it, even when not offered
  * @property bool $is_default              Whether this is the default locale
  * @property int $sort_order               Display order
  * @property Carbon $created_at
@@ -58,6 +59,7 @@ class Locale extends Model {
         'script',
         'rtl',
         'active',
+        'translated',
         'is_default',
         'sort_order',
     ];
@@ -70,6 +72,7 @@ class Locale extends Model {
     protected $casts = [
         'rtl' => 'boolean',
         'active' => 'boolean',
+        'translated' => 'boolean',
         'is_default' => 'boolean',
         'sort_order' => 'integer',
     ];
