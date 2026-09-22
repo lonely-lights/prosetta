@@ -1,59 +1,67 @@
 {
-  "name": "lonely-lights/prosetta",
-  "description": "A Laravel package for managing translations with database-driven UI management, AI assistance, and human review workflows.",
-  "type": "library",
-  "license": "MIT",
-  "keywords": ["laravel", "translation", "i18n", "localization", "prosetta"],
-
-  "homepage": "https://github.com/lonely-lights/prosetta",
-  "authors": [
-    {
-      "name": "Andrew K. Hartley",
-      "homepage": "https://andrewkhartley.com",
-      "email": "andrew@andrewkhartley.com",
-      "role": "Creator"
-    }
-  ],
-
-  "require": {
-    "php": "^8.3",
-    "illuminate/contracts": "^11.0|^12.0|^13.0",
-    "illuminate/database": "^11.0|^12.0|^13.0",
-    "illuminate/support": "^11.0|^12.0|^13.0",
-    "ezyang/htmlpurifier": "^4.17"
-  },
-  "require-dev": {
-    "orchestra/testbench": "^8.0|^9.0|^10.0",
-    "pestphp/pest": "^2.0|^3.0",
-    "pestphp/pest-plugin-laravel": "^2.0|^3.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "LonelyLights\\Prosetta\\": "src"
-    }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "LonelyLights\\Prosetta\\Tests\\": "tests"
-    }
-  },
-  "scripts": {
-    "test": "vendor/bin/pest",
-    "test-coverage": "vendor/bin/pest --coverage"
-  },
-  "config": {
-    "sort-packages": true,
-    "allow-plugins": {
-      "pestphp/pest-plugin": true
-    }
-  },
-  "extra": {
-    "laravel": {
-      "providers": [
-        "LonelyLights\\Prosetta\\ProsettaServiceProvider"
-      ]
-    }
-  },
-  "minimum-stability": "dev",
-  "prefer-stable": true
+    "name": "lonely-lights/prosetta",
+    "description": "Translation workflow for Laravel: canonical source lang files, AI drafts through a host-supplied driver, per-language review, and export to root and module lang folders.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "translation", "i18n", "localization", "ai", "prosetta"],
+    "homepage": "https://github.com/lonely-lights/prosetta",
+    "authors": [
+        {
+            "name": "Andrew K. Hartley",
+            "homepage": "https://andrewkhartley.com",
+            "email": "andrew@andrewkhartley.com",
+            "role": "Creator"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "illuminate/auth": "^11.0|^12.0|^13.0",
+        "illuminate/bus": "^11.0|^12.0|^13.0",
+        "illuminate/console": "^11.0|^12.0|^13.0",
+        "illuminate/contracts": "^11.0|^12.0|^13.0",
+        "illuminate/database": "^11.0|^12.0|^13.0",
+        "illuminate/filesystem": "^11.0|^12.0|^13.0",
+        "illuminate/queue": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/translation": "^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^5.1",
+        "pestphp/pest-plugin-laravel": "^5.0"
+    },
+    "suggest": {
+        "spatie/laravel-translatable": "Planned: translate Eloquent model content through Prosetta's review workflow."
+    },
+    "autoload": {
+        "psr-4": {
+            "LonelyLights\\Prosetta\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "LonelyLights\\Prosetta\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "LonelyLights\\Prosetta\\ProsettaServiceProvider"
+            ],
+            "aliases": {
+                "Prosetta": "LonelyLights\\Prosetta\\Facades\\Prosetta"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

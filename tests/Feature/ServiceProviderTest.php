@@ -1,24 +1,33 @@
 <?php
 
-use LonelyLights\Prosetta\Services\LangKeyService;
+use LonelyLights\Prosetta\Support\Fingerprint;
+use LonelyLights\Prosetta\Support\Settings;
 
-describe('ProsettaServiceProvider', function () {
-    it('registers the LangKeyService as a singleton', function () {
-        $service1 = app(LangKeyService::class);
-        $service2 = app(LangKeyService::class);
+it('merges the package config', function () {
+    expect(config('prosetta.source_locale'))->toBe('en')
+        ->and(config('prosetta.exclude_paths'))->toBe(['lang/vendor', 'vendor']);
+});
 
-        expect($service1)->toBeInstanceOf(LangKeyService::class);
-        expect($service1)->toBe($service2);
-    });
+it('resolves table names, falling back to the legacy camelCase key', function () {
+    expect(Settings::table('locales'))->toBe('prosetta_locales');
 
-    it('registers the activeLocales singleton', function () {
-        $locales = app('activeLocales');
+    config()->set('prosetta.table_names.locales', null);
+    config()->set('prosetta.tableNames.locales', 'legacy_locales');
 
-        expect($locales)->toBeArray();
-    });
+    expect(Settings::table('locales'))->toBe('legacy_locales');
 
-    it('merges prosetta config', function () {
-        expect(config('prosetta'))->toBeArray();
-        expect(config('prosetta.locales'))->toBeArray();
-    });
+    config()->set('prosetta.tableNames.locales', null);
+
+    expect(Settings::table('locales'))->toBe('prosetta_locales');
+});
+
+it('resolves model classes from config', function () {
+    config()->set('prosetta.models.locale', 'App\\Models\\Locale');
+
+    expect(Settings::model('locale'))->toBe('App\\Models\\Locale')
+        ->and(Settings::model('file'))->toBe('LonelyLights\\Prosetta\\Models\\TranslationFile');
+});
+
+it('fingerprints values with sha256', function () {
+    expect(Fingerprint::of('abc'))->toBe(hash('sha256', 'abc'))->toHaveLength(64);
 });
