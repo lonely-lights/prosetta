@@ -61,3 +61,13 @@ it('rate-limits and de-duplicates its jobs', function () {
     expect($middleware[0])->toBeInstanceOf(RateLimited::class)
         ->and($middleware[1])->toBeInstanceOf(WithoutOverlapping::class);
 });
+
+it('survives being released for rate limiting or overlap without exhausting its attempts', function () {
+    $job = new TranslateBatch('es', 1, [1, 2]);
+    $middleware = $job->middleware();
+
+    expect($job->retryUntil())->toBeInstanceOf(DateTimeInterface::class)
+        ->and($job->retryUntil()->getTimestamp())->toBeGreaterThan(now()->addHour()->getTimestamp())
+        ->and($job->timeout)->toBeGreaterThan(0)
+        ->and($middleware[1]->expiresAfter)->toBeGreaterThan(0);
+});

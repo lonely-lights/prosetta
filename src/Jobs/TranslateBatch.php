@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Jobs;
 
+use DateTimeInterface;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,6 +17,9 @@ use LonelyLights\Prosetta\Translation\TranslationRunner;
 final class TranslateBatch implements ShouldQueue {
     use Batchable, InteractsWithQueue, Queueable;
 
+    /** Seconds a worker may spend running this job before it is treated as timed out. */
+    public int $timeout = 300;
+
     /** @param list<int> $keyIds */
     public function __construct(
         public string $locale,
@@ -24,11 +28,19 @@ final class TranslateBatch implements ShouldQueue {
         public bool $force = false,
     ) {}
 
+    /**
+     * Being released for rate limiting or overlap consumes an attempt, so
+     * bound retries by time instead of a fixed try count.
+     */
+    public function retryUntil(): DateTimeInterface {
+        return now()->addHours(2);
+    }
+
     /** @return list<object> */
     public function middleware(): array {
         return [
             new RateLimited('prosetta-ai'),
-            (new WithoutOverlapping("prosetta:{$this->locale}:{$this->fileId}"))->releaseAfter(30),
+            (new WithoutOverlapping("prosetta:{$this->locale}:{$this->fileId}"))->releaseAfter(30)->expireAfter(600),
         ];
     }
 
