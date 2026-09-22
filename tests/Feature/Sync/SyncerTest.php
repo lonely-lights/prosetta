@@ -128,6 +128,49 @@ it('syncs only the namespaces asked for', function () {
     expect(TranslationFile::query()->pluck('namespace')->unique()->values()->all())->toBe(['identity']);
 });
 
+it('obsoletes every key of a namespace that stops being discovered on a full sync', function () {
+    app(Syncer::class)->sync();
+
+    config()->set('prosetta.namespaces.exclude', ['identity']);
+    $report = app(Syncer::class)->sync();
+
+    expect($report->obsoleted)->toHaveCount(3)
+        ->and($report->obsoleted)->toContain(
+            'identity::onboarding.toast.accessCode.capReached',
+            'identity::onboarding.toast.accessCode.inUse',
+            'identity::onboarding.toast.accessCode.timedOut',
+        )
+        ->and(TranslationKey::query()->whereHas('file', fn ($q) => $q->where('namespace', 'identity'))->get()->pluck('obsolete_at'))
+        ->each(fn ($value) => $value->not->toBeNull());
+});
+
+it('does not obsolete an excluded namespace during a namespace-limited sync', function () {
+    app(Syncer::class)->sync();
+
+    config()->set('prosetta.namespaces.exclude', ['identity']);
+    $report = app(Syncer::class)->sync(['*']);
+
+    expect($report->obsoleted)->toBe([])
+        ->and(TranslationKey::query()->whereHas('file', fn ($q) => $q->where('namespace', 'identity'))->get()->pluck('obsolete_at'))
+        ->each(fn ($value) => $value->toBeNull());
+});
+
+it('restores a namespace that reappears after a full sync', function () {
+    app(Syncer::class)->sync();
+
+    config()->set('prosetta.namespaces.exclude', ['identity']);
+    app(Syncer::class)->sync();
+
+    config()->set('prosetta.namespaces.exclude', []);
+    $report = app(Syncer::class)->sync();
+
+    expect($report->restored)->toContain(
+        'identity::onboarding.toast.accessCode.capReached',
+        'identity::onboarding.toast.accessCode.inUse',
+        'identity::onboarding.toast.accessCode.timedOut',
+    );
+});
+
 it('dispatches events after the transaction, unless quiet', function () {
     Event::fake([KeyAdded::class, KeyChanged::class, SyncCompleted::class]);
 

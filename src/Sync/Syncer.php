@@ -49,9 +49,14 @@ final class Syncer {
         DB::transaction(function () use ($namespaces, $report, &$pending): void {
             $source = $this->locales->source();
             $targets = array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets());
+            $roots = $this->discovery->roots($namespaces);
 
-            foreach ($this->discovery->roots($namespaces) as $root) {
+            foreach ($roots as $root) {
                 $this->syncRoot($root, $source, $targets, $report, $pending);
+            }
+
+            if ($namespaces === null) {
+                $this->obsoleteUndiscoveredNamespaces($roots, $report, $pending);
             }
         });
 
@@ -88,6 +93,25 @@ final class Syncer {
 
         # A Group Whose Source File Disappeared: Every Key in It Becomes Obsolete
         $fileModel::query()->where('namespace', $root->namespace)->whereKeyNot($seen)->get()
+            ->each(function (TranslationFile $file) use ($report, &$pending): void {
+                $this->syncKeys($file, [], $report, $pending);
+            });
+    }
+
+    /**
+     * A full sync (no namespace filter) obsoletes every key of a namespace
+     * that is no longer discovered at all, e.g. a deleted module or one
+     * excluded by config. Keys come back through the normal restore path
+     * in syncKeys() if the namespace is discovered again.
+     *
+     * @param list<LangRoot> $roots
+     * @param list<object> $pending
+     */
+    private function obsoleteUndiscoveredNamespaces(array $roots, SyncReport $report, array &$pending): void {
+        $fileModel = Settings::model('file');
+        $discovered = array_values(array_unique(array_map(fn (LangRoot $root) => $root->namespace, $roots)));
+
+        $fileModel::query()->whereNotIn('namespace', $discovered)->get()
             ->each(function (TranslationFile $file) use ($report, &$pending): void {
                 $this->syncKeys($file, [], $report, $pending);
             });
