@@ -68,6 +68,48 @@ it('checks plain plural segments against the target language', function () {
         ->and(codes($guard->check($source, ':count 个苹果', 'zh-CN')))->toBe(['plural_segments_differ']);
 });
 
+it('matches placeholders by range in explicit plural forms', function () {
+    $issues = (new PlaceholderGuard)->check('{1} :n minute|[2,*] :n minutes', '{1} :n 分|[2,*] 分', 'ja');
+
+    expect(codes($issues))->toBe(['placeholder_missing'])
+        ->and($issues[0]->message)->toContain('[2,*]');
+});
+
+it('passes a faithful explicit-range plural translation', function () {
+    $source = '{1} Too many email requests. Please try again in 1 minute.|[2,*] Too many email requests. Please try again in :minutes minutes.';
+    $candidate = '{1} Demasiadas solicitudes. Inténtalo de nuevo en 1 minuto.|[2,*] Demasiadas solicitudes. Inténtalo de nuevo en :minutes minutos.';
+
+    expect((new PlaceholderGuard)->check($source, $candidate, 'es'))->toBe([]);
+});
+
+it('flags a placeholder moved into the wrong plural range', function () {
+    $source = '{1} Too many email requests. Please try again in 1 minute.|[2,*] Too many email requests. Please try again in :minutes minutes.';
+    $candidate = '{1} Demasiadas solicitudes. Inténtalo de nuevo en :minutes minuto.|[2,*] Demasiadas solicitudes. Inténtalo de nuevo en minutos.';
+
+    $issues = (new PlaceholderGuard)->check($source, $candidate, 'es');
+    $issueCodes = codes($issues);
+    sort($issueCodes);
+    $messages = implode(' ', array_map(fn (Issue $issue) => $issue->message, $issues));
+
+    expect($issueCodes)->toBe(['placeholder_missing', 'placeholder_unexpected'])
+        ->and($messages)->toContain('[2,*]')
+        ->and($messages)->toContain('{1}');
+});
+
+it('allows a placeholder found in only some source segments to land anywhere in an unmarked plural', function () {
+    $source = 'One apple|:count apples';
+    $candidate = 'تفاحة واحدة|:count تفاحتان|:count تفاحات|:count تفاحات|:count تفاحات|:count تفاحة';
+
+    expect(codes((new PlaceholderGuard)->check($source, $candidate, 'ar')))->toBe(['plural_segments_differ']);
+});
+
+it('requires a placeholder found in every source segment to survive in every unmarked plural segment', function () {
+    $source = ':name has one|:name has :count';
+    $candidate = ':name tiene una|tiene :count';
+
+    expect(codes((new PlaceholderGuard)->check($source, $candidate, 'es')))->toBe(['placeholder_missing']);
+});
+
 it('requires HTML tags to survive in order', function () {
     $guard = new PlaceholderGuard;
     $source = 'Read the <a href=":url">terms</a> first.';
