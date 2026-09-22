@@ -109,10 +109,10 @@ class ProsettaManager {
      * @param list<string> $locales
      * @param list<string> $namespaces
      */
-    public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, ?Authenticatable $by = null): ExportReport {
+    public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, ?Authenticatable $by = null, bool $force = false): ExportReport {
         $this->authorizer->authorize($by, Ability::Manage);
 
-        return $this->exporter->export($locales, $namespaces, $includeDrafts, $dryRun);
+        return $this->exporter->export($locales, $namespaces, $includeDrafts, $dryRun, $force);
     }
 
     public function rename(string $from, string $to, ?Authenticatable $by = null): TranslationKey {

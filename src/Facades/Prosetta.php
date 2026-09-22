@@ -15,7 +15,7 @@ use LonelyLights\Prosetta\ProsettaManager;
  * @method static \LonelyLights\Prosetta\Review\ApproveReport approve(int|array $translationIds, ?\Illuminate\Contracts\Auth\Authenticatable $by, ?string $notes = null)
  * @method static \LonelyLights\Prosetta\Review\ApproveReport approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?\Illuminate\Contracts\Auth\Authenticatable $by = null)
  * @method static \LonelyLights\Prosetta\Models\Translation reject(int $translationId, ?\Illuminate\Contracts\Auth\Authenticatable $by, ?string $notes = null)
- * @method static \LonelyLights\Prosetta\Export\ExportReport export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, ?\Illuminate\Contracts\Auth\Authenticatable $by = null)
+ * @method static \LonelyLights\Prosetta\Export\ExportReport export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, ?\Illuminate\Contracts\Auth\Authenticatable $by = null, bool $force = false)
  * @method static \LonelyLights\Prosetta\Models\TranslationKey rename(string $from, string $to, ?\Illuminate\Contracts\Auth\Authenticatable $by = null)
  * @method static array stats(?string $locale = null)
  * @method static \LonelyLights\Prosetta\Models\TranslationKey|null lookup(string $keyRef)

@@ -17,10 +17,13 @@ final class ExportReport {
     /** @var array<string, int> path => keys in the file */
     public array $keys = [];
 
+    /** @var array<string, list<string>> path => keys whose on-disk value Prosetta did not write; the file was left alone */
+    public array $conflicts = [];
+
     public function __construct(public readonly bool $dryRun = false) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys];
+        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts];
     }
 }

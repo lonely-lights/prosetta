@@ -179,6 +179,39 @@ it('records what it wrote and announces the export', function () {
     Event::assertDispatched(ExportCompleted::class);
 });
 
+it('refuses to overwrite a hand edit that sync has not imported yet', function () {
+    file_put_contents($this->fixture.'/lang/es/auth.php', "<?php return ['failed' => 'Credenciales incorrectas.'];");
+
+    $report = app(Exporter::class)->export(['es']);
+
+    expect($report->conflicts)->toHaveKey($this->fixture.'/lang/es/auth.php')
+        ->and($report->conflicts[$this->fixture.'/lang/es/auth.php'])->toBe(['failed'])
+        ->and(require $this->fixture.'/lang/es/auth.php')->toBe(['failed' => 'Credenciales incorrectas.'])
+        ->and(app(Syncer::class)->sync()->handEdits)->toBe(['es auth.failed']);
+});
+
+it('refuses to overwrite a target file it has never synced', function () {
+    mkdir($this->fixture.'/lang/fr');
+    file_put_contents($this->fixture.'/lang/fr/auth.php', "<?php return ['failed' => 'Identifiants incorrects.'];");
+    \LonelyLights\Prosetta\Models\Locale::findByCode('fr')->update(['translated' => true]);
+
+    $report = app(Exporter::class)->export(['fr']);
+
+    expect($report->conflicts)->toHaveKey($this->fixture.'/lang/fr/auth.php')
+        ->and(require $this->fixture.'/lang/fr/auth.php')->toBe(['failed' => 'Identifiants incorrects.']);
+});
+
+it('refuses keys the source does not have, and overwrites everything when forced', function () {
+    file_put_contents($this->fixture.'/lang/es/auth.php', "<?php return ['failed' => 'Estas credenciales no coinciden con nuestros registros.', 'stray' => 'Suelto'];");
+
+    $refused = app(Exporter::class)->export(['es']);
+    $forced = app(Exporter::class)->export(['es'], force: true);
+
+    expect($refused->conflicts[$this->fixture.'/lang/es/auth.php'])->toBe(['stray'])
+        ->and($forced->conflicts)->toBe([])
+        ->and(require $this->fixture.'/lang/es/auth.php')->toBe(['failed' => 'Estas credenciales no coinciden con nuestros registros.']);
+});
+
 it('exports what reviewers approved without needing drafts', function () {
     app()->instance(TranslationDriver::class, new FakeTranslationDriver);
     app(Translator::class)->translate(['es'], ['identity'], queue: false);
