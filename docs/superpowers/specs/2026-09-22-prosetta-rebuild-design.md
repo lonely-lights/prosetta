@@ -133,7 +133,7 @@ return [
         'exclude'  => [],
     ],
     'paths' => [],                // explicit overrides: 'identity' => app_path('Modules/Identity/Lang')
-    'exclude_paths' => ['lang/vendor'],   // globs relative to base_path(); skipped by sync, refused by export
+    'exclude_paths' => ['lang/vendor', 'vendor'],   // globs or absolute paths (relative ones resolve against base_path()); skipped by sync, refused by export
 
     'export' => [
         'include_drafts' => env('PROSETTA_EXPORT_DRAFTS', false),
@@ -423,6 +423,15 @@ interface LocaleSource {
 | Production pull | 6–8 h |
 | Comment copying | about 4 h |
 | Model catalogue | about 3 h |
+
+## 16a. Amendments made while writing the plan
+
+These refine the approved design and don't change behaviour anyone agreed to:
+
+1. **Key uniqueness:** `prosetta_keys` gains `key_hash` (sha256 of `key`), and uniqueness is `unique(file_id, key_hash)`. `key` becomes `text`, because JSON keys are whole sentences and can exceed index length limits.
+2. **Default `exclude_paths` is `['lang/vendor', 'vendor']`.** Without `vendor`, discovery would pick up third-party packages' `loadTranslationsFrom()` namespaces and export into `vendor/`.
+3. **Locale caching:** the Locale model keeps no cache, so there's nothing for `booted()` to clear. `DatabaseLocaleSource` queries each time; there are few rows and it's safe in long-lived queue workers.
+4. **Imported values with blocking issues:** a first-import target value with a blocking guard issue (for example a missing `:placeholder`) imports as `needs_review` with no `approved_value`, so it counts as outstanding and is never exported as approved.
 
 ## 17. Risks and open questions
 
