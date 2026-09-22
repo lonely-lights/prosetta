@@ -41,7 +41,19 @@ final class ProsettaServiceProvider extends ServiceProvider {
     public function boot(): void {
         if ($this->app->runningInConsole()) {
             $this->publishes([__DIR__.'/../config/prosetta.php' => config_path('prosetta.php')], 'prosetta-config');
-            $this->publishesMigrations([__DIR__.'/../database/migrations' => database_path('migrations')], 'prosetta-migrations');
+
+            // publishesMigrations() on a directory publishes it recursively (see
+            // VendorPublishCommand::moveManagedFiles(), listContents(..., deep: true)),
+            // so the workflow tag lists its four files individually. That way the
+            // locales migration below (its own subdirectory) is never pulled in.
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations/2026_09_22_000200_create_prosetta_files_table.php' => database_path('migrations/2026_09_22_000200_create_prosetta_files_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000300_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000300_create_prosetta_keys_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000400_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000400_create_prosetta_translations_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000500_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000500_create_prosetta_reviews_table.php'),
+            ], 'prosetta-migrations');
+
+            $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
             $this->commands([
                 InstallCommand::class, SyncCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,

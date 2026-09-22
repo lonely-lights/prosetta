@@ -47,12 +47,24 @@ it('prints stats and refuses a bad rename', function () {
     $this->artisan('prosetta:rename auth.failed auth.nope')->assertFailed();
 });
 
-it('publishes config and migrations on install', function () {
-    $this->artisan('prosetta:install')->assertSuccessful();
+it('publishes config and workflow migrations on install, leaving an existing locales table alone', function () {
+    try {
+        $this->artisan('prosetta:install')
+            ->expectsOutputToContain('locales table already exists')
+            ->assertSuccessful();
 
-    expect(is_file(config_path('prosetta.php')))->toBeTrue();
-    unlink(config_path('prosetta.php'));
-    foreach (glob(database_path('migrations/*prosetta*.php')) as $migration) {
-        unlink($migration);
+        $published = glob(database_path('migrations/*prosetta*.php'));
+
+        expect(is_file(config_path('prosetta.php')))->toBeTrue()
+            ->and($published)->toHaveCount(4)
+            ->and(array_filter($published, fn (string $path) => str_contains($path, 'create_prosetta_locales_table')))->toBe([]);
+    } finally {
+        if (is_file(config_path('prosetta.php'))) {
+            unlink(config_path('prosetta.php'));
+        }
+
+        foreach (glob(database_path('migrations/*prosetta*.php')) ?: [] as $migration) {
+            unlink($migration);
+        }
     }
 });
