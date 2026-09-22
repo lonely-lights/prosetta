@@ -209,5 +209,9 @@ final class Exporter {
 
             throw new ProsettaException("Could not write [$path].");
         }
+
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($path, true);
+        }
     }
 }

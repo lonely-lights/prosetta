@@ -58,6 +58,11 @@ final class LangReader {
 
     /** @return array<array-key, mixed> */
     private function readPhp(string $path): array {
+        # Under FPM or Octane a file Prosetta just wrote can come back stale from OPcache
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($path, true);
+        }
+
         try {
             $data = $this->files->getRequire($path);
         } catch (Throwable $e) {
