@@ -8,7 +8,7 @@ Translation workflow for Laravel. Your source-language lang files are the canoni
 2. **`prosetta:sync`** reads them into keys. New keys become *missing* in every target locale. A changed English value makes existing translations *stale*. Removed keys become *obsolete*. Existing target files are imported as approved work; later hand edits to them are imported for review, never silently accepted.
 3. **`prosetta:translate`** drafts missing and stale keys through your `TranslationDriver`. Every result is checked for placeholders (exact case), plural segments and HTML, gets one retry with feedback, and is saved as a draft with model, provider and tokens.
 4. **Reviewers approve, edit or reject** per locale (`Prosetta::approve()`, `edit()`, `reject()`, or `prosetta:review`).
-5. **`prosetta:export`** writes approved values (or drafts, if you choose) into each locale's files, in the source file's key order.
+5. **`prosetta:export`** writes approved values (or drafts, if you choose) into each locale's files, in the source file's key order. A target file holding anything Prosetta didn't write (a hand edit not yet synced, a file never synced, a key the source doesn't have) is left alone and reported as a conflict, and the command exits 1. Run `prosetta:sync` to import it, or pass `--force` to overwrite.
 
 ## Install
 
@@ -17,6 +17,8 @@ composer require lonely-lights/prosetta
 php artisan prosetta:install   # publishes config/prosetta.php and the migrations
 php artisan migrate
 ```
+
+`prosetta:install` publishes the four workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`). It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`) and widen `locale_initials` to 35 characters. Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
 
 Target locales are rows in `prosetta_locales` where `active` (offered to members) or `translated` (maintained, even if not offered) is true. Codes must match your lang folder names exactly (`zh-CN`, `en_GB`) and can't change once created.
 
@@ -127,7 +129,7 @@ Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => 
 | `prosetta:sync [--namespace=*] [--check]` | Read source files, import target files. `--check` changes nothing and exits 1 when work is outstanding (use it in CI). |
 | `prosetta:translate [--locale=*] [--namespace=*] [--key=*] [--force] [--sync]` | Draft missing and stale keys (queued on `prosetta.queue.name` unless `--sync`). |
 | `prosetta:review {locale} [--approve-clean] [--namespace=]` | List the review queue, or approve every clean current candidate. |
-| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run]` | Write target-locale files. |
+| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run] [--force]` | Write target-locale files; exits 1 on conflicts unless `--force`. |
 | `prosetta:rename {from} {to}` | Move translations to a key you renamed in the source file (sync first). |
 | `prosetta:stats [--locale=]` | Progress per locale and namespace. |
 
@@ -135,7 +137,7 @@ Key references use Laravel's notation: `identity::onboarding.toast.accessCode.in
 
 ## Services for your own admin
 
-`Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.
+`Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.
 
 ## Testing your integration
 
