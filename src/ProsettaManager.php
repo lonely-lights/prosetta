@@ -88,6 +88,15 @@ class ProsettaManager {
         return $this->queue->forLocale($locale, $filters, $perPage);
     }
 
+    /** @param array<string, mixed> $filters */
+    public function missing(string $locale, array $filters = [], int $perPage = 50): LengthAwarePaginator {
+        return $this->queue->missing($locale, $filters, $perPage);
+    }
+
+    public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
+        return $this->reviews->write($keyRef, $locale, $value, $by, $notes, $approve);
+    }
+
     public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
         return $this->reviews->edit($translationId, $value, $by, $notes, $approve);
     }
