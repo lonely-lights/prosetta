@@ -118,3 +118,31 @@ Each of these is something a person caught or did by hand.
 4. **Fatal and budget errors** fail the job without retry, cancel the rest of the batch, and raise an event.
 5. **`retryUntil`** can then be long (e.g. 24 h), because the circuit, not the deadline, keeps traffic down during an outage.
 6. **Separate limits** for background runs and member-facing work, each with its own queue, limiter and circuit, so a background backlog never delays a reader.
+
+## 3. Follow-ups from the resilience layer build (2026-09-23)
+
+Minor findings the task and whole-branch reviews deferred or parked. None blocks the layer; fix them before tagging a release.
+
+- Circuits::for() name-registry read-then-write can drop a name under a first-use race (self-heals on next for()).
+- Circuit::decision() lock-contention wait of 60 s is a literal, not config.
+- setting()/haltHold() near-duplicate clamping.
+- CircuitOpened/CircuitClosed dispatch inside the write lock — a listener that re-enters the same circuit would block; Task 8's logging listener doesn't.
+- commit f58decd put the trailers on the subject line (single-line message).
+- no test for record() with tokens <= 0 or for two periods exhausted at once.
+- used()/limit() re-resolve cache/config per period.
+- RunScope::id() sort helper uses a needless IIFE inside an arrow fn (verbatim from the plan).
+- after a failed health check, a second decision() of kind 'test' (only with 1 s cooldown/hold) is overwritten and its lock leaks until TTL.
+- no tests for a health check throwing ProviderRejected during a halt test, or a real call failing after a passed health check.
+- untested branches — held→halted, CallDeferred outage=true, quota, job budget branches (per_run no-suspend / daily suspend), batch cancel, TranslateCommand FAILURE on stopped.
+- legacy null-scope fallback suspends the whole locale; add a comment.
+- no resume test for a held circuit (shares the tested wait path); a batch-dispatch failure aborts the rest of a resume run (documented only as @throws).
+- Estimator::history() loads every AI draft row for a locale (unbounded over time); an aggregate SUM query would scale better. No 49-draft boundary test. output_tokens null not filtered.
+- G1 cites a commit range rather than one SHA (more useful; fine).
+- health-check test closure lacks a type hint and JSON_THROW_ON_ERROR (verbatim from the plan).
+- suspension-reason vocabulary (sync class_basename vs job words; unknown halts suspend as rejected) — fix before tagging a release.
+- Undaunted checkHealth() ignores prosetta.ai.models (empty today).
+- Undaunted overload e2e test calls capReachedBatch() defined only in TranslationDriverTest.php, so in a parallel worker it may open the circuit on 'undefined function' errors — Ruling: real, test-only, Minor; move the helper to tests/Pest.php as a follow-up — cost if wrong: that test doesn't prove the overload mapping (the mapping itself is proven by TranslationDriverTest's dataset).
+- sync-run report over-counts failed and drops drafted/tokens when a batch rejection hits the retry pass — Ruling: reporting-only, no data loss — cost if wrong: misleading numbers in one rare case.
+- spec §6 list broken by an inserted paragraph; spec §5 still says failed_jobs reserved for bugs (ProviderBatchRejected now lands there) — Ruling: doc tidy-up follow-up — cost if wrong: two stale sentences.
+- merge test doesn't read the stored started_at; last-writer-wins can restore an earlier start time — Ruling: narrow edge, Minor — cost if wrong: rare skipped re-force of human-edited keys.
+- Translator::refs() orders by 'id' not the model key name — Ruling: harmless with default models — cost if wrong: breaks only a custom key model.
