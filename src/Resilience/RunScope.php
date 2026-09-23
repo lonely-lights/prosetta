@@ -22,7 +22,11 @@ final readonly class RunScope {
         public bool $cycle = false,
     ) {}
 
-    /** Leaves out startedAt and cycle, so repeated suspensions of the same run merge. */
+    /**
+     * Leaves out startedAt, so repeated suspensions of the same run merge. A
+     * cycle run hashes apart from a manual run over the same locales (and a
+     * manual run's id is the same as before the flag existed).
+     */
     public function id(): string {
         $sorted = fn (array $values) => (function () use ($values) {
             sort($values);
@@ -30,7 +34,9 @@ final readonly class RunScope {
             return $values;
         })();
 
-        return sha1((string) json_encode([$sorted($this->locales), $sorted($this->namespaces), $sorted($this->keys), $this->force]));
+        $parts = [$sorted($this->locales), $sorted($this->namespaces), $sorted($this->keys), $this->force];
+
+        return sha1((string) json_encode($this->cycle ? [...$parts, 'cycle'] : $parts));
     }
 
     /** @return array{locales: list<string>, namespaces: list<string>, keys: list<string>, force: bool, started_at: ?int, cycle: bool} */

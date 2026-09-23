@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Automation;
 
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Batch;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
@@ -49,12 +52,16 @@ final readonly class Cycle {
     public function run(bool $sync = false): CycleReport {
         $previous = State::get('cycle.batch');
 
+        # Only FinishCycle Ends a Queued Cycle: a Batch Is "Finished" Before Its FinishCycle Has Run, and at Once When Cancelled
         if (is_array($previous) && isset($previous['batch_id'])) {
             $batch = Bus::findBatch((string) $previous['batch_id']);
 
-            if ($batch !== null && ! $batch->finished()) {
+            if (! $this->isAbandoned($batch, $previous, now())) {
                 return CycleReport::skip('previous cycle still running');
             }
+
+            Log::channel(config('prosetta.log_channel'))->warning("[prosetta] Cycle batch {$previous['batch_id']} was abandoned without finishing; starting a new cycle.");
+            State::forget('cycle.batch');
         }
 
         $this->syncer->sync();
@@ -129,10 +136,44 @@ final readonly class Cycle {
         );
 
         State::put('cycle.last_run', now()->getTimestamp());
-        State::forget('cycle.batch');
+        $stored = State::get('cycle.batch');
+
+        # Release Only Our Own Guard: a Late FinishCycle Must Never Unblock a Newer Cycle
+        if ($batchId !== null && is_array($stored) && ($stored['batch_id'] ?? null) === $batchId) {
+            State::forget('cycle.batch');
+        }
         $this->events->dispatch(new CycleCompleted($report));
 
         return $report;
+    }
+
+    /**
+     * Whether a stored cycle batch can no longer finish on its own: it's gone
+     * (pruned), or it settled (every job ran or failed, or it was cancelled)
+     * longer ago than the grace period, max(60 minutes, 2 x automation.every),
+     * and its FinishCycle still hasn't released the guard.
+     *
+     * @param array{batch_id?: string, started_at?: int} $stored
+     */
+    public function isAbandoned(?Batch $batch, array $stored, CarbonInterface $now): bool {
+        if ($batch === null) {
+            return true;
+        }
+
+        if ($batch->pendingJobs !== $batch->failedJobs && ! $batch->cancelled()) {
+            return false;
+        }
+
+        $settledAt = $batch->finishedAt ?? $batch->cancelledAt
+            ?? (isset($stored['started_at']) ? Carbon::createFromTimestamp((int) $stored['started_at'], $now->getTimezone()) : null);
+
+        if ($settledAt === null) {
+            return false;
+        }
+
+        $grace = max(60, 2 * (int) config('prosetta.automation.every', 0));
+
+        return $now->greaterThanOrEqualTo($settledAt->copy()->addMinutes($grace));
     }
 
     /**

@@ -384,10 +384,100 @@ it('clears a suspended cycle run on resume instead of re-translating its scope',
     $suspensions->suspend('scripted-driver:default', $scope, 'outage');
 
     expect(LonelyLights\Prosetta\Resilience\RunScope::fromArray($scope->toArray())->cycle)->toBeTrue()
-        ->and($scope->id())->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], []))->id());
+        ->and($scope->id())->not->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], []))->id())
+        ->and($scope->id())->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['ar', 'es'], [], [], false, 1, cycle: true))->id());
 
     $this->artisan('prosetta:resume')->expectsOutputToContain('Cleared 1 suspended cycle run(s)')->assertSuccessful();
 
     Bus::assertNothingBatched();
     expect($suspensions->all())->toBe([]);
+});
+
+it('skips a cycle started after the batch finished but before its FinishCycle ran', function () {
+    Bus::fake();
+    cycleAutoTranslate('es');
+    $driver = new ScriptedDriver;
+    app()->instance(TranslationDriver::class, $driver);
+    $first = app(Cycle::class)->run();
+    # Every Job Ran: Laravel Marks the Batch Finished, While FinishCycle Still Waits in the Queue
+    $batch = Bus::findBatch($first->batchId);
+    $batch->pendingJobs = 0;
+    $batch->finishedAt = Carbon\CarbonImmutable::now();
+
+    $second = app(Cycle::class)->run();
+
+    expect($batch->finished())->toBeTrue()
+        ->and($second->skipped)->toBeTrue()
+        ->and($second->reason)->toBe('previous cycle still running')
+        ->and(State::get('cycle.batch')['batch_id'])->toBe($first->batchId);
+    Bus::assertBatchCount(1);
+});
+
+it('keeps a newer cycle\'s guard when a stale FinishCycle for an older batch runs', function () {
+    State::put('cycle.batch', ['batch_id' => 'newer-batch', 'started_at' => now()->getTimestamp()]);
+
+    $report = (new FinishCycle('older-batch', 'older-batch', now()->getTimestamp() - 60, 0))->handle(app(Cycle::class));
+
+    expect($report->batchId)->toBe('older-batch')
+        ->and(State::get('cycle.batch'))->toBe(['batch_id' => 'newer-batch', 'started_at' => State::get('cycle.batch')['started_at']])
+        ->and(State::get('cycle.last_run'))->toBeGreaterThan(0);
+
+    # A Synchronous Cycle Owns No Batch Either, so It Leaves a Stored Guard Alone
+    app(Cycle::class)->finish('run-1', now()->getTimestamp(), 0);
+    expect(State::get('cycle.batch')['batch_id'])->toBe('newer-batch');
+});
+
+it('decides when a stored cycle batch is abandoned', function () {
+    $cycle = app(Cycle::class);
+    $now = Carbon\CarbonImmutable::now();
+    $batch = fn (int $pending, int $failed, ?Carbon\CarbonImmutable $finished = null, ?Carbon\CarbonImmutable $cancelled = null) => new Illuminate\Support\Testing\Fakes\BatchFake('b', 'prosetta:translate', 3, $pending, $failed, [], [], $now->subDay(), $cancelled, $finished);
+    $stored = ['batch_id' => 'b', 'started_at' => $now->subDay()->getTimestamp()];
+
+    expect($cycle->isAbandoned(null, $stored, $now))->toBeTrue()
+        # Still Running, However Old
+        ->and($cycle->isAbandoned($batch(2, 0), $stored, $now))->toBeFalse()
+        # Settled, but Within the 60-Minute Grace: FinishCycle May Still Be Queued
+        ->and($cycle->isAbandoned($batch(0, 0, $now->subMinutes(59)), $stored, $now))->toBeFalse()
+        ->and($cycle->isAbandoned($batch(0, 0, $now->subMinutes(61)), $stored, $now))->toBeTrue()
+        # Every Remaining Job Failed Counts as Settled
+        ->and($cycle->isAbandoned($batch(1, 1, $now->subMinutes(61)), $stored, $now))->toBeTrue()
+        # Cancelled With Jobs Still Pending Counts as Settled, From cancelled_at
+        ->and($cycle->isAbandoned($batch(2, 0, null, $now->subMinutes(90)), $stored, $now))->toBeTrue()
+        # Settled With No Timestamps Falls Back to the Stored started_at
+        ->and($cycle->isAbandoned($batch(0, 0), $stored, $now))->toBeTrue()
+        ->and($cycle->isAbandoned($batch(0, 0), ['batch_id' => 'b', 'started_at' => $now->getTimestamp()], $now))->toBeFalse();
+
+    # The Grace Grows to Twice automation.every
+    config(['prosetta.automation.every' => 45]);
+    expect($cycle->isAbandoned($batch(0, 0, $now->subMinutes(61)), $stored, $now))->toBeFalse()
+        ->and($cycle->isAbandoned($batch(0, 0, $now->subMinutes(91)), $stored, $now))->toBeTrue();
+});
+
+it('proceeds past a settled batch whose FinishCycle never ran, and logs it', function () {
+    Bus::fake();
+    cycleAutoTranslate('es');
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+    $old = Bus::batch([new FinishCycle('x', 'x', 0, 0)])->dispatch();
+    $old->pendingJobs = 0;
+    $old->finishedAt = Carbon\CarbonImmutable::now()->subHours(2);
+    State::put('cycle.batch', ['batch_id' => $old->id, 'started_at' => now()->subHours(3)->getTimestamp()]);
+    Illuminate\Support\Facades\Log::shouldReceive('channel')->andReturnSelf();
+    Illuminate\Support\Facades\Log::shouldReceive('warning')->once()->withArgs(fn (string $message) => str_contains($message, "Cycle batch $old->id was abandoned"));
+
+    $report = app(Cycle::class)->run(sync: true);
+
+    expect($report->skipped)->toBeFalse()
+        ->and($report->drafted)->toBeGreaterThan(0)
+        ->and(State::get('cycle.batch'))->toBeNull();
+});
+
+it('keeps a manual run and a cycle run over the same locales as separate suspensions', function () {
+    $suspensions = app(LonelyLights\Prosetta\Resilience\Suspensions::class);
+    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], []), 'outage');
+    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], [], false, 1, cycle: true), 'outage');
+    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], [], false, 2, cycle: true), 'outage');
+
+    $all = $suspensions->all();
+    expect($all)->toHaveCount(2)
+        ->and(collect($all)->map(fn (array $row) => $row['scope']->cycle)->sort()->values()->all())->toBe([false, true]);
 });
