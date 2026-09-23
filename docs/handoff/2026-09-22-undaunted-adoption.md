@@ -1,6 +1,6 @@
 # Prosetta rebuild — hand-off for Undaunted
 
-You already know Undaunted well; this covers what changed in Prosetta (`lonely-lights/prosetta`, the path package at `C:\Websites\packages\prosetta`, reached through `vendor/lonely-lights/prosetta`) and how Undaunted adopts it. Everything below describes the code as committed at `a1f7733`.
+You already know Undaunted well; this covers what changed in Prosetta (`lonely-lights/prosetta`, the path package at `C:\Websites\packages\prosetta`, reached through `vendor/lonely-lights/prosetta`) and how Undaunted adopts it. Everything below describes the code as committed at `47e16c4`.
 
 > **Never delete, clean or `rm -rf` anything under `vendor/lonely-lights/prosetta`.** It is a junction to the package source; deleting through it has emptied the package before. The package folder also has its own `vendor/` for its tests, which shows up at `vendor/lonely-lights/prosetta/vendor/`. Leave it alone; Undaunted's autoloader ignores it.
 
@@ -17,13 +17,15 @@ Why a rebuild: the old package wrote files directly with no review, didn't see m
 
 ## 2. Version and commits
 
-- **Branch / SHA:** `main` at `a1f7733`, **pushed** to `origin` (`https://github.com/lonely-lights/prosetta`). There is no release tag yet; publishing timing is still to be decided.
-- **Constraint:** `php ^8.3`; `illuminate/{auth,bus,console,contracts,database,filesystem,queue,support,translation}` `^11.0|^12.0|^13.0`. Laravel 13 is allowed; the old `^10|^11|^12` blocked it.
+- **Branch / SHA:** `main` at `47e16c4`, **pushed** to `origin` (`https://github.com/lonely-lights/prosetta`). There is no release tag yet; publishing timing is still to be decided.
+- **Constraint:** `php ^8.3`; `illuminate/{auth,bus,cache,console,contracts,database,filesystem,queue,support,translation}` `^11.0|^12.0|^13.0`. Laravel 13 is allowed; the old `^10|^11|^12` blocked it.
 - **Undaunted must run:** `composer update lonely-lights/prosetta`. The code is already live through the junction, but `composer.lock` still records the old metadata, and package discovery needs refreshing for the new `Prosetta` facade alias.
 
 Commits since the old `76e9ebc` (newest first):
 
 ```
+47e16c4 Close the deferred minors: plural detection, driver check, stats, search, bulk auth, lists and orphans
+bdb9eae Add the Undaunted hand-off report and record post-MVP decisions
 a1f7733 Address IDE review: typed constants, exception handling and guarded writes
 70c0c6b Make stateless classes readonly and drop an unnecessary cast
 d2f2b16 Document export conflicts, hand translation and the locales migration upgrade path
@@ -58,7 +60,7 @@ bc74a54 Add Prosetta rebuild design spec
 be8c70d Add translated flag to Locale; widen locale code to 35
 ```
 
-The design is `docs/superpowers/specs/2026-09-22-prosetta-rebuild-design.md` in the package. The package suite is 182 tests; Undaunted's full suite passed against `a1f7733` (699 passed, 2 skipped).
+The design is `docs/superpowers/specs/2026-09-22-prosetta-rebuild-design.md` in the package. The package suite is 192 tests. Undaunted's full suite passed against `a1f7733` (699 passed, 2 skipped); `47e16c4` changes nothing Undaunted calls today.
 
 Already in Undaunted: `a84056a` (the `translated` column, the 35-character code, the `en_GB`/`en_US` seed rows) and `ff19f8a` (removed the obsolete "gates Prosetta's own dashboard" test), both on `feat/responses-ledger`.
 
@@ -328,7 +330,7 @@ This follows the `NameReviewer` pattern (`Promptable`, structured output). Add t
 | `prosetta:sync [--namespace=*] [--check]` | Reads the `en` files into keys, marks stale and obsolete keys, and imports target files. `--check` changes nothing and exits 1 if anything is missing, stale, unreviewed or broken. | `php artisan prosetta:sync`, then `php artisan prosetta:sync --namespace=identity --check` |
 | `prosetta:translate [--locale=*] [--namespace=*] [--key=*] [--force] [--sync]` | Drafts missing and stale keys through your driver. Queued unless `--sync`. | `php artisan prosetta:translate --locale=es --namespace=identity --sync` |
 | `prosetta:review {locale} [--approve-clean] [--namespace=] [--limit=20]` | Lists the review queue, or approves every current candidate with no blocking issues. | `php artisan prosetta:review es --namespace=identity`, then `php artisan prosetta:review es --approve-clean --namespace=identity` |
-| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run] [--force]` | Writes target files. Exits 1 on conflicts unless `--force`. | `php artisan prosetta:export --locale=es --namespace=identity --dry-run` |
+| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run] [--force]` | Writes target files. Exits 1 on conflicts unless `--force`. Incomplete lists are left out; files whose source group is gone are left untouched and reported. | `php artisan prosetta:export --locale=es --namespace=identity --dry-run` |
 | `prosetta:rename {from} {to}` | Carries translations to a key you renamed in the `en` file (sync first). | `php artisan prosetta:rename identity::onboarding.toast.accessCode.inUse identity::onboarding.toast.accessCode.heldElsewhere` |
 | `prosetta:stats [--locale=]` | Progress per locale and namespace. | `php artisan prosetta:stats --locale=es` |
 
@@ -461,18 +463,21 @@ php artisan prosetta:export --locale=es --namespace=identity
 - **Hand-written target-file comments are lost on first export** (see §9).
 - **No spatie dependency (decided).** Eloquent content translation will use Prosetta's own storage when it's built. It isn't built yet.
 - **Other post-MVP items not built:** the report-a-bad-translation backend (for your select-text menu), production review with a pull back to git, copying `en` comments into target files, and the AI model and cost catalogue.
-- **Minors deferred in the package:**
-  - a literal `|` in a non-plural string is treated as a plural (Undaunted has no such string today);
-  - queued `translate()` doesn't fail fast without a driver;
-  - `--check` ignores `--namespace`;
-  - `Stats` loads all rows into PHP;
-  - review search is case-sensitive on Postgres;
-  - the legacy `tableNames` fallback never fires;
-  - the rate limiter is global rather than per provider;
-  - partially translated lists export with gaps in their numbering;
-  - a removed source group empties its target files;
-  - `composer.json` lacks `illuminate/cache`;
-  - a mixed-locale bulk approval can partly apply.
+- **Behaviour worth knowing (from the post-review fixes):**
+  - A `|` counts as plural forms only when the string also has range markers (`{1}`, `[2,*]`) or `:count`. `"Home | :app"` is plain text, and only warns if the translation changes the number of pipes.
+  - Queued `translate()` fails immediately with `MissingDriverException` when no driver is bound, instead of failing inside every job.
+  - `prosetta:sync --check --namespace=identity` counts only that namespace. Outstanding counts each key and locale once.
+  - Review and missing searches are case-insensitive, and treat `%` and `_` literally.
+  - A PHP list (`steps.0`, `steps.1`, …) is exported whole or not at all, so a half-translated list falls back to English rather than exporting with gaps.
+  - When a source group disappears, its target files are left untouched and listed as `orphaned` in the export report and command output. Delete them by hand.
+  - A bulk `approve()` authorizes every locale before approving anything.
+  - The old `tableNames` key is no longer read. Undaunted's table names are the defaults.
+- **Still deferred:**
+  - `Stats` loads all rows into PHP. That's fine at Undaunted's scale; SQL aggregates come later if needed.
+  - The AI rate limiter is app-wide (`prosetta-ai`, `queue.rate_per_minute`), not per provider, because the provider is only known after a call.
 - **`feat/responses-ledger`** carries `a84056a` and `ff19f8a` and isn't pushed. Pushing it is this session's call.
-- **The Alexandria copy** (`C:\Websites\alexandria\packages\prosetta`) is being updated to match this repository as a separate step. `alexandria-legacy` subclasses Locale (`App\Models\Prosetta\Locale`, adding only `users()`) and has its own Prosetta migrations, so check it after that update. Its subclass keeps working, but anything it used from the old services (`LangKeyService`, the old `HasTranslations`) is gone.
+- **The Alexandria copy** (`C:\Websites\alexandria\packages\prosetta`) is now a clean clone at the same commit as `main`, and nothing links to it.
+  - `alexandria-legacy/vendor/lonely-lights/prosetta` is a junction to **`C:\Websites\packages\prosetta`**, so it already runs this rebuild.
+  - It uses only `Locale`, through `App\Models\Prosetta\Locale`, which is now honoured via `config('prosetta.models.locale')`.
+  - It boots on Laravel 13 and reads its 100 locale rows.
 - **Publishing** (tag, Packagist, a CI matrix for Laravel 11/12/13) is still to be decided.

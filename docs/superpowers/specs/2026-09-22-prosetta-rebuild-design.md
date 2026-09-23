@@ -179,7 +179,7 @@ return [
 ];
 ```
 
-Compatibility: `tableNames.locales` (the old camelCase key) is read as a fallback for `table_names.locales`, so Undaunted's existing migration keeps working until its config is replaced.
+Compatibility: only `table_names.*` is read. The old camelCase `tableNames.*` key is ignored; Undaunted's table names are the defaults, so nothing depends on it.
 
 ## 7. Sync (`Prosetta::sync()`, `prosetta:sync`)
 
@@ -223,7 +223,7 @@ Compatibility: `tableNames.locales` (the old camelCase key) is read as a fallbac
 - `TranslateBatch` jobs, one per (locale, file), in chunks of `ai.batch`;
 - dispatched as a `Bus::batch` (progress visible to hosts);
 - on `queue.connection` / `queue.name`;
-- with `RateLimited` middleware per provider and `WithoutOverlapping` per (locale, file);
+- with one app-wide `RateLimited('prosetta-ai')` limiter (the provider is only known after a call, so it can't key the limit) and `WithoutOverlapping` per (locale, file);
 - `--sync` / `queue: false` runs inline.
 
 **Idempotence.** Before calling the driver, a job reloads its keys and drops any whose hash changed, or that gained a current candidate or approved value since dispatch.

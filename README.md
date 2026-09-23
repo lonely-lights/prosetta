@@ -129,7 +129,7 @@ Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => 
 | `prosetta:sync [--namespace=*] [--check]` | Read source files, import target files. `--check` changes nothing and exits 1 when work is outstanding (use it in CI). |
 | `prosetta:translate [--locale=*] [--namespace=*] [--key=*] [--force] [--sync]` | Draft missing and stale keys (queued on `prosetta.queue.name` unless `--sync`). |
 | `prosetta:review {locale} [--approve-clean] [--namespace=]` | List the review queue, or approve every clean current candidate. |
-| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run] [--force]` | Write target-locale files; exits 1 on conflicts unless `--force`. |
+| `prosetta:export [--locale=*] [--namespace=*] [--include-drafts] [--dry-run] [--force]` | Write target-locale files; exits 1 on conflicts unless `--force`. Incomplete lists are left out, and files whose source group is gone are left untouched and reported. |
 | `prosetta:rename {from} {to}` | Move translations to a key you renamed in the source file (sync first). |
 | `prosetta:stats [--locale=]` | Progress per locale and namespace. |
 
