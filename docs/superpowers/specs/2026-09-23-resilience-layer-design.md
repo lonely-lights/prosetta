@@ -95,7 +95,7 @@ Budgets are in **tokens** (input plus output plus reasoning, as the driver repor
 
 `null` means no limit. Budgets are a separate gate from circuits: reaching one never trips a circuit, and `prosetta:resume` checks the budget before requeueing. Spending is counted in the cache (per run, day and month) after each call. A call is refused **before** it's made when the counter is already at or over the limit. A single batch can overshoot a limit by at most one batch's tokens, which is the accepted trade-off for not estimating every call. Reaching a limit raises `BudgetReached` (period, used, limit) once per period, and the stopped jobs end quietly as in §5.
 
-**`php artisan prosetta:translate --estimate`** prints, for the run it would start: strings, source characters and expected input and output tokens, without calling anything. The per-character rates come from the locale's own history when it has at least 50 AI drafts, otherwise from defaults (`budgets.estimate` in config). It also prints how the estimate compares with each remaining budget.
+**`php artisan prosetta:translate --estimate`** prints, for the run it would start: strings, source characters and expected input and output tokens, without calling anything. The per-character rates come from the locale's own history when it has at least 50 AI drafts, otherwise from defaults (`budgets.estimate` in config). It also prints the `per_run` limit and whether the whole estimate fits under it, and what's left of the daily and monthly budgets.
 
 ## 8. Synchronous runs
 

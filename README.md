@@ -205,7 +205,7 @@ Circuit and suspension state changes (opening, tripping, recording a suspended s
 | `prosetta:circuit status` | Each known circuit: state, failures, cooldown and time left, open since, suspended scopes, budget usage |
 | `prosetta:circuit reset [circuit]` | Close a circuit, or all of them, and clear its halt; suspended work is resumed on the next `prosetta:resume` |
 | `prosetta:resume` | Tests each circuit that's due (via `checkHealth()` when the driver has it, otherwise by requeueing) and queues its suspended scopes again on success |
-| `prosetta:translate --estimate` | Prints, for the run it would start: strings, source characters and expected input/output tokens, without calling anything, and how that compares with each remaining budget |
+| `prosetta:translate --estimate` | Prints, for the run it would start: strings, source characters and expected input/output tokens, without calling anything; whether the whole estimate fits under the `per_run` limit; and what's left of the daily and monthly budgets |
 
 `prosetta:resume` only runs on a schedule when `resilience.resume_every` is set **and** the host actually runs Laravel's scheduler (`schedule:work` locally, a cron entry calling `schedule:run` every minute in production). With `resume_every` left `null`, or no scheduler running, nothing calls `prosetta:resume` for you — run it by hand or wire up your own schedule.
 

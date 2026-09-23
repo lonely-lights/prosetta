@@ -32,6 +32,13 @@ final class TranslateCommand extends Command {
             ));
             $total = array_sum(array_map(fn (array $row) => $row['input'] + $row['output'], $estimate));
             $this->line("Total: about $total tokens.");
+            $perRun = config('prosetta.budgets.per_run');
+
+            if ($perRun !== null) {
+                # The Whole Run Must Fit Under per_run, Not Just What's Left of It
+                $perRun = max(0, (int) $perRun);
+                $this->line("per_run limit: $perRun tokens; this estimate ".($total <= $perRun ? 'fits under it.' : 'does not fit under it.'));
+            }
 
             foreach ($budget->usage() as $period => ['used' => $used, 'limit' => $limit]) {
                 if ($limit !== null) {

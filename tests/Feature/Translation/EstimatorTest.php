@@ -49,3 +49,18 @@ it('prints an estimate without queueing anything', function () {
 
     \Illuminate\Support\Facades\Bus::assertNothingBatched();
 });
+
+it('compares the estimate with the per-run limit as well as the daily and monthly budgets', function () {
+    config(['prosetta.resilience.cache_store' => 'array', 'prosetta.budgets.per_run' => 10, 'prosetta.budgets.daily' => 1_000_000]);
+
+    $this->artisan('prosetta:translate --locale=ar --estimate')
+        ->expectsOutputToContain('per_run limit: 10 tokens; this estimate does not fit under it.')
+        ->expectsOutputToContain('daily budget:')
+        ->assertSuccessful();
+
+    config(['prosetta.budgets.per_run' => 10_000_000]);
+
+    $this->artisan('prosetta:translate --locale=ar --estimate')
+        ->expectsOutputToContain('per_run limit: 10000000 tokens; this estimate fits under it.')
+        ->assertSuccessful();
+});
