@@ -11,6 +11,9 @@ final class TranslateReport {
     /** @var list<string> */
     public array $withIssues = [];
 
+    /** @var list<string> "{locale} {ref}" drafts made in update mode */
+    public array $updated = [];
+
     /** @var list<string> */
     public array $failed = [];
 
@@ -29,6 +32,7 @@ final class TranslateReport {
     public function merge(self $other): void {
         $this->drafted = [...$this->drafted, ...$other->drafted];
         $this->withIssues = [...$this->withIssues, ...$other->withIssues];
+        $this->updated = [...$this->updated, ...$other->updated];
         $this->failed = [...$this->failed, ...$other->failed];
         $this->refused = [...$this->refused, ...$other->refused];
         $this->stopped ??= $other->stopped;
@@ -40,7 +44,7 @@ final class TranslateReport {
     /** @return array<string, mixed> */
     public function toArray(): array {
         return [
-            'drafted' => $this->drafted, 'with_issues' => $this->withIssues, 'failed' => $this->failed,
+            'drafted' => $this->drafted, 'with_issues' => $this->withIssues, 'updated' => $this->updated, 'failed' => $this->failed,
             'refused' => $this->refused, 'stopped' => $this->stopped,
             'skipped' => $this->skipped, 'input_tokens' => $this->inputTokens, 'output_tokens' => $this->outputTokens,
         ];

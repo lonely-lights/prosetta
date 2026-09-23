@@ -68,15 +68,14 @@ final readonly class TranslationRunner {
         }
 
         $driver = $this->driver();
-        $items = $keys->map(fn (TranslationKey $key) => new TranslationItem(
-            (string) $key->getKey(),
-            $key->ref()->toString(),
-            $key->source_value,
-            $key->context,
-            $key->max_length,
-            $key->placeholders ?? [],
-            $existing->get($key->getKey())?->approved_value,
-        ))->values()->all();
+        $items = $keys->map(function (TranslationKey $key) use ($existing) {
+            $current = $existing->get($key->getKey());
+            $previousSource = $current?->approved_value !== null && $current->approved_source_value !== null && $current->approved_source_value !== $key->source_value
+                ? $current->approved_source_value
+                : null;
+
+            return new TranslationItem((string) $key->getKey(), $key->ref()->toString(), $key->source_value, $key->context, $key->max_length, $key->placeholders ?? [], $current?->approved_value, $previousSource);
+        })->values()->all();
 
         $source = $this->locales->source();
         $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
@@ -140,7 +139,7 @@ final readonly class TranslationRunner {
         return $shares;
     }
 
-    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int}> */
+    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool}> */
     private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale, ?string $runId): array {
         $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch));
         $weights = [];
@@ -156,19 +155,31 @@ final readonly class TranslationRunner {
         foreach ($batch->items as $item) {
             $value = $result->values[$item->id] ?? null;
             $refusal = $result->refused[$item->id] ?? null;
+            $translated = $refusal === null && is_string($value) ? $value : null;
+
+            $issues = match (true) {
+                $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
+                is_string($value) => [...$this->guard->check($item->source, $value, $locale), ...$this->glossary->check($item->source, $value, $batch->target->glossary)],
+                default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
+            };
+
+            if ($translated !== null && $item->previousSource !== null && $item->previous !== null) {
+                $ratio = SourceChange::ratio($item->previousSource, $item->source, $item->previous, $translated);
+
+                if ($ratio > (float) config('prosetta.automation.rewrite_ratio', 3.0) && SourceChange::changedWords($item->previous, $translated) > 2) {
+                    $issues[] = Issue::warning('large_rewrite', 'The update changed much more of the translation than the English changed.');
+                }
+            }
 
             $outcomes[$item->id] = [
-                'value' => $refusal === null && is_string($value) ? $value : null,
-                'issues' => match (true) {
-                    $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
-                    is_string($value) => [...$this->guard->check($item->source, $value, $locale), ...$this->glossary->check($item->source, $value, $batch->target->glossary)],
-                    default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
-                },
+                'value' => $translated,
+                'issues' => $issues,
                 'provider' => $result->provider,
                 'model' => $result->model,
                 'invocation' => $result->invocationId,
                 'input' => $input[$item->id],
                 'output' => $output[$item->id],
+                'isUpdate' => $item->previousSource !== null,
             ];
         }
 
@@ -176,7 +187,7 @@ final readonly class TranslationRunner {
     }
 
     /**
-     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int} $outcome
+     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool} $outcome
      * @throws Throwable when a database transaction fails
      */
     private function persist(TranslationKey $key, ?Translation $existing, string $locale, array $outcome, TranslateReport $report): void {
@@ -212,6 +223,10 @@ final readonly class TranslationRunner {
         });
 
         $report->drafted[] = $ref;
+
+        if ($outcome['isUpdate']) {
+            $report->updated[] = $ref;
+        }
 
         if ($this->blocking($outcome['issues'])) {
             $report->withIssues[] = $ref;

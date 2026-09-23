@@ -14,5 +14,6 @@ final readonly class TranslationItem {
         public ?int $maxLength = null,
         public array $placeholders = [],
         public ?string $previous = null,
+        public ?string $previousSource = null,
     ) {}
 }
