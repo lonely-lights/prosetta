@@ -183,7 +183,7 @@ A driver that implements it lets Prosetta test a provider after a cooldown witho
     'outage_timeout' => 21600,           // 6 h open without a break: stop retrying, suspend
     'halt_hold' => null,                 // seconds a halt lasts before testing; null = until prosetta:circuit reset
     'unknown_errors' => 'transient',     // or 'halt'
-    'resume_every' => null,              // minutes; null = the host schedules prosetta:resume itself
+    'resume_every' => null,              // minutes, clamped to 1-59 (a */N cron); null = the host schedules prosetta:resume itself
 ],
 
 'budgets' => [
@@ -196,18 +196,18 @@ A driver that implements it lets Prosetta test a provider after a cooldown witho
 
 Budgets are counted in tokens (input plus output, as the driver reports them), because there's no price catalogue yet. `per_run` stops only that run; `daily` and `monthly` stop every run, suspend it, and are picked up again automatically once the period changes. Reaching a budget never trips a circuit, and a budget is a separate gate: `prosetta:resume` checks it before requeueing anything.
 
-Circuit and suspension state changes (opening, tripping, recording a suspended scope) go through a short cache write lock, so two workers racing the same event can't both fire it. Your `resilience.cache_store` needs to be a store that supports locks — Redis, database, file or array all work; Laravel's `memcached`/`dynamodb` file-less setups may not, check before relying on one.
+Circuit and suspension state changes (opening, tripping, recording a suspended scope) go through a short cache write lock, so two workers racing the same event can't both fire it. Your `resilience.cache_store` needs to be a store that supports locks: Redis, memcached, dynamodb, database and file all do. `array` supports locks too but lives in one process, so it's for tests only, never for more than one worker.
 
 **Commands:**
 
 | Command | What it does |
 |---|---|
-| `prosetta:circuit status` | Each known circuit: state, failures, cooldown and time left, open since, suspended scopes, budget usage |
+| `prosetta:circuit status` | A table of each known circuit: state (`closed`, `open`, or `halted (reason)`), failures, next test (a time, or `until reset`) and last error; then the number of suspended runs and the daily and monthly budget usage |
 | `prosetta:circuit reset [circuit]` | Close a circuit, or all of them, and clear its halt; suspended work is resumed on the next `prosetta:resume` |
 | `prosetta:resume` | Tests each circuit that's due (via `checkHealth()` when the driver has it, otherwise by requeueing) and queues its suspended scopes again on success |
 | `prosetta:translate --estimate` | Prints, for the run it would start: strings, source characters and expected input/output tokens, without calling anything; whether the whole estimate fits under the `per_run` limit; and what's left of the daily and monthly budgets |
 
-`prosetta:resume` only runs on a schedule when `resilience.resume_every` is set **and** the host actually runs Laravel's scheduler (`schedule:work` locally, a cron entry calling `schedule:run` every minute in production). With `resume_every` left `null`, or no scheduler running, nothing calls `prosetta:resume` for you — run it by hand or wire up your own schedule.
+`resume_every` becomes a `*/N * * * *` cron, so it's clamped to 1–59 minutes: 60 or more runs every 59 minutes; for an hourly or longer interval, leave it `null` and schedule `prosetta:resume` yourself. `prosetta:resume` only runs on a schedule when `resilience.resume_every` is set **and** the host actually runs Laravel's scheduler (`schedule:work` locally, a cron entry calling `schedule:run` every minute in production). With `resume_every` left `null`, or no scheduler running, nothing calls `prosetta:resume` for you — run it by hand or wire up your own schedule.
 
 **Events**, all in `LonelyLights\Prosetta\Events`, raised once per state change (not once per job):
 

@@ -81,7 +81,7 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
 Each suspension is cleared **before** its scope is queued again, so a requeued job that suspends the same scope straight away isn't wiped. If queueing throws, the scope is suspended again and the error is rethrown.
 - **Circuit closed:** the scope is queued again straight away.
 
-**Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. `null` leaves scheduling to the host. The command is also safe to run by hand.
+**Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. The interval is a `*/N` cron, so it's clamped to 1–59 minutes. `null` leaves scheduling to the host. The command is also safe to run by hand.
 
 ## 7. Token budgets
 
@@ -145,7 +145,7 @@ Package defaults:
     'outage_timeout' => 21600,           // 6 h open without a break: stop retrying, suspend
     'halt_hold' => null,                 // seconds a halt lasts before testing; null = until prosetta:circuit reset
     'unknown_errors' => 'transient',     // or 'halt'
-    'resume_every' => null,              // minutes; null = the host schedules prosetta:resume itself
+    'resume_every' => null,              // minutes, clamped to 1-59; null = the host schedules prosetta:resume itself
 ],
 
 'budgets' => [
@@ -180,7 +180,7 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
   - an HTTP 408 or 5xx → `ProviderUnavailable`;
   - anything else is left to `unknown_errors`.
 - **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
-- **Listeners** for the §9 events log to the app log for now. Notifications (mail or the Bridge) come later.
+- **Logging needs no listeners:** Prosetta logs every §9 event to `log_channel` itself (`LogResilienceEvents`). Listeners are optional, for notifications (mail or the Bridge), which come later.
 - **The translations worker** needs `queue:restart` on deploy (G4). That's noted in the README, not solved here.
 
 ## 13. Testing

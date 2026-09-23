@@ -81,8 +81,10 @@ return [
     | outage_timeout seconds of downtime. A halt (bad key, no credits) trips the
     | circuit for halt_hold seconds (null = until prosetta:circuit reset).
     | Suspended work is requeued by prosetta:resume, scheduled every
-    | resume_every minutes when set. Use a shared cache store (Redis) with more
-    | than one worker, so every worker sees the same circuit.
+    | resume_every minutes when set (an every-N-minutes cron, so clamped to
+    | 1-59; null = the host schedules prosetta:resume itself). Use a shared
+    | cache store (Redis) with more than one worker, so every worker sees the
+    | same circuit.
     */
     'resilience' => [
         'cache_store' => env('PROSETTA_CACHE_STORE'),

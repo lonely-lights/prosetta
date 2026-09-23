@@ -318,7 +318,7 @@ final readonly class LaravelAiTranslationDriver implements TranslationDriver {
 }
 ```
 
-This follows the `NameReviewer` pattern (`Promptable`, structured output). Add the same fail-soft logging as `AgentNameModerator` if you like. A thrown exception fails that queued chunk, and the retry is bounded by `retryUntil()` (2 hours).
+This follows the `NameReviewer` pattern (`Promptable`, structured output). Add the same fail-soft logging as `AgentNameModerator` if you like. Provider errors are mapped as §11 describes. Any other exception is a genuine bug: the job retries after 30, 120 and 600 seconds and fails that queued chunk after three (`$maxExceptions`), within a `retryUntil()` of seven days.
 
 ## 7. Commands and services
 
@@ -400,7 +400,7 @@ authorizeUsing(Closure $callback): void
 5. **Blade routes.** Nothing to turn off: the package has no routes. Remove `routes` / `PROSETTA_ROUTES` from config and `.env` (the new config doesn't have them).
 6. **Queue.**
    - Add a Horizon supervisor for the `translations` queue, with a small fixed process count. The `job_batches` table already exists.
-   - The job sets `retryUntil()` to 2 hours, a 300-second timeout, and an overlap lock that expires after 10 minutes, so it's fine under `tries => 3`.
+   - The job sets `retryUntil()` to seven days (Laravel then ignores `tries`, so it's fine under `tries => 3`), `$maxExceptions = 3` for genuine bugs, a 300-second timeout, and an overlap lock that expires after 10 minutes.
 7. **Tests.**
    - Keep `tests/Feature/Auth/LocaleCoverageTest.php` as is. It checks that the files agree across locales, and Prosetta's export only writes keys that exist in `en`. Treat it as the file-level guard: if an `en` key is added and nothing is approved (or drafted, with drafts exported) for a locale, it fails until that locale is translated. That's intended.
    - Add a CI step `php artisan prosetta:sync --check`. Note it counts **every** target locale, `en_GB`/`en_US` included (§10), so decide on the variants before gating CI on it.
@@ -497,7 +497,7 @@ Translation runs can now be left unattended: Prosetta backs off individual failu
   - an HTTP 408 or 5xx → `ProviderUnavailable`;
   - anything else is left to `unknown_errors`.
 - **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
-- **Listeners** for the resilience events (`CircuitOpened`, `CircuitClosed`, `TranslationHalted`, `TranslationSuspended`, `TranslationResumed`, `BudgetReached`) log to the app log for now. Notifications (mail or the Bridge) come later.
+- **Logging is built in.** Prosetta already writes a line to `log_channel` for each resilience event (`CircuitOpened`, `CircuitClosed`, `TranslationHalted`, `TranslationSuspended`, `TranslationResumed`, `BudgetReached`) through its own `LogResilienceEvents` subscriber. Listeners are optional, only for notifications (mail or the Bridge), which come later.
 - **The translations worker** needs `queue:restart` on deploy (G4) whenever the driver or translation config changes. That's noted in the package README, not solved by Prosetta itself.
 
 **Config values to use** (everything else stays at the package default):
@@ -511,13 +511,13 @@ Translation runs can now be left unattended: Prosetta backs off individual failu
 'budgets' => ['per_run' => 250_000, 'daily' => 500_000, 'monthly' => 5_000_000],
 ```
 
-**Scheduling.** `resume_every: 10` only takes effect if Undaunted actually runs Laravel's scheduler. Add `schedule:work` to the `composer dev` script (alongside the existing `serve`/`queue:listen`/`vite` processes) for local development, and confirm the production cron entry (`* * * * * php artisan schedule:run`) is in place before relying on automatic resume there.
+**Scheduling.** `resume_every: 10` only takes effect if Undaunted actually runs Laravel's scheduler. Undaunted's `composer dev` script runs `schedule:work` alongside its `queue:work` workers (including the `translations` one) and `vite` for local development. Confirm the production cron entry (`* * * * * php artisan schedule:run`) is in place before relying on automatic resume there.
 
 **Adoption steps** (in addition to §8 above):
 
 1. Add the `'resilience'` and `'budgets'` config blocks above to `config/prosetta.php`.
 2. Implement `checkHealth()` on `LaravelAiTranslationDriver` and map laravel/ai's exceptions to Prosetta's `ProviderException` subclasses, both as described above.
-3. Register listeners for the six resilience events (log for now; notifications later).
-4. Add `schedule:work` to `composer.json`'s `dev` script.
+3. Nothing to register for logging: Prosetta logs the six resilience events itself. Add listeners only when you want notifications.
+4. Keep `schedule:work` in `composer.json`'s `dev` script (it's there now).
 5. Confirm the production scheduler is running (`schedule:run` on cron), so `prosetta:resume` actually fires every 10 minutes.
 6. Note `php artisan queue:restart` as a required deploy step whenever the driver or translation config changes (G4 is now documented, not yet automated).
