@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Translation;
 
+use Closure;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
@@ -95,12 +96,27 @@ final readonly class Translator {
      */
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true, ?int $forcedBefore = null): Batch|TranslateReport {
         $work = $this->workList($locales, $namespaces, $keys, $force, $forcedBefore);
-        $size = max(1, (int) config('prosetta.ai.batch', 25));
         $scope = new RunScope(array_values($locales), array_values($namespaces), array_values($keys), $force, $forcedBefore ?? now()->getTimestamp());
+
+        return $this->run($work, $scope, $queue);
+    }
+
+    /**
+     * Translates a prepared work list, inline or as one queued batch.
+     *
+     * @param array<string, array<int, list<int>>> $work locale => file id => key ids
+     * @param RunScope $scope what a suspension keeps for prosetta:resume; its force flag applies to every chunk
+     * @param Closure|null $finally with a queue: the batch's finally callback (it must be serializable)
+     * @param string|null $runId without a queue: the run id usage is recorded under (default a new uuid); queued jobs use their batch id
+     * @throws Throwable when the queued batch cannot be dispatched
+     */
+    public function run(array $work, RunScope $scope, bool $queue = true, ?Closure $finally = null, ?string $runId = null): Batch|TranslateReport {
+        $size = max(1, (int) config('prosetta.ai.batch', 25));
+        $force = $scope->force;
 
         if (! $queue) {
             $report = new TranslateReport;
-            $runId = (string) Str::uuid();
+            $runId ??= (string) Str::uuid();
 
             foreach ($work as $locale => $files) {
                 foreach ($files as $ids) {
@@ -144,6 +160,10 @@ final readonly class Translator {
 
         $pending = Bus::batch($jobs)->name('prosetta:translate')->allowFailures();
         $connection = config('prosetta.queue.connection');
+
+        if ($finally !== null) {
+            $pending->finally($finally);
+        }
 
         if (is_string($connection) && $connection !== '') {
             $pending->onConnection($connection);

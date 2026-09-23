@@ -194,9 +194,10 @@ final readonly class ReviewService {
 
     /**
      * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
+     * With $strict, only candidates with no issues at all: warnings (glossary, rewrite) hold one back too.
      * @throws Throwable when a database transaction fails
      */
-    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null): ApproveReport {
+    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false): ApproveReport {
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -212,6 +213,7 @@ final readonly class ReviewService {
             ->whereColumn("$t.source_hash", "$k.source_hash")
             ->when($namespace !== null, fn ($query) => $query->where("$f.namespace", $namespace))
             ->when($group !== null, fn ($query) => $query->where("$f.group", $group))
+            ->when($strict, fn ($query) => $query->whereNull("$t.issues"))
             ->orderBy("$t.id")
             ->pluck("$t.id")
             ->map(fn ($id) => (int) $id)

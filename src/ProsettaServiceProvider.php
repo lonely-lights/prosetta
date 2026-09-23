@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
+use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
 use LonelyLights\Prosetta\Console\InstallCommand;
 use LonelyLights\Prosetta\Console\RenameCommand;
@@ -63,7 +64,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
             $this->commands([
                 InstallCommand::class, SyncCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
-                ResumeCommand::class, CircuitCommand::class,
+                ResumeCommand::class, CircuitCommand::class, CycleCommand::class,
             ]);
         }
 
@@ -80,6 +81,14 @@ final class ProsettaServiceProvider extends ServiceProvider {
         if ($every !== null && (int) $every > 0) {
             $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($every): void {
                 $schedule->command('prosetta:resume')->cron('*/'.max(1, min(59, (int) $every)).' * * * *')->withoutOverlapping();
+            });
+        }
+
+        $cycleEvery = config('prosetta.automation.every');
+
+        if ($cycleEvery !== null && (int) $cycleEvery > 0) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($cycleEvery): void {
+                $schedule->command('prosetta:cycle')->cron('*/'.max(1, min(59, (int) $cycleEvery)).' * * * *')->withoutOverlapping();
             });
         }
     }
