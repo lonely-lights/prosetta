@@ -99,6 +99,20 @@ it('keeps retryUntil beyond the outage timeout', function () {
         ->toBeGreaterThanOrEqual(now()->addSeconds(21600 + 3600)->getTimestamp());
 });
 
+it('gives a job a horizon of days, so a long run never expires a job Prosetta has not given up on', function () {
+    $horizon = (new TranslateBatch('es', 1, [1]))->retryUntil()->getTimestamp();
+
+    expect($horizon)->toBeGreaterThanOrEqual(now()->addDays(7)->getTimestamp() - 1)
+        ->and($horizon)->toBeGreaterThan(now()->addHours(24)->getTimestamp());
+});
+
+it('bounds genuine bugs with maxExceptions and a backoff', function () {
+    $job = new TranslateBatch('es', 1, [1]);
+
+    expect($job->maxExceptions)->toBe(3)
+        ->and($job->backoff())->toBe([30, 120, 600]);
+});
+
 it('stops a synchronous run at the first provider problem and suspends it', function () {
     app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new ProviderRejected('bad key')));
 

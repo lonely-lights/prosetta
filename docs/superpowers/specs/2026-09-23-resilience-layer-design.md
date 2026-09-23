@@ -52,7 +52,7 @@ A `ProviderUnavailable` (or a `ProviderRateLimited` without `retryAfter`) releas
 - **Open.** No calls are made. A job that finds the circuit open releases itself until the cooldown ends, plus jitter, without touching the provider. The first cooldown is `circuit.cooldown`; each re-opening multiplies it by `circuit.cooldown_multiplier`, up to `circuit.max_cooldown`. Opening raises `CircuitOpened`.
 - **Testing** (after a cooldown ends). Exactly **one** caller, holding an atomic cache lock, tests the provider: through `checkHealth()` if the driver has it, otherwise by running its own real batch. Everyone else keeps waiting. Success **closes** the circuit, resets the cooldown to its first value and raises `CircuitClosed` with the downtime. Failure **re-opens** it with the next, longer cooldown.
 
-**Downtime timeout.** When a circuit has been open (including failed tests) for `resilience.outage_timeout` seconds without a break, jobs stop retrying. Each one **suspends** its scope (§6) and ends without being marked failed, and Prosetta raises `TranslationSuspended`. The circuit itself keeps cycling. Because no jobs are left to test it, the scheduled `prosetta:resume` does the testing (§6). Jobs' `retryUntil()` becomes `outage_timeout` plus the longest cooldown, so a job is never expired by Laravel before Prosetta decides.
+**Downtime timeout.** When a circuit has been open (including failed tests) for `resilience.outage_timeout` seconds without a break, jobs stop retrying. Each one **suspends** its scope (§6) and ends without being marked failed, and Prosetta raises `TranslationSuspended`. The circuit itself keeps cycling. Because no jobs are left to test it, the scheduled `prosetta:resume` does the testing (§6). Jobs' `retryUntil()` is a long horizon, seven days: Laravel fixes it in the payload at dispatch and `release()` keeps it, so anything shorter would expire jobs on a long run with no outage at all. The circuit and `outage_timeout` decide when to suspend, not the deadline. Genuine bugs (exceptions Prosetta doesn't handle) are bounded separately by `$maxExceptions = 3` and a `backoff()` of 30, 120 and 600 seconds, and those jobs do land in `failed_jobs`.
 
 ## 5. Halts
 
@@ -186,7 +186,7 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
 - Circuit: opens at the threshold; stays open, releasing jobs without calling the driver; allows exactly one test after the cooldown when two jobs arrive at once; closes on success and resets the cooldown; re-opens on failure with a doubled cooldown, capped at the maximum.
 - Health check used for the test when the driver has it, and a real job used when it doesn't.
 - Halts: `ProviderRejected` and `ProviderQuotaExhausted` end the job quietly (not in `failed_jobs`), cancel the batch, trip the circuit and suspend the scope. `halt_hold = null` waits for a reset; a number tests after the hold.
-- Outage timeout: jobs suspend instead of retrying, and `retryUntil` covers the timeout.
+- Outage timeout: jobs suspend instead of retrying; `retryUntil` is days, not hours; `maxExceptions` and `backoff()` bound unhandled exceptions.
 - Resume: queues suspended scopes after a successful test and clears them; doesn't when the test fails; merges duplicate scopes.
 - Budgets: per-run stops that run only, without suspending or tripping a circuit; daily and monthly stop, suspend and are requeued by `prosetta:resume` after the period ends; a call is refused when the counter is already over.
 - Refused strings are recorded as failed with `refused` and not retried.

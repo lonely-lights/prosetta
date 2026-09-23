@@ -223,7 +223,7 @@ Prosetta also writes a line to `log_channel` for each: warning for opened, halte
 
 **Operational notes.**
 - Run `php artisan queue:restart` after deploying a new driver or changing translation config. The worker process keeps the old code and config until it's restarted.
-- Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` stays reserved for genuine bugs.
+- Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` stays reserved for genuine bugs. A job's `retryUntil()` is seven days after dispatch, so Laravel never expires a job during a long run or an outage: the circuit and `outage_timeout` decide when to stop. A genuine bug (an exception Prosetta doesn't handle) is retried after 30, 120 and 600 seconds and fails the job after three (`$maxExceptions = 3`).
 
 ## Services for your own admin
 

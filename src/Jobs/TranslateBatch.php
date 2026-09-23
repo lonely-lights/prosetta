@@ -49,15 +49,28 @@ final class TranslateBatch implements ShouldQueue {
     ) {}
 
     /**
+     * Exceptions Prosetta doesn't handle (genuine bugs) fail the job after this many, via Laravel's own counter.
+     * Provider trouble never counts: it is caught and released, waited out or suspended.
+     */
+    public int $maxExceptions = 3;
+
+    /**
      * Releases for rate limits, overlap and open circuits all consume
-     * attempts, so retries are bounded by time: long enough that Prosetta,
-     * not the queue, decides when an outage has lasted too long.
+     * attempts, so retries are bounded by time. Laravel stores this deadline
+     * in the payload at dispatch and release() keeps it, so it must outlast
+     * any run: the circuit and outage_timeout decide when to suspend, not it.
      */
     public function retryUntil(): DateTimeInterface {
-        $outage = (int) config('prosetta.resilience.outage_timeout', 21600);
-        $cooldown = (int) config('prosetta.resilience.circuit.max_cooldown', 3600);
+        return now()->addDays(7);
+    }
 
-        return now()->addSeconds(max(21600, $outage + $cooldown + 600));
+    /**
+     * Seconds before retrying after an unhandled exception (a genuine bug), bounded by $maxExceptions.
+     *
+     * @return list<int>
+     */
+    public function backoff(): array {
+        return [30, 120, 600];
     }
 
     /** @return list<object> */
