@@ -33,11 +33,11 @@ final readonly class Budget {
             return;
         }
 
-        $cache = Settings::cache();
+        $cache = Settings::cacheStore();
 
         foreach ($this->periods($runId) as $period => [$key, $ttl]) {
             $cache->add($key, 0, $ttl);
-            $used = (int) $cache->increment($key, $tokens);
+            $used = $cache->increment($key, $tokens);
             $limit = $this->limit($period);
 
             if ($limit !== null && $used >= $limit && $cache->add("$key:reached", true, $ttl)) {
@@ -78,7 +78,7 @@ final readonly class Budget {
     }
 
     private function used(string $key): int {
-        return (int) Settings::cache()->get($key, 0);
+        return (int) Settings::cacheStore()->get($key, 0);
     }
 
     private function limit(string $period): ?int {

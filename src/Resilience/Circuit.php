@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Resilience;
 
 use Closure;
-use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\CircuitOpened;
@@ -32,7 +31,7 @@ final class Circuit {
     /** Seconds a mutation blocks waiting for the write lock before giving up. */
     private const int WRITE_LOCK_WAIT_SECONDS = 5;
 
-    public function __construct(public readonly string $name, private readonly Repository $cache, private readonly Dispatcher $events) {}
+    public function __construct(public readonly string $name, private readonly CacheStore $cache, private readonly Dispatcher $events) {}
 
     /** @return array{state: string, failures: int, opened_at: ?int, until: ?int, cooldown: int, reason: ?string, halt: ?string, message: ?string} */
     public function state(): array {
@@ -169,7 +168,7 @@ final class Circuit {
 
     /** Serializes a read-compute-write transition through a short blocking lock, separate from the test lock. */
     private function mutate(Closure $change): mixed {
-        return $this->cache->lock($this->key().':write', self::WRITE_LOCK_SECONDS)->block(self::WRITE_LOCK_WAIT_SECONDS, $change);
+        return $this->cache->locked($this->key().':write', self::WRITE_LOCK_SECONDS, self::WRITE_LOCK_WAIT_SECONDS, $change);
     }
 
     private function isTest(?Decision $decision): bool {

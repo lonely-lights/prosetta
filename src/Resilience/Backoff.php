@@ -22,6 +22,6 @@ final class Backoff {
         $spread = max(0.0, min(1.0, (float) config('prosetta.resilience.jitter', 0.2)));
         $range = (int) round($seconds * $spread);
 
-        return max(1, $seconds + ($range > 0 ? random_int(-$range, $range) : 0));
+        return max(1, $seconds + ($range > 0 ? mt_rand(-$range, $range) : 0));
     }
 }

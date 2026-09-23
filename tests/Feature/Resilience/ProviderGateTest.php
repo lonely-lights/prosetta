@@ -137,7 +137,7 @@ it('releases the test lock and keeps counted tokens when a circuit-closed listen
 
     expect(fn () => callThrough($driver))->toThrow(RuntimeException::class, 'listener boom');
 
-    expect(Settings::cache()->lock('prosetta:circuit:scripted:m:test', 1)->get())->toBeTrue()
+    expect(Settings::cacheStore()->lock('prosetta:circuit:scripted:m:test', 1)->get())->toBeTrue()
         ->and(app(Budget::class)->usage()['daily']['used'])->toBeGreaterThan(0);
 });
 

@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\CircuitClosed;
@@ -135,11 +134,11 @@ it('remembers every circuit it has handed out', function () {
 it('serializes mutations through a write lock, so a concurrent worker cannot race a state change', function () {
     Sleep::fake(true, true);
 
-    $writeLock = Settings::cache()->lock('prosetta:circuit:fake:model:write', 10);
+    $writeLock = Settings::cacheStore()->lock('prosetta:circuit:fake:model:write', 10);
     expect($writeLock->get())->toBeTrue();
 
     expect(fn () => $this->circuit->recordFailure('boom'))
-        ->toThrow(LockTimeoutException::class);
+        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'Timed out');
 
     $writeLock->release();
     $this->circuit->recordFailure('boom');
@@ -196,7 +195,7 @@ it('does not re-hold a halted circuit when a late in-flight call fails', functio
 
 it('never takes the write lock for a success on a healthy circuit', function () {
     Sleep::fake(true, true);
-    $writeLock = Settings::cache()->lock('prosetta:circuit:fake:model:write', 10);
+    $writeLock = Settings::cacheStore()->lock('prosetta:circuit:fake:model:write', 10);
     expect($writeLock->get())->toBeTrue();
 
     $this->circuit->recordSuccess(Decision::call());

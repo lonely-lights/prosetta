@@ -6,6 +6,7 @@ namespace LonelyLights\Prosetta\Support;
 
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
+use LonelyLights\Prosetta\Resilience\CacheStore;
 
 /** Reads Prosetta's config with its defaults, so no other class repeats them. */
 final readonly class Settings {
@@ -35,5 +36,10 @@ final readonly class Settings {
         $store = config('prosetta.resilience.cache_store');
 
         return Cache::store(is_string($store) && $store !== '' ? $store : null);
+    }
+
+    /** The resilience cache, wrapped so cache errors surface as ProsettaExceptions and locks come from the store. */
+    public static function cacheStore(): CacheStore {
+        return new CacheStore(self::cache());
     }
 }

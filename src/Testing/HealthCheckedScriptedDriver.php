@@ -14,7 +14,7 @@ final class HealthCheckedScriptedDriver extends ScriptedDriver implements Checks
     /** @var list<Throwable> */
     private array $healthFailures = [];
 
-    public function failHealth(Throwable ...$errors): static {
+    public function failHealth(Throwable ...$errors): self {
         $this->healthFailures = [...$this->healthFailures, ...array_values($errors)];
 
         return $this;

@@ -58,7 +58,7 @@ final class TranslateCommand extends Command {
         );
 
         if ($result instanceof Batch) {
-            $this->components->info("Queued batch {$result->id} with {$result->totalJobs} job(s) on the ".config('prosetta.queue.name').' queue.');
+            $this->components->info("Queued batch $result->id with $result->totalJobs job(s) on the ".config('prosetta.queue.name').' queue.');
 
             return self::SUCCESS;
         }

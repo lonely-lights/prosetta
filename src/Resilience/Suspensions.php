@@ -27,7 +27,7 @@ final readonly class Suspensions {
             $id = $circuit.'|'.$scope->id();
             $new = ! isset($stored[$id]);
             $stored[$id] = ['circuit' => $circuit, 'scope' => $scope->toArray(), 'reason' => $reason, 'at' => now()->getTimestamp()];
-            Settings::cache()->forever(self::KEY, $stored);
+            Settings::cacheStore()->forever(self::KEY, $stored);
 
             if ($new) {
                 $this->events->dispatch(new TranslationSuspended($circuit, $reason, $scope));
@@ -44,17 +44,17 @@ final readonly class Suspensions {
         $this->mutate(function () use ($id) {
             $stored = $this->stored();
             unset($stored[$id]);
-            Settings::cache()->forever(self::KEY, $stored);
+            Settings::cacheStore()->forever(self::KEY, $stored);
         });
     }
 
     /** Serializes a read-compute-write transition through a short blocking lock. */
-    private function mutate(Closure $change): mixed {
-        return Settings::cache()->lock(self::KEY.':write', self::WRITE_LOCK_SECONDS)->block(self::WRITE_LOCK_WAIT_SECONDS, $change);
+    private function mutate(Closure $change): void {
+        Settings::cacheStore()->locked(self::KEY.':write', self::WRITE_LOCK_SECONDS, self::WRITE_LOCK_WAIT_SECONDS, $change);
     }
 
     /** @return array<string, array{circuit: string, scope: array<string, mixed>, reason: string, at: int}> */
     private function stored(): array {
-        return (array) Settings::cache()->get(self::KEY, []);
+        return (array) Settings::cacheStore()->get(self::KEY, []);
     }
 }

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\Container;
 use LonelyLights\Prosetta\Contracts\ChecksHealth;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Events\TranslationResumed;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\Circuit;
 use LonelyLights\Prosetta\Resilience\Circuits;
@@ -77,7 +79,14 @@ final class ResumeCommand extends Command {
             return false;
         }
 
-        $driver = $container->bound(TranslationDriver::class) ? $container->make(TranslationDriver::class) : null;
+        try {
+            $driver = $container->bound(TranslationDriver::class) ? $container->make(TranslationDriver::class) : null;
+        } catch (BindingResolutionException $e) {
+            # Give the Test Turn Back, or the Circuit Can't Be Tested Until the Lock Expires
+            $decision->release();
+
+            throw new ProsettaException("The bound TranslationDriver could not be built: {$e->getMessage()}", 0, $e);
+        }
 
         if ($driver instanceof ChecksHealth) {
             return $gate->test($driver, $circuit, $decision);

@@ -218,3 +218,17 @@ it('keeps a suspension that a job records again while resume is requeueing it', 
     Bus::assertBatchCount(1);
     expect(app(Suspensions::class)->all())->toHaveCount(1);
 });
+
+it('gives the test turn back when the driver cannot be built during resume', function () {
+    app()->bind(TranslationDriver::class, fn () => throw new \Illuminate\Contracts\Container\BindingResolutionException('missing API key'));
+    $circuit = app(Circuits::class)->for('scripted-driver:default');
+    foreach (range(1, 5) as $ignored) {
+        $circuit->recordFailure('down');
+    }
+    suspendSpanish('scripted-driver:default');
+    $this->travel(301)->seconds();
+
+    expect(fn () => $this->artisan('prosetta:resume')->run())
+        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'could not be built');
+    expect(\LonelyLights\Prosetta\Support\Settings::cacheStore()->lock('prosetta:circuit:scripted-driver:default:test', 1)->get())->toBeTrue();
+});

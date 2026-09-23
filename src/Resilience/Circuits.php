@@ -15,7 +15,7 @@ final readonly class Circuits {
     public function __construct(private Dispatcher $events) {}
 
     public function for(string $name): Circuit {
-        $cache = Settings::cache();
+        $cache = Settings::cacheStore();
         $names = (array) $cache->get(self::NAMES, []);
 
         if (! in_array($name, $names, true)) {
@@ -27,7 +27,7 @@ final readonly class Circuits {
 
     /** @return list<string> */
     public function names(): array {
-        return array_values((array) Settings::cache()->get(self::NAMES, []));
+        return array_values((array) Settings::cacheStore()->get(self::NAMES, []));
     }
 
     /** "fake-translation-driver:gpt-x": the driver's class in kebab case, then the model (or "default"). */

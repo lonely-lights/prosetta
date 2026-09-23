@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\TranslationSuspended;
@@ -45,11 +44,11 @@ it('serializes mutations through a write lock, so concurrent workers cannot race
     Sleep::fake(true, true);
 
     $suspensions = app(Suspensions::class);
-    $writeLock = Settings::cache()->lock('prosetta:suspended:write', 10);
+    $writeLock = Settings::cacheStore()->lock('prosetta:suspended:write', 10);
     expect($writeLock->get())->toBeTrue();
 
     expect(fn () => $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage'))
-        ->toThrow(LockTimeoutException::class);
+        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'Timed out');
 
     $writeLock->release();
     $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage');
