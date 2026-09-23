@@ -22,8 +22,9 @@ New exceptions in `LonelyLights\Prosetta\Exceptions\Provider`, all extending an 
 |---|---|---|
 | `ProviderUnavailable` | Down, overloaded, connection failure, timeout, 5xx | Backoff; counts towards the circuit |
 | `ProviderRateLimited(?int $retryAfter)` | 429 | Wait `retryAfter` seconds (or the backoff); counts towards the circuit |
-| `ProviderRejected` | Invalid key, unknown or retired model, malformed request | **Halt** (§5) |
+| `ProviderRejected` | Invalid key, unknown or retired model, no access (HTTP 401, 403, 404) | **Halt** (§5) |
 | `ProviderQuotaExhausted` | Out of credits or quota | **Halt** (§5) |
+| `ProviderBatchRejected` | The provider refused this batch's request (context too long, invalid input: HTTP 400 or 422); the provider itself is fine | **Fails that job** into `failed_jobs` with its error; the batch allows failures and carries on. Never touches the circuit and never halts. A synchronous run records the chunk's keys as failed and goes on to the next chunk |
 
 Any other `Throwable` from the driver is handled according to `resilience.unknown_errors`: `'transient'` (default, treated as `ProviderUnavailable`) or `'halt'` (treated as `ProviderRejected`).
 
@@ -174,7 +175,9 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
   - `RateLimitedException` → `ProviderRateLimited`, with `retryAfter` when laravel/ai exposes it;
   - `ProviderOverloadedException` and `ProviderConnectionException` → `ProviderUnavailable`;
   - `InsufficientCreditsException` → `ProviderQuotaExhausted`;
-  - an HTTP 401, 403, 404 or 400 from the provider → `ProviderRejected`;
+  - an HTTP 401, 403 or 404 from the provider → `ProviderRejected`;
+  - an HTTP 400 or 422 → `ProviderBatchRejected` (a problem with that batch, such as too much context or invalid input: halting the whole provider for it would bring the same bad chunk back on every resume, forever);
+  - an HTTP 408 or 5xx → `ProviderUnavailable`;
   - anything else is left to `unknown_errors`.
 - **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
 - **Listeners** for the §9 events log to the app log for now. Notifications (mail or the Bridge) come later.
@@ -193,6 +196,7 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
 - Budgets: per-run stops that run only, without suspending or tripping a circuit; daily and monthly stop, suspend and are requeued by `prosetta:resume` after the period ends; a call is refused when the counter is already over.
 - Refused strings are recorded as failed with `refused` and not retried.
 - `unknown_errors` both ways.
+- `ProviderBatchRejected` fails only its own job, leaves the circuit alone and raises no halt; a synchronous run records the chunk as failed and carries on.
 - `--sync` stops with the right message in each state.
 - `--estimate` from history and from defaults.
 - Events raised once per state change, not once per job.

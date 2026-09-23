@@ -10,6 +10,7 @@ use LonelyLights\Prosetta\Contracts\ChecksHealth;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Events\TranslationHalted;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
@@ -72,7 +73,7 @@ final readonly class ProviderGate {
             try {
                 $driver->checkHealth();
             } catch (Throwable $e) {
-                $this->fail($breaker, $e, $decision);
+                $this->fail($breaker, $e, $decision, health: true);
 
                 return false;
             }
@@ -95,12 +96,18 @@ final readonly class ProviderGate {
             : new ProviderUnavailable($e->getMessage(), 0, $e);
     }
 
-    /** Records the failure on the circuit and returns the classified exception, tagged with the circuit. */
-    private function fail(Circuit $breaker, Throwable $e, Decision $decision): ProviderException {
+    /**
+     * Records the failure on the circuit and returns the classified exception, tagged with the circuit.
+     * A rejected batch says nothing about the provider, so it leaves the circuit alone; a health
+     * check is Prosetta's own request, so its rejection counts as a failed test.
+     */
+    private function fail(Circuit $breaker, Throwable $e, Decision $decision, bool $health = false): ProviderException {
         $classified = $this->classify($e);
         $classified->circuit = $breaker->name;
 
-        if ($classified instanceof ProviderRejected || $classified instanceof ProviderQuotaExhausted) {
+        if ($classified instanceof ProviderBatchRejected && ! $health) {
+            $decision->release();
+        } elseif ($classified instanceof ProviderRejected || $classified instanceof ProviderQuotaExhausted) {
             $reason = match (true) {
                 $classified instanceof ProviderQuotaExhausted => 'quota',
                 $classified !== $e => 'unknown',

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Event;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Events\TranslationSuspended;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRateLimited;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
@@ -129,5 +130,29 @@ it('stops a synchronous run at its own budget without suspending it', function (
     $report = app(Translator::class)->translate(['es'], ['*'], queue: false);
 
     expect($report->stopped)->toContain('per_run')
+        ->and(app(Suspensions::class)->all())->toBe([]);
+});
+
+it('fails only its own job when the provider rejects the batch', function () {
+    $job = resilientJob((new ScriptedDriver)->fail($error = new ProviderBatchRejected('context too long')));
+    handle($job);
+
+    $job->assertFailedWith($error);
+    $job->assertNotReleased();
+    expect(app(Suspensions::class)->all())->toBe([])
+        ->and(app(Circuits::class)->for('scripted-driver:default')->state()['failures'])->toBe(0);
+    Event::assertNotDispatched(TranslationSuspended::class);
+});
+
+it('records a rejected chunk as failed in a synchronous run and carries on', function () {
+    config(['prosetta.ai.batch' => 1]);
+    app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new ProviderBatchRejected('invalid input')));
+
+    $report = app(Translator::class)->translate(['es'], ['identity'], queue: false);
+
+    expect($report->stopped)->toBeNull()
+        ->and($report->failed)->toHaveCount(1)
+        ->and($report->drafted)->toHaveCount(1)
+        ->and($report->failed[0])->toStartWith('es identity::')
         ->and(app(Suspensions::class)->all())->toBe([]);
 });

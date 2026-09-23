@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRateLimited;
@@ -28,7 +29,8 @@ use Throwable;
  * One chunk of one file for one locale. Idempotent: the runner re-checks
  * before calling the AI. Provider trouble never fails the job: it is released
  * with backoff, waits out an open circuit, or ends quietly with its run
- * suspended for prosetta:resume.
+ * suspended for prosetta:resume. Only a batch the provider refuses
+ * (ProviderBatchRejected) fails, into failed_jobs, while the batch goes on.
  */
 final class TranslateBatch implements ShouldQueue {
     use Batchable, InteractsWithQueue, Queueable;
@@ -97,6 +99,9 @@ final class TranslateBatch implements ShouldQueue {
             }
 
             $this->release($deferred->seconds);
+        } catch (ProviderBatchRejected $rejected) {
+            # This Batch's Own Problem, Not the Provider's: a Genuine Failure, and the Batch Carries On
+            $this->fail($rejected);
         } catch (ProviderRejected|ProviderQuotaExhausted $halt) {
             $this->stop($suspensions, (string) $halt->circuit, $halt instanceof ProviderQuotaExhausted ? 'quota' : 'rejected');
         } catch (ProviderException $transient) {

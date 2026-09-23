@@ -6,6 +6,7 @@ use LonelyLights\Prosetta\Data\TranslationBatch;
 use LonelyLights\Prosetta\Data\TranslationItem;
 use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\TranslationHalted;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
@@ -157,4 +158,45 @@ it('does not count waiting on another caller\'s test call as an outage', functio
     });
 
     $test->release();
+});
+
+it('rethrows a batch rejection without touching the circuit or halting', function () {
+    $driver = (new ScriptedDriver)->fail(new ProviderBatchRejected('context too long'), new ProviderBatchRejected('context too long'), new ProviderBatchRejected('context too long'));
+
+    foreach (range(1, 3) as $ignored) {
+        expect(fn () => callThrough($driver))->toThrow(function (ProviderBatchRejected $e) {
+            expect($e->circuit)->toBe('scripted:m');
+        });
+    }
+
+    expect(app(Circuits::class)->for('scripted:m')->state())->toMatchArray(['state' => 'closed', 'failures' => 0])
+        ->and(callThrough($driver)->values)->toBe(['1' => 'Hello [es]']);
+    Event::assertNotDispatched(TranslationHalted::class);
+});
+
+it('leaves an open circuit as it was when its test call is a rejected batch, and frees the test turn', function () {
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'), new ProviderBatchRejected('invalid input'));
+    rescue(fn () => callThrough($driver), report: false);
+    rescue(fn () => callThrough($driver), report: false);
+    $this->travel(301)->seconds();
+    $before = app(Circuits::class)->for('scripted:m')->state();
+
+    expect(fn () => callThrough($driver))->toThrow(ProviderBatchRejected::class);
+
+    expect(app(Circuits::class)->for('scripted:m')->state())->toBe($before)
+        ->and(app(Circuits::class)->for('scripted:m')->decision()->kind)->toBe('test');
+    Event::assertNotDispatched(TranslationHalted::class);
+});
+
+it('counts a rejected health check as a failed test', function () {
+    $driver = (new HealthCheckedScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    rescue(fn () => callThrough($driver), report: false);
+    rescue(fn () => callThrough($driver), report: false);
+    $this->travel(301)->seconds();
+    $driver->failHealth(new ProviderBatchRejected('bad request'));
+
+    expect(fn () => callThrough($driver))->toThrow(CallDeferred::class);
+
+    expect(app(Circuits::class)->for('scripted:m')->state()['cooldown'])->toBe(600)
+        ->and($driver->calls)->toHaveCount(2);
 });

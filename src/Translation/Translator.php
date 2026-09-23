@@ -11,6 +11,7 @@ use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
@@ -106,6 +107,9 @@ final readonly class Translator {
                     foreach (array_chunk($ids, $size) as $chunk) {
                         try {
                             $report->merge($this->runner->run($locale, $chunk, $force, $runId));
+                        } catch (ProviderBatchRejected) {
+                            # Only This Chunk Was Refused: Record It as Failed and Go On
+                            $report->failed = [...$report->failed, ...$this->refs($locale, $chunk)];
                         } catch (CallDeferred|ProviderException|BudgetExhausted $e) {
                             $report->stopped = $e->getMessage();
                             $this->suspendSync($e, $scope);
@@ -146,6 +150,15 @@ final readonly class Translator {
         }
 
         return $pending->onQueue((string) config('prosetta.queue.name', 'translations'))->dispatch();
+    }
+
+    /**
+     * @param list<int> $keyIds
+     * @return list<string> "{locale} {ref}", as the report lists them
+     */
+    private function refs(string $locale, array $keyIds): array {
+        return Settings::model('key')::query()->whereKey($keyIds)->orderBy('id')->get()
+            ->map(fn (TranslationKey $key) => $locale.' '.$key->ref()->toString())->values()->all();
     }
 
     /** A synchronous run suspends like a queued one, except when only its own per-run budget ran out. */

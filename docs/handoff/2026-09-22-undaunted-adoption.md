@@ -492,7 +492,9 @@ Translation runs can now be left unattended: Prosetta backs off individual failu
   - `RateLimitedException` → `ProviderRateLimited`, with `retryAfter` when laravel/ai exposes it;
   - `ProviderOverloadedException` and `ProviderConnectionException` → `ProviderUnavailable`;
   - `InsufficientCreditsException` → `ProviderQuotaExhausted`;
-  - an HTTP 401, 403, 404 or 400 from the provider → `ProviderRejected`;
+  - an HTTP 401, 403 or 404 from the provider → `ProviderRejected` (halts the provider);
+  - an HTTP 400 or 422 → `ProviderBatchRejected` (fails only that batch's job into `failed_jobs`; the circuit and the rest of the run carry on);
+  - an HTTP 408 or 5xx → `ProviderUnavailable`;
   - anything else is left to `unknown_errors`.
 - **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
 - **Listeners** for the resilience events (`CircuitOpened`, `CircuitClosed`, `TranslationHalted`, `TranslationSuspended`, `TranslationResumed`, `BudgetReached`) log to the app log for now. Notifications (mail or the Bridge) come later.

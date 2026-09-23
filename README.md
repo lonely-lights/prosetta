@@ -139,14 +139,15 @@ Key references use Laravel's notation: `identity::onboarding.toast.accessCode.in
 
 Translation runs are meant to be left unattended. Prosetta never hammers a provider that's down, stops cleanly on problems that won't fix themselves, and recovers by itself once the problem clears.
 
-**Error classes.** Prosetta defines the categories; your `TranslationDriver` maps its provider's errors onto them, because only the driver knows the provider. All four extend `LonelyLights\Prosetta\Exceptions\Provider\ProviderException`:
+**Error classes.** Prosetta defines the categories; your `TranslationDriver` maps its provider's errors onto them, because only the driver knows the provider. All five extend `LonelyLights\Prosetta\Exceptions\Provider\ProviderException`:
 
 | Exception | Meaning | Prosetta's response |
 |---|---|---|
 | `ProviderUnavailable` | Down, overloaded, connection failure, timeout, 5xx | Backoff; counts towards the circuit |
 | `ProviderRateLimited(?int $retryAfter)` | 429 | Wait `retryAfter` seconds (or the backoff); counts towards the circuit |
-| `ProviderRejected` | Invalid key, unknown or retired model, malformed request | Halt |
+| `ProviderRejected` | Invalid key, unknown or retired model, no access (HTTP 401, 403, 404) | Halt |
 | `ProviderQuotaExhausted` | Out of credits or quota | Halt |
+| `ProviderBatchRejected` | The provider refused this batch's request (context too long, invalid input: HTTP 400 or 422); the provider itself is fine | Fails that one job into `failed_jobs` with its error, and the batch carries on. Never touches the circuit or halts. A `--sync` run records the chunk's keys as failed and goes on |
 
 Any other `Throwable` from the driver is handled according to `resilience.unknown_errors`: `'transient'` (default, treated as `ProviderUnavailable`) or `'halt'` (treated as `ProviderRejected`).
 
@@ -223,7 +224,7 @@ Prosetta also writes a line to `log_channel` for each: warning for opened, halte
 
 **Operational notes.**
 - Run `php artisan queue:restart` after deploying a new driver or changing translation config. The worker process keeps the old code and config until it's restarted.
-- Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` stays reserved for genuine bugs. A job's `retryUntil()` is seven days after dispatch, so Laravel never expires a job during a long run or an outage: the circuit and `outage_timeout` decide when to stop. A genuine bug (an exception Prosetta doesn't handle) is retried after 30, 120 and 600 seconds and fails the job after three (`$maxExceptions = 3`).
+- Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` holds only genuine bugs and, by design, batches the provider refused (`ProviderBatchRejected`), each with its error. A job's `retryUntil()` is seven days after dispatch, so Laravel never expires a job during a long run or an outage: the circuit and `outage_timeout` decide when to stop. A genuine bug (an exception Prosetta doesn't handle) is retried after 30, 120 and 600 seconds and fails the job after three (`$maxExceptions = 3`).
 
 ## Services for your own admin
 
