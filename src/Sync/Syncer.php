@@ -203,6 +203,7 @@ final readonly class Syncer {
                     'value' => $value, 'source_hash' => $model->source_hash,
                     'approved_value' => $clean ? $value : null,
                     'approved_source_hash' => $clean ? $model->source_hash : null,
+                    'approved_source_value' => $clean ? $model->source_value : null,
                     'status' => $clean ? TranslationStatus::Approved : TranslationStatus::NeedsReview,
                     'origin' => TranslationOrigin::Imported,
                     'issues' => $issues, 'exported_hash' => $fileHash,

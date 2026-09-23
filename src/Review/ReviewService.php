@@ -139,6 +139,7 @@ final readonly class ReviewService {
     private function markApproved(Translation $translation, ?Authenticatable $by, ?string $notes): void {
         $translation->update([
             'approved_value' => $translation->value, 'approved_source_hash' => $translation->source_hash,
+            'approved_source_value' => $translation->source_hash === $translation->key->source_hash ? $translation->key->source_value : null,
             'status' => TranslationStatus::Approved, 'reviewed_by' => $this->id($by), 'reviewed_at' => now(),
         ]);
         $translation->logReview(ReviewAction::Approved, $this->id($by), newValue: $translation->value, notes: $notes);
@@ -155,6 +156,38 @@ final readonly class ReviewService {
         });
 
         $this->events->dispatch(new TranslationRejected($translation, $this->id($by)));
+
+        return $translation->refresh();
+    }
+
+    /**
+     * Re-approves a stale translation against the key's current English without
+     * changing its value: the human already reviewed this wording, it's just
+     * the source that moved. Refuses a translation that isn't approved, or
+     * whose approval already matches the key's current English.
+     * @throws Throwable when a database transaction fails
+     */
+    public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+        $translation = $this->load($translationId);
+        $this->authorizer->authorize($by, Ability::Review, $translation->locale);
+        $key = $translation->key;
+
+        if ($translation->approved_value === null || $translation->approved_source_hash === $key->source_hash) {
+            throw new ProsettaException('Only a stale approved translation can be confirmed.');
+        }
+
+        DB::transaction(function () use ($translation, $key, $by, $notes): void {
+            $translation->update([
+                'value' => $translation->approved_value, 'approved_value' => $translation->approved_value,
+                'source_hash' => $key->source_hash, 'approved_source_hash' => $key->source_hash,
+                'approved_source_value' => $key->source_value,
+                'status' => TranslationStatus::Approved, 'reviewed_by' => $this->id($by), 'reviewed_at' => now(),
+                'issues' => null,
+            ]);
+            $translation->logReview(ReviewAction::Confirmed, $this->id($by), newValue: $translation->approved_value, notes: $notes);
+        });
+
+        $this->events->dispatch(new TranslationApproved($translation, $this->id($by)));
 
         return $translation->refresh();
     }

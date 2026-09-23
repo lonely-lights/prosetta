@@ -124,6 +124,11 @@ readonly class ProsettaManager {
         return $this->reviews->reject($translationId, $by, $notes);
     }
 
+    /** @throws Throwable when a database transaction fails */
+    public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+        return $this->reviews->confirm($translationId, $by, $notes);
+    }
+
     /**
      * @param list<string> $locales
      * @param list<string> $namespaces
