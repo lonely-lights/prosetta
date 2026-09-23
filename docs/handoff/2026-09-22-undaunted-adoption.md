@@ -481,3 +481,41 @@ php artisan prosetta:export --locale=es --namespace=identity
   - It uses only `Locale`, through `App\Models\Prosetta\Locale`, which is now honoured via `config('prosetta.models.locale')`.
   - It boots on Laravel 13 and reads its 100 locale rows.
 - **Publishing** (tag, Packagist, a CI matrix for Laravel 11/12/13) is still to be decided.
+
+## 11. Resilience layer (added 2026-09-23)
+
+Translation runs can now be left unattended: Prosetta backs off individual failures, opens a circuit breaker per provider/model after repeated failures, halts cleanly on a bad key or exhausted quota, suspends the run's scope so nothing is lost, and resumes it automatically once the provider recovers. Token budgets (per run, day and month) stop a run before it overspends. Everything is configured in `config/prosetta.php`; nothing here needs a migration, since all state lives in the cache. Full design: `docs/superpowers/specs/2026-09-23-resilience-layer-design.md`.
+
+**Undaunted's side, from the design's §12:**
+
+- **`LaravelAiTranslationDriver` maps errors:**
+  - `RateLimitedException` → `ProviderRateLimited`, with `retryAfter` when laravel/ai exposes it;
+  - `ProviderOverloadedException` and `ProviderConnectionException` → `ProviderUnavailable`;
+  - `InsufficientCreditsException` → `ProviderQuotaExhausted`;
+  - an HTTP 401, 403, 404 or 400 from the provider → `ProviderRejected`;
+  - anything else is left to `unknown_errors`.
+- **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
+- **Listeners** for the resilience events (`CircuitOpened`, `CircuitClosed`, `TranslationHalted`, `TranslationSuspended`, `TranslationResumed`, `BudgetReached`) log to the app log for now. Notifications (mail or the Bridge) come later.
+- **The translations worker** needs `queue:restart` on deploy (G4) whenever the driver or translation config changes. That's noted in the package README, not solved by Prosetta itself.
+
+**Config values to use** (everything else stays at the package default):
+
+```php
+'resilience' => [
+    'halt_hold' => 600,                  // halts test themselves after 10 minutes
+    'resume_every' => 10,                // resume suspended work within 10 minutes of recovery
+    // everything else: the package defaults
+],
+'budgets' => ['per_run' => 250_000, 'daily' => 500_000, 'monthly' => 5_000_000],
+```
+
+**Scheduling.** `resume_every: 10` only takes effect if Undaunted actually runs Laravel's scheduler. Add `schedule:work` to the `composer dev` script (alongside the existing `serve`/`queue:listen`/`vite` processes) for local development, and confirm the production cron entry (`* * * * * php artisan schedule:run`) is in place before relying on automatic resume there.
+
+**Adoption steps** (in addition to §8 above):
+
+1. Add the `'resilience'` and `'budgets'` config blocks above to `config/prosetta.php`.
+2. Implement `checkHealth()` on `LaravelAiTranslationDriver` and map laravel/ai's exceptions to Prosetta's `ProviderException` subclasses, both as described above.
+3. Register listeners for the six resilience events (log for now; notifications later).
+4. Add `schedule:work` to `composer.json`'s `dev` script.
+5. Confirm the production scheduler is running (`schedule:run` on cron), so `prosetta:resume` actually fires every 10 minutes.
+6. Note `php artisan queue:restart` as a required deploy step whenever the driver or translation config changes (G4 is now documented, not yet automated).

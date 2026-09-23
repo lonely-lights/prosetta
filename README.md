@@ -135,6 +135,96 @@ Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => 
 
 Key references use Laravel's notation: `identity::onboarding.toast.accessCode.inUse`, `auth.failed`, `json:Save changes`.
 
+## Resilience
+
+Translation runs are meant to be left unattended. Prosetta never hammers a provider that's down, stops cleanly on problems that won't fix themselves, and recovers by itself once the problem clears.
+
+**Error classes.** Prosetta defines the categories; your `TranslationDriver` maps its provider's errors onto them, because only the driver knows the provider. All four extend `LonelyLights\Prosetta\Exceptions\Provider\ProviderException`:
+
+| Exception | Meaning | Prosetta's response |
+|---|---|---|
+| `ProviderUnavailable` | Down, overloaded, connection failure, timeout, 5xx | Backoff; counts towards the circuit |
+| `ProviderRateLimited(?int $retryAfter)` | 429 | Wait `retryAfter` seconds (or the backoff); counts towards the circuit |
+| `ProviderRejected` | Invalid key, unknown or retired model, malformed request | Halt |
+| `ProviderQuotaExhausted` | Out of credits or quota | Halt |
+
+Any other `Throwable` from the driver is handled according to `resilience.unknown_errors`: `'transient'` (default, treated as `ProviderUnavailable`) or `'halt'` (treated as `ProviderRejected`).
+
+A halt trips the circuit, ends the current job quietly (deleted, not failed), cancels its batch and suspends the run's scope for `prosetta:resume`.
+
+**Per-string refusals** (a provider's safety filter declines some strings) aren't exceptions: `TranslationBatchResult::$refused` (item id => reason) records them as failed with a `refused` issue, and the issue-retry loop leaves them alone.
+
+**`ChecksHealth`** is an optional contract for your driver:
+
+```php
+interface ChecksHealth {
+    /** A near-free call that proves the provider answers. Throws a ProviderException when it doesn't. */
+    public function checkHealth(): void;
+}
+```
+
+A driver that implements it lets Prosetta test a provider after a cooldown without spending a real batch. Without it, the test is the next real job (and `prosetta:resume` just requeues the scope, letting one of those jobs make the test call).
+
+**Config**, with the package defaults:
+
+```php
+'resilience' => [
+    'cache_store' => null,               // null = the default store. Use a store that supports locks
+                                          // (Redis, database, file, array); every worker must share it.
+    'backoff' => [30, 60, 120, 300, 600, 900],   // seconds per attempt; the last repeats
+    'jitter' => 0.2,                     // ±20%
+    'circuit' => [
+        'failure_threshold' => 5,        // consecutive countable failures that open the circuit
+        'cooldown' => 300,               // first open period, seconds
+        'cooldown_multiplier' => 2,
+        'max_cooldown' => 3600,
+    ],
+    'outage_timeout' => 21600,           // 6 h open without a break: stop retrying, suspend
+    'halt_hold' => null,                 // seconds a halt lasts before testing; null = until prosetta:circuit reset
+    'unknown_errors' => 'transient',     // or 'halt'
+    'resume_every' => null,              // minutes; null = the host schedules prosetta:resume itself
+],
+
+'budgets' => [
+    'per_run' => null,                   // tokens; null = no limit
+    'daily' => null,
+    'monthly' => null,
+    'estimate' => ['input_per_char' => 0.3, 'output_per_char' => 0.3, 'input_per_item' => 12, 'output_per_item' => 8],
+],
+```
+
+Budgets are counted in tokens (input plus output, as the driver reports them), because there's no price catalogue yet. `per_run` stops only that run; `daily` and `monthly` stop every run, suspend it, and are picked up again automatically once the period changes. Reaching a budget never trips a circuit, and a budget is a separate gate: `prosetta:resume` checks it before requeueing anything.
+
+Circuit and suspension state changes (opening, tripping, recording a suspended scope) go through a short cache write lock, so two workers racing the same event can't both fire it. Your `resilience.cache_store` needs to be a store that supports locks — Redis, database, file or array all work; Laravel's `memcached`/`dynamodb` file-less setups may not, check before relying on one.
+
+**Commands:**
+
+| Command | What it does |
+|---|---|
+| `prosetta:circuit status` | Each known circuit: state, failures, cooldown and time left, open since, suspended scopes, budget usage |
+| `prosetta:circuit reset [circuit]` | Close a circuit, or all of them, and clear its halt; suspended work is resumed on the next `prosetta:resume` |
+| `prosetta:resume` | Tests each circuit that's due (via `checkHealth()` when the driver has it, otherwise by requeueing) and queues its suspended scopes again on success |
+| `prosetta:translate --estimate` | Prints, for the run it would start: strings, source characters and expected input/output tokens, without calling anything, and how that compares with each remaining budget |
+
+`prosetta:resume` only runs on a schedule when `resilience.resume_every` is set **and** the host actually runs Laravel's scheduler (`schedule:work` locally, a cron entry calling `schedule:run` every minute in production). With `resume_every` left `null`, or no scheduler running, nothing calls `prosetta:resume` for you — run it by hand or wire up your own schedule.
+
+**Events**, all in `LonelyLights\Prosetta\Events`, raised once per state change (not once per job):
+
+| Event | Payload |
+|---|---|
+| `CircuitOpened` | circuit, cooldown seconds, failure count, last error message |
+| `CircuitClosed` | circuit, downtime seconds |
+| `TranslationHalted` | circuit, reason (`rejected`, `quota`, `unknown`), message |
+| `TranslationSuspended` | circuit, reason, scope |
+| `TranslationResumed` | circuit, scopes queued |
+| `BudgetReached` | period, used, limit |
+
+Prosetta also writes a line to `log_channel` for each: warning for opened, halted, suspended and budget; info for closed and resumed.
+
+**Operational notes.**
+- Run `php artisan queue:restart` after deploying a new driver or changing translation config. The worker process keeps the old code and config until it's restarted.
+- Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` stays reserved for genuine bugs.
+
 ## Services for your own admin
 
 `Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.

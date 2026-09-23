@@ -106,10 +106,12 @@ All are in `LonelyLights\Prosetta\Events`. The host listens and decides how to n
 |---|---|
 | `CircuitOpened` | circuit, cooldown seconds, failure count, last error message |
 | `CircuitClosed` | circuit, downtime seconds |
-| `TranslationHalted` | circuit, reason (`rejected`, `quota`, `unknown`), message, scope |
+| `TranslationHalted` | circuit, reason (`rejected`, `quota`, `unknown`), message |
 | `TranslationSuspended` | circuit, reason, scope |
 | `TranslationResumed` | circuit, scopes queued |
 | `BudgetReached` | period, used, limit |
+
+`TranslationHalted` carries no scope: the circuit trips independently of any one run. The `TranslationSuspended` raised for the same halt (§5 step 3) carries the scope, since that is what `prosetta:resume` needs to queue again.
 
 Prosetta also writes a line to `log_channel` for each: warning for opened, halted, suspended and budget; info for closed and resumed.
 
