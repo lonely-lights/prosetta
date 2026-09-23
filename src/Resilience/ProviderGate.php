@@ -47,30 +47,42 @@ final readonly class ProviderGate {
         }
 
         try {
-            $result = $call();
-        } catch (Throwable $e) {
-            throw $this->fail($breaker, $e, $decision);
+            try {
+                $result = $call();
+            } catch (Throwable $e) {
+                throw $this->fail($breaker, $e, $decision);
+            }
+
+            $this->budget->record($runId, $result->inputTokens + $result->outputTokens);
+            $breaker->recordSuccess($decision);
+
+            return $result;
+        } finally {
+            // recordSuccess/fail already release the decision's lock when they complete, but
+            // both can throw before doing so (a write-lock timeout, a listener that throws);
+            // release() is a harmless no-op on an already-released lock, so this always frees
+            // the test turn for the next caller even when a circuit transition blows up.
+            $decision->release();
         }
-
-        $breaker->recordSuccess($decision);
-        $this->budget->record($runId, $result->inputTokens + $result->outputTokens);
-
-        return $result;
     }
 
     /** Runs the health check for a circuit's test turn; true when it passed and the circuit closed. */
     public function test(TranslationDriver&ChecksHealth $driver, Circuit $breaker, Decision $decision): bool {
         try {
-            $driver->checkHealth();
-        } catch (Throwable $e) {
-            $this->fail($breaker, $e, $decision);
+            try {
+                $driver->checkHealth();
+            } catch (Throwable $e) {
+                $this->fail($breaker, $e, $decision);
 
-            return false;
+                return false;
+            }
+
+            $breaker->recordSuccess($decision);
+
+            return true;
+        } finally {
+            $decision->release();
         }
-
-        $breaker->recordSuccess($decision);
-
-        return true;
     }
 
     public function classify(Throwable $e): ProviderException {

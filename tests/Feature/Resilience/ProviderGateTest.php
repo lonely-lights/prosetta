@@ -4,14 +4,17 @@ use Illuminate\Support\Facades\Event;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Data\TranslationBatch;
 use LonelyLights\Prosetta\Data\TranslationItem;
+use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\TranslationHalted;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
+use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\BudgetExhausted;
 use LonelyLights\Prosetta\Resilience\CallDeferred;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\ProviderGate;
+use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Testing\HealthCheckedScriptedDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
 
@@ -43,11 +46,9 @@ it('passes a successful call through and counts its tokens against the budget', 
 it('names the circuit on the exception and opens the circuit after repeated outages', function () {
     $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
 
-    try {
-        callThrough($driver);
-    } catch (ProviderUnavailable $e) {
+    expect(fn () => callThrough($driver))->toThrow(function (ProviderUnavailable $e) {
         expect($e->circuit)->toBe('scripted:m');
-    }
+    });
 
     expect(fn () => callThrough($driver))->toThrow(ProviderUnavailable::class)
         ->and(fn () => callThrough($driver))->toThrow(CallDeferred::class)
@@ -69,11 +70,9 @@ it('halts once on a rejected key or exhausted quota and holds every later call',
 
     expect(fn () => callThrough($driver))->toThrow($error::class);
 
-    try {
-        callThrough($driver);
-    } catch (CallDeferred $deferred) {
+    expect(fn () => callThrough($driver))->toThrow(function (CallDeferred $deferred) {
         expect($deferred->reason)->toBe('held');
-    }
+    });
 
     expect($driver->calls)->toHaveCount(1);
     Event::assertDispatchedTimes(TranslationHalted::class, 1);
@@ -120,9 +119,23 @@ it('flags a deferral once the outage has lasted longer than outage_timeout', fun
     $this->travel(601)->seconds();
     app(Circuits::class)->for('scripted:m')->recordFailure('still down', app(Circuits::class)->for('scripted:m')->decision());
 
-    try {
-        callThrough($driver);
-    } catch (CallDeferred $deferred) {
+    expect(fn () => callThrough($driver))->toThrow(function (CallDeferred $deferred) {
         expect($deferred->outage)->toBeTrue();
-    }
+    });
+});
+
+it('releases the test lock and keeps counted tokens when a circuit-closed listener throws', function () {
+    config(['prosetta.resilience.circuit' => ['failure_threshold' => 1, 'cooldown' => 300, 'cooldown_multiplier' => 2, 'max_cooldown' => 3600]]);
+    Event::listen(CircuitClosed::class, function () {
+        throw new RuntimeException('listener boom');
+    });
+
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'));
+    rescue(fn () => callThrough($driver), report: false);
+    $this->travel(301)->seconds();
+
+    expect(fn () => callThrough($driver))->toThrow(RuntimeException::class, 'listener boom');
+
+    expect(Settings::cache()->lock('prosetta:circuit:scripted:m:test', 1)->get())->toBeTrue()
+        ->and(app(Budget::class)->usage()['daily']['used'])->toBeGreaterThan(0);
 });
