@@ -57,17 +57,22 @@ final readonly class Budget {
         return $usage;
     }
 
-    /** @return array<string, array{0: string, 1: int}> period => [cache key, seconds to keep it] */
+    /**
+     * Daily, then monthly, then per_run: exhausted() names the first one reached, so a run over
+     * both a shared budget and its own is suspended (per_run alone isn't) and resumes later.
+     *
+     * @return array<string, array{0: string, 1: int}> period => [cache key, seconds to keep it]
+     */
     private function periods(?string $runId): array {
         $now = now();
-        $periods = [];
+        $periods = [
+            'daily' => ['prosetta:budget:day:'.$now->format('Y-m-d'), 2 * 86400],
+            'monthly' => ['prosetta:budget:month:'.$now->format('Y-m'), 40 * 86400],
+        ];
 
         if ($runId !== null) {
             $periods['per_run'] = ["prosetta:budget:run:$runId", 7 * 86400];
         }
-
-        $periods['daily'] = ['prosetta:budget:day:'.$now->format('Y-m-d'), 2 * 86400];
-        $periods['monthly'] = ['prosetta:budget:month:'.$now->format('Y-m'), 40 * 86400];
 
         return $periods;
     }

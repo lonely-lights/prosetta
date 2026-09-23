@@ -61,8 +61,23 @@ it('reports usage against each limit', function () {
     app(Budget::class)->record('run-1', 40);
 
     expect(app(Budget::class)->usage('run-1'))->toBe([
-        'per_run' => ['used' => 40, 'limit' => 50],
         'daily' => ['used' => 40, 'limit' => 1000],
         'monthly' => ['used' => 40, 'limit' => null],
+        'per_run' => ['used' => 40, 'limit' => 50],
     ]);
+});
+
+it('names the daily or monthly budget before the per-run one, so a run over both is suspended', function () {
+    config(['prosetta.budgets.per_run' => 100, 'prosetta.budgets.daily' => 100, 'prosetta.budgets.monthly' => 100]);
+    app(Budget::class)->record('run-1', 150);
+
+    expect(app(Budget::class)->exhausted('run-1'))->toBe('daily');
+
+    config(['prosetta.budgets.daily' => null]);
+
+    expect(app(Budget::class)->exhausted('run-1'))->toBe('monthly');
+
+    config(['prosetta.budgets.monthly' => null]);
+
+    expect(app(Budget::class)->exhausted('run-1'))->toBe('per_run');
 });
