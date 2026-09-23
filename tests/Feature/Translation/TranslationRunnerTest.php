@@ -5,10 +5,12 @@ use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
+use LonelyLights\Prosetta\Testing\ScriptedDriver;
 use LonelyLights\Prosetta\Translation\TranslationRunner;
 
 beforeEach(function () {
@@ -104,4 +106,56 @@ it('tells the driver about variants and per-locale models', function () {
 
 it('explains a missing driver', function () {
     expect(fn () => app(TranslationRunner::class)->run('es', keyIds('auth.throttle')))->toThrow(MissingDriverException::class);
+});
+
+it('records strings the provider refused as failed, without retrying them', function () {
+    config(['prosetta.resilience.cache_store' => 'array']);
+    $driver = (new ScriptedDriver)->refuse('These credentials do not match our records.');
+    app()->instance(TranslationDriver::class, $driver);
+
+    // auth.failed already has an approved es translation imported from the fixture's es/auth.php,
+    // so it needs force: true here to actually reach the driver instead of being skipped as up to date.
+    $report = app(TranslationRunner::class)->run('es', keyIds('auth.failed', 'auth.throttle'), force: true);
+
+    expect($report->refused)->toBe(['es auth.failed'])
+        ->and($report->failed)->toBe(['es auth.failed'])
+        ->and($report->drafted)->toBe(['es auth.throttle'])
+        ->and($driver->calls)->toHaveCount(1);
+});
+
+it('keeps the first attempt\'s drafts when the retry call fails', function () {
+    config(['prosetta.resilience.cache_store' => 'array']);
+    $driver = new class extends ScriptedDriver {
+        public function translate(\LonelyLights\Prosetta\Data\TranslationBatch $batch): \LonelyLights\Prosetta\Data\TranslationBatchResult {
+            if ($batch->feedback !== []) {
+                $this->calls[] = $batch;
+
+                throw new ProviderUnavailable('down during the retry');
+            }
+
+            $result = parent::translate($batch);
+
+            return new \LonelyLights\Prosetta\Data\TranslationBatchResult(
+                array_map(fn (string $value) => str_replace(':name', '', $value), $result->values),
+                $result->provider, $result->model, $result->inputTokens, $result->outputTokens,
+            );
+        }
+    };
+    app()->instance(TranslationDriver::class, $driver);
+    $ids = keyIds('messages.welcome');
+
+    expect(fn () => app(TranslationRunner::class)->run('es', $ids))->toThrow(ProviderUnavailable::class);
+    expect(Translation::query()->where('key_id', $ids[0])->where('locale', 'es')->value('status'))->toBe(TranslationStatus::Draft);
+});
+
+it('names the run it belongs to when counting tokens', function () {
+    config(['prosetta.resilience.cache_store' => 'array', 'prosetta.budgets.per_run' => 1]);
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+
+    // auth.failed already has an approved es translation imported from the fixture's es/auth.php,
+    // so it needs force: true here to actually reach the driver and record tokens against run-9.
+    app(TranslationRunner::class)->run('es', keyIds('auth.failed'), force: true, runId: 'run-9');
+
+    expect(fn () => app(TranslationRunner::class)->run('es', keyIds('auth.throttle'), runId: 'run-9'))
+        ->toThrow(\LonelyLights\Prosetta\Resilience\BudgetExhausted::class);
 });
