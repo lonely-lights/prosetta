@@ -28,15 +28,14 @@ final readonly class GlossaryGuard {
             }
 
             $target = (string) ($entry['target'] ?? '');
-            $targetFound = $target !== '' && mb_stripos($translation, $target) !== false;
 
             foreach ((array) ($entry['banned'] ?? []) as $banned) {
-                if ($banned !== '' && mb_stripos($translation, (string) $banned) !== false && $targetFound) {
+                if ($banned !== '' && mb_stripos($translation, (string) $banned) !== false) {
                     $issues[] = Issue::error('glossary_banned', "Use \"$target\" for \"$term\", not \"$banned\".");
                 }
             }
 
-            if (! $targetFound && $target !== '') {
+            if ($target !== '' && mb_stripos($translation, $target) === false) {
                 $issues[] = Issue::warning('glossary_missing', "\"$term\" should be translated as \"$target\".");
             }
         }
