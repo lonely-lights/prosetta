@@ -226,6 +226,85 @@ Prosetta also writes a line to `log_channel` for each: warning for opened, halte
 - Run `php artisan queue:restart` after deploying a new driver or changing translation config. The worker process keeps the old code and config until it's restarted.
 - Halted or suspended jobs are deleted, never marked failed, so `failed_jobs` holds only genuine bugs and, by design, batches the provider refused (`ProviderBatchRejected`), each with its error. A job's `retryUntil()` is seven days after dispatch, so Laravel never expires a job during a long run or an outage: the circuit and `outage_timeout` decide when to stop. A genuine bug (an exception Prosetta doesn't handle) is retried after 30, 120 and 600 seconds and fails the job after three (`$maxExceptions = 3`).
 
+## Background mode
+
+`prosetta:cycle` keeps a site's translations current with nobody running commands: it syncs, confirms cosmetic edits, drafts and updates what needs it, then approves and exports per config. It's meant for the dev machine (`composer dev`) and CI, where the lang files live, not production.
+
+### Language settings
+
+Three columns on `prosetta_locales` (added by `add_automation_columns`, a Prosetta migration in two forms like the others: for new hosts and as an upgrade path for hosts that already have the table):
+
+| Column | Type | Meaning |
+|---|---|---|
+| `auto_translate` | boolean, default false | The cycle drafts every key that needs work in this language: missing, a stale candidate, or a rejected candidate, not only edited keys. |
+| `style_note` | text, nullable | Sent with every batch for this language, through `LocaleDescriptor::$styleNote`. |
+| `glossary` | json, nullable | A list of `{"source": "cohort", "target": "دفعة", "banned": ["فوج", "مجموعة"]}` entries. `banned` is optional. |
+
+`Locale::autoTranslate()` scopes to it, and `DatabaseLocaleSource::autoTranslateTargets()` returns the codes (excluding the source locale). A regional code (`en_GB` of `en`) with no note or glossary of its own falls back to its base language's, field by field: it gets the base's `style_note` only if it has none of its own, and the base's `glossary` only if its own is empty.
+
+### Glossary checks
+
+`GlossaryGuard` runs after `PlaceholderGuard` in the runner, for every entry whose `source` term appears in the English:
+
+- matched as a whole word, singular or plural (an optional trailing `s` or `es`), case-insensitively, against the source;
+- the translation must then contain `target` — checked as a plain case-insensitive substring, not a word boundary match, because many scripts (Arabic, Chinese, …) have none. Missing it is a **warning**, `glossary_missing`;
+- if the translation contains any `banned` term (also a case-insensitive substring), that's an **error**, `glossary_banned`. It gets the normal single retry with feedback ("Use \"دفعة\" for \"cohort\", not \"فوج\".").
+
+Warnings (glossary or the rewrite check below) block auto-approval but not export under `include_drafts`.
+
+### Update mode and the cosmetic rule
+
+Every approval path (`approve`, `edit(..., approve: true)`, `write(..., approve: true)`, `confirm`, and importing an existing target file during sync) writes `approved_source_value` on the translation — the English it was approved against — but only when that approval is made from the key's *current* English; an approval of an already-stale value leaves it `null`. Rows approved before this migration have it `null` and fall back to an ordinary re-translation.
+
+Each cycle, before anything is sent to the AI, `CosmeticConfirmer::confirmAll()` finds every translation whose `approved_source_value` no longer matches its key's current English, skips any that already have a candidate made from that new English (someone's already on it) or with no `approved_source_value`, and for the rest checks `SourceChange::isCosmetic()`: the old and new English compare equal after lowercasing, folding curly quotes and em/en dashes to straight equivalents, collapsing whitespace, and trimming trailing punctuation (`.!?…:;`). A cosmetic match is **confirmed** — re-approved against the new English with no AI call, keeping its origin and logging `ReviewAction::Confirmed`. Anything else is substantive and goes to the model.
+
+For a substantive change, `TranslationRunner` sets `TranslationItem::$previousSource` to the translation's `approved_source_value` (only when it differs from the key's current English and the translation has an `approved_value`). Your driver receives it alongside the current English and can build a word-level diff with `SourceChange::diff()` (LCS-based, `[-removed-]` / `{+added+}` markers) to show the model exactly what changed.
+
+After an update, `SourceChange::ratio()` compares how much the translation's words changed (Levenshtein distance, normalized by word count) against how much the English changed. If the ratio is above `automation.rewrite_ratio` (default 3.0) *and* the translation itself changed by more than two words, the draft gets a warning, `large_rewrite`, and isn't auto-approved.
+
+**Which languages get updates:** every target language with an approved translation of the edited key, whether or not it's auto-translate. **Which languages get drafts of keys they never had:** only auto-translate languages. `CycleWork::build()` computes this per key and locale.
+
+### The cycle
+
+`prosetta:cycle` (registered by the service provider on a `*/N * * * *` schedule when `automation.every` is set, with `withoutOverlapping()`; also runnable by hand):
+
+1. **Guard.** The running cycle's batch id is kept in `prosetta_state` (survives a cache clear). If it's still going, the command logs and exits without doing anything. A stored batch counts as abandoned — and a new cycle starts anyway, with a warning logged — only once it's missing, or every job in it has finished or failed (or it was cancelled) *and* that settled for longer than `max(60 minutes, 2 × automation.every)`; until then the guard holds even if `FinishCycle` seems to be taking a while.
+2. **Sync** every namespace.
+3. **Confirm** cosmetic edits (above); no AI.
+4. **Build the work:** update-mode keys (any target language, substantive change) and draft-mode keys (auto-translate languages only).
+5. **Queue** it as one `Translator` run, so budgets, circuits and suspensions all apply. Queued, the batch's `finally` callback dispatches `FinishCycle`; `--sync` runs it inline instead.
+6. **Finish** (`Cycle::finish()`, run by `FinishCycle` or inline): approve this cycle's own clean AI drafts per `automation.approve` — drafts written since the cycle started, with *no* issues at all (not even a glossary or rewrite warning); export the languages that got at least one approval, when `automation.export` is true; record the heartbeat (`cycle.last_run` in `prosetta_state`); raise `CycleCompleted` with a report of what happened.
+7. **An empty cycle** (nothing to sync, confirm or translate) still records the heartbeat and raises `CycleCompleted` with zero counts.
+
+**Cycle approval only ever touches this cycle's own AI drafts** — origin AI, status still `draft`, no issues, `updated_at` at or after the moment the cycle started. It never approves a draft from an earlier run, and it never touches a person's pending manual edit (`needs_review`), even one with no issues.
+
+**`--sync`** (for CI) runs steps 2–6 inline and exits 1 when anything is flagged, when a stale approved translation is still made from older English, or when any run is suspended; it exits 0 otherwise, printing each flagged ref.
+
+### The `automation` config
+
+```php
+'automation' => [
+    'every' => null,          // minutes between scheduled prosetta:cycle runs; null = no schedule
+    'approve' => 'all',       // 'all' | 'none' (stop at drafts) | list of language codes that auto-approve
+    'export' => true,         // write lang files after approving
+    'rewrite_ratio' => 3.0,   // flag an update whose translation changed this many times more than the English
+],
+```
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `prosetta:cycle [--sync]` | Runs one background cycle. Queued by default; `--sync` runs inline and sets CI-friendly exit codes (see above). |
+| `prosetta:health` | Exits 1 and prints why when automation is on and the last cycle is older than `3 × automation.every`, any circuit is halted, or a daily/monthly budget is spent; exits 0 (`healthy`) otherwise. |
+| `prosetta:circuit status` | As before, plus the last cycle's time. |
+
+**In CI:** run `prosetta:cycle --sync` as a gate (like `prosetta:sync --check`); it fails the build on anything flagged, stale or suspended, so review happens in the lang files' git diff, not in Prosetta.
+
+### Notifications, via events
+
+Prosetta raises the event; it doesn't send mail itself (Undaunted's job, a later task). `Cycle::finish()` dispatches `CycleCompleted($report)` — a `CycleReport` with `drafted`, `updated`, `confirmed`, `approved`, `flagged` (a list of `"{locale} {ref}"`), `files` (paths the export wrote) and `tokens`. Unlike the six resilience events, Prosetta writes no log line for `CycleCompleted` itself. The resilience events that already exist — `TranslationHalted`, `BudgetReached`, `TranslationSuspended` — are the other signals worth listening to: something needs attention, or the cycle stopped running.
+
 ## Services for your own admin
 
 `Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.
