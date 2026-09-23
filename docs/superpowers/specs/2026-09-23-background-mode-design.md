@@ -63,7 +63,7 @@ Warnings block auto-approval (§6) but not export under `include_drafts`.
 
 `prosetta:cycle` runs on its own schedule. It is registered by the service provider when `automation.every` is set, with `withoutOverlapping()`. It can also run by hand, and `--sync` runs it inline for CI.
 
-1. **Guard.** If the previous cycle's batch hasn't finished (its id is stored in the cache), log and exit. A cycle never overlaps another.
+1. **Guard.** If the previous cycle's batch hasn't finished (its id is kept in `prosetta_state` under `cycle.batch`, so a cache clear can't lose it), log and exit. A cycle never overlaps another.
 2. **Sync** all namespaces.
 3. **Cosmetic edits:** confirm them (§4); no AI.
 4. **Build the work:**
@@ -81,7 +81,7 @@ Warnings block auto-approval (§6) but not export under `include_drafts`.
 
 ## 7. Heartbeat and health
 
-- **A small `prosetta_state` table** (key, value, updated_at; package migration) holds `cycle.last_run`, which a cache clear can't lose.
+- **A small `prosetta_state` table** (key, value, updated_at; package migration) holds `cycle.last_run` and `cycle.batch`, which a cache clear can't lose.
 - **`prosetta:health`** exits 1 and says why when:
   - automation is on and the last cycle is older than 3 × `automation.every`;
   - any circuit is halted;
