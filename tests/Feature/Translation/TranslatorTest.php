@@ -68,7 +68,7 @@ it('survives being released for rate limiting or overlap without exhausting its 
     $middleware = $job->middleware();
 
     expect($job->retryUntil())->toBeInstanceOf(DateTimeInterface::class)
-        ->and($job->retryUntil()->getTimestamp())->toBeGreaterThan(now()->addHour()->getTimestamp())
+        ->and($job->retryUntil()->getTimestamp())->toBeGreaterThan(now()->addHours(6)->getTimestamp())
         ->and($job->timeout)->toBeGreaterThan(0)
         ->and($middleware[1]->expiresAfter)->toBeGreaterThan(0);
 });

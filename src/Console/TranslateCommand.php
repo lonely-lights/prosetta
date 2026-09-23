@@ -40,10 +40,14 @@ final class TranslateCommand extends Command {
             count($result->drafted), count($result->withIssues), count($result->failed), $result->inputTokens, $result->outputTokens,
         ));
 
+        if ($result->stopped !== null) {
+            $this->components->error('Stopped early: '.$result->stopped.' The rest is suspended for prosetta:resume unless only the per-run budget ran out.');
+        }
+
         foreach ($result->withIssues as $ref) {
             $this->components->warn("Needs attention: $ref");
         }
 
-        return $result->failed === [] ? self::SUCCESS : self::FAILURE;
+        return $result->failed === [] && $result->stopped === null ? self::SUCCESS : self::FAILURE;
     }
 }

@@ -6,14 +6,20 @@ namespace LonelyLights\Prosetta\Translation;
 
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Resilience\BudgetExhausted;
+use LonelyLights\Prosetta\Resilience\CallDeferred;
+use LonelyLights\Prosetta\Resilience\RunScope;
+use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
 use Throwable;
@@ -23,6 +29,7 @@ final readonly class Translator {
         private LocaleSource $locales,
         private KeyFinder $finder,
         private TranslationRunner $runner,
+        private Suspensions $suspensions,
     ) {}
 
     /**
@@ -83,14 +90,23 @@ final readonly class Translator {
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true): Batch|TranslateReport {
         $work = $this->workList($locales, $namespaces, $keys, $force);
         $size = max(1, (int) config('prosetta.ai.batch', 25));
+        $scope = new RunScope(array_values($locales), array_values($namespaces), array_values($keys), $force);
 
         if (! $queue) {
             $report = new TranslateReport;
+            $runId = (string) Str::uuid();
 
             foreach ($work as $locale => $files) {
                 foreach ($files as $ids) {
                     foreach (array_chunk($ids, $size) as $chunk) {
-                        $report->merge($this->runner->run($locale, $chunk, $force));
+                        try {
+                            $report->merge($this->runner->run($locale, $chunk, $force, $runId));
+                        } catch (CallDeferred|ProviderException|BudgetExhausted $e) {
+                            $report->stopped = $e->getMessage();
+                            $this->suspendSync($e, $scope);
+
+                            return $report;
+                        }
                     }
                 }
             }
@@ -103,7 +119,7 @@ final readonly class Translator {
         foreach ($work as $locale => $files) {
             foreach ($files as $fileId => $ids) {
                 foreach (array_chunk($ids, $size) as $chunk) {
-                    $jobs[] = new TranslateBatch($locale, $fileId, $chunk, $force);
+                    $jobs[] = new TranslateBatch($locale, $fileId, $chunk, $force, $scope->toArray());
                 }
             }
         }
@@ -125,5 +141,18 @@ final readonly class Translator {
         }
 
         return $pending->onQueue((string) config('prosetta.queue.name', 'translations'))->dispatch();
+    }
+
+    /** A synchronous run suspends like a queued one, except when only its own per-run budget ran out. */
+    private function suspendSync(CallDeferred|ProviderException|BudgetExhausted $e, RunScope $scope): void {
+        [$circuit, $reason] = match (true) {
+            $e instanceof BudgetExhausted => ['budget', $e->period],
+            $e instanceof CallDeferred => [$e->circuit, $e->reason === 'held' ? 'halted' : 'outage'],
+            default => [(string) $e->circuit, class_basename($e)],
+        };
+
+        if ($reason !== 'per_run') {
+            $this->suspensions->suspend($circuit, $scope, $reason);
+        }
     }
 }
