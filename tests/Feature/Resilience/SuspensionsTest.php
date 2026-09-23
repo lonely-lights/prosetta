@@ -1,9 +1,12 @@
 <?php
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\TranslationSuspended;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
+use LonelyLights\Prosetta\Support\Settings;
 
 beforeEach(function () {
     config(['prosetta.resilience.cache_store' => 'array']);
@@ -36,4 +39,20 @@ it('clears a suspension by id', function () {
     $suspensions->clear(array_key_first($suspensions->all()));
 
     expect($suspensions->all())->toBe([]);
+});
+
+it('serializes mutations through a write lock, so concurrent workers cannot race', function () {
+    Sleep::fake(true, true);
+
+    $suspensions = app(Suspensions::class);
+    $writeLock = Settings::cache()->lock('prosetta:suspended:write', 10);
+    expect($writeLock->get())->toBeTrue();
+
+    expect(fn () => $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage'))
+        ->toThrow(LockTimeoutException::class);
+
+    $writeLock->release();
+    $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage');
+
+    expect($suspensions->all())->toHaveCount(1);
 });
