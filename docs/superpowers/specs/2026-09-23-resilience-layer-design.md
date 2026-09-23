@@ -72,9 +72,10 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
 
 **`php artisan prosetta:resume`** does the following for each circuit that has suspended work:
 - **Circuit open, cooldown not over:** nothing happens.
-- **Circuit ready to test:** run the test (the health check if available, otherwise a one-string real translation from the suspended scope).
+- **Circuit ready to test, driver has `checkHealth()`:** run the health check.
   - **On success:** the circuit closes; each suspended scope is queued again through the ordinary `translate()` path, which skips anything already done; the suspension is cleared; `TranslationResumed` is raised.
   - **On failure:** the circuit re-opens with the next cooldown.
+- **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request.
 - **Circuit closed:** the scope is queued again straight away.
 
 **Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. `null` leaves scheduling to the host. The command is also safe to run by hand.
@@ -146,7 +147,7 @@ Package defaults:
     'per_run' => null,                   // tokens; null = no limit
     'daily' => null,
     'monthly' => null,
-    'estimate' => ['input_per_char' => 0.35, 'output_per_char' => 0.45, 'input_per_item' => 30, 'output_per_item' => 12],
+    'estimate' => ['input_per_char' => 0.3, 'output_per_char' => 0.3, 'input_per_item' => 12, 'output_per_item' => 8],
 ],
 ```
 
@@ -161,7 +162,7 @@ Undaunted's values, for testing:
 'budgets' => ['per_run' => 250_000, 'daily' => 500_000, 'monthly' => 5_000_000],
 ```
 
-The defaults for `estimate` come from the Spanish run: 63k source characters produced 40k input and 34k output tokens across 1,795 strings.
+The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source characters produced 40,161 input and 33,752 output tokens (0.3 × 63,094 + 12 × 1,795 ≈ 40.5k; 0.3 × 63,094 + 8 × 1,795 ≈ 33.3k).
 
 ## 12. Undaunted's side
 
