@@ -210,6 +210,10 @@ it('keeps a suspension that a job records again while resume is requeueing it', 
         public function find(string $code): ?LocaleDescriptor {
             return $this->inner->find($code);
         }
+
+        public function autoTranslateTargets(): array {
+            return $this->inner->autoTranslateTargets();
+        }
     });
     app()->forgetInstance(Translator::class);
 

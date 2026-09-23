@@ -22,6 +22,7 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property string|null $source_hash
  * @property string|null $approved_value
  * @property string|null $approved_source_hash
+ * @property string|null $approved_source_value
  * @property TranslationStatus $status
  * @property TranslationOrigin $origin
  * @property list<array{code: string, severity: string, message: string}>|null $issues
@@ -38,7 +39,7 @@ use LonelyLights\Prosetta\Support\Settings;
 class Translation extends Model {
     protected $fillable = [
         'key_id', 'locale', 'value', 'source_hash', 'approved_value', 'approved_source_hash',
-        'status', 'origin', 'issues', 'ai_provider', 'ai_model', 'input_tokens', 'output_tokens',
+        'approved_source_value', 'status', 'origin', 'issues', 'ai_provider', 'ai_model', 'input_tokens', 'output_tokens',
         'ai_invocation_id', 'exported_hash', 'reviewed_by', 'reviewed_at',
     ];
 

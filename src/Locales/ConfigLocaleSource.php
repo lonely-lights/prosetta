@@ -29,6 +29,11 @@ final readonly class ConfigLocaleSource implements LocaleSource {
     }
 
     /** @return list<string> */
+    public function autoTranslateTargets(): array {
+        return [];
+    }
+
+    /** @return list<string> */
     private function codes(): array {
         return array_values(array_filter((array) config('prosetta.locales.fallback', []), 'is_string'));
     }

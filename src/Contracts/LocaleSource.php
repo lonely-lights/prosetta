@@ -15,4 +15,7 @@ interface LocaleSource {
     public function targets(): array;
 
     public function find(string $code): ?LocaleDescriptor;
+
+    /** @return list<string> codes of target locales background mode auto-translates */
+    public function autoTranslateTargets(): array;
 }

@@ -72,6 +72,8 @@ return [
         'keys' => 'prosetta_keys',
         'translations' => 'prosetta_translations',
         'reviews' => 'prosetta_reviews',
+        'usage' => 'prosetta_usage',
+        'state' => 'prosetta_state',
     ],
 
     /*
@@ -113,6 +115,20 @@ return [
         'daily' => null,
         'monthly' => null,
         'estimate' => ['input_per_char' => 0.3, 'output_per_char' => 0.3, 'input_per_item' => 12, 'output_per_item' => 8],
+    ],
+
+    /*
+    | Background mode. every: minutes between scheduled prosetta:cycle runs
+    | (null = no scheduled cycle). approve: 'all', 'none' (stop at drafts), or
+    | a list of language codes whose clean drafts are approved automatically.
+    | export: write lang files after approving. rewrite_ratio: flag an update
+    | whose translation changed this many times more than the English did.
+    */
+    'automation' => [
+        'every' => null,
+        'approve' => 'all',
+        'export' => true,
+        'rewrite_ratio' => 3.0,
     ],
 
     'log_channel' => null,
