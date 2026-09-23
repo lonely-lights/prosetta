@@ -75,7 +75,9 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
 - **Circuit ready to test, driver has `checkHealth()`:** run the health check.
   - **On success:** the circuit closes; each suspended scope is queued again through the ordinary `translate()` path, which skips anything already done; the suspension is cleared; `TranslationResumed` is raised.
   - **On failure:** the circuit re-opens with the next cooldown.
-- **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request.
+- **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request. Waiting on that test call never counts as an outage, even when `outage_timeout` has passed, so the waiting jobs don't suspend and cancel the batch mid-test.
+
+Each suspension is cleared **before** its scope is queued again, so a requeued job that suspends the same scope straight away isn't wiped. If queueing throws, the scope is suspended again and the error is rethrown.
 - **Circuit closed:** the scope is queued again straight away.
 
 **Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. `null` leaves scheduling to the host. The command is also safe to run by hand.

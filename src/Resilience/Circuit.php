@@ -61,7 +61,7 @@ final class Circuit {
 
         $lock = $this->cache->lock($this->key().':test', self::TEST_LOCK_SECONDS);
 
-        return $lock->get() ? Decision::test($lock) : Decision::wait(60);
+        return $lock->get() ? Decision::test($lock) : Decision::wait(60, testing: true);
     }
 
     /**

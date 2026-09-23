@@ -43,8 +43,17 @@ final class ResumeCommand extends Command {
             }
 
             $scope = $suspended['scope'];
-            $translator->translate($scope->locales, $scope->namespaces, $scope->keys, $scope->force, forcedBefore: $scope->force ? $scope->startedAt : null);
+            # Clear First: a Requeued Job That Suspends the Scope Again Must Not Be Wiped Afterwards
             $suspensions->clear($id);
+
+            try {
+                $translator->translate($scope->locales, $scope->namespaces, $scope->keys, $scope->force, forcedBefore: $scope->force ? $scope->startedAt : null);
+            } catch (Throwable $e) {
+                $suspensions->suspend($name, $scope, $suspended['reason']);
+
+                throw $e;
+            }
+
             $resumed[$name] = ($resumed[$name] ?? 0) + 1;
         }
 

@@ -117,14 +117,19 @@ final readonly class ProviderGate {
         return $classified;
     }
 
-    /** @throws CallDeferred when the decision is to wait or stay held */
+    /**
+     * Waiting on another caller's test call is never an outage: that test is
+     * the recovery in progress, and suspending now would cancel its batch.
+     *
+     * @throws CallDeferred when the decision is to wait or stay held
+     */
     private function defer(Circuit $breaker, Decision $decision): void {
         if ($decision->kind === 'held') {
             throw new CallDeferred($breaker->name, 0, 'held');
         }
 
         if ($decision->kind === 'wait') {
-            throw new CallDeferred($breaker->name, Backoff::jitter($decision->seconds), 'open', $breaker->outageExceeded());
+            throw new CallDeferred($breaker->name, Backoff::jitter($decision->seconds), 'open', ! $decision->testing && $breaker->outageExceeded());
         }
     }
 }

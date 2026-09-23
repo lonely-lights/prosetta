@@ -139,3 +139,22 @@ it('releases the test lock and keeps counted tokens when a circuit-closed listen
     expect(Settings::cache()->lock('prosetta:circuit:scripted:m:test', 1)->get())->toBeTrue()
         ->and(app(Budget::class)->usage()['daily']['used'])->toBeGreaterThan(0);
 });
+
+it('does not count waiting on another caller\'s test call as an outage', function () {
+    config(['prosetta.resilience.outage_timeout' => 600]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    rescue(fn () => callThrough($driver), report: false);
+    rescue(fn () => callThrough($driver), report: false);
+    $this->travel(601)->seconds();
+
+    $test = app(Circuits::class)->for('scripted:m')->decision();
+    expect($test->kind)->toBe('test')
+        ->and(app(Circuits::class)->for('scripted:m')->outageExceeded())->toBeTrue();
+
+    expect(fn () => callThrough($driver))->toThrow(function (CallDeferred $deferred) {
+        expect($deferred->reason)->toBe('open')
+            ->and($deferred->outage)->toBeFalse();
+    });
+
+    $test->release();
+});

@@ -5,10 +5,13 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Data\TranslationBatch;
 use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Events\TranslationResumed;
+use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Resilience\Circuits;
@@ -173,4 +176,45 @@ it('merges repeated suspensions of the same run whatever their start time', func
 
     expect(app(Suspensions::class)->all())->toHaveCount(1)
         ->and(RunScope::fromArray((new RunScope(['es'], [], [], true, 100))->toArray())->startedAt)->toBe(100);
+});
+
+it('keeps a suspension when requeueing it throws', function () {
+    Bus::fake();
+    suspendSpanish('budget');
+
+    expect(fn () => $this->artisan('prosetta:resume')->run())->toThrow(MissingDriverException::class);
+
+    expect(app(Suspensions::class)->all())->toHaveCount(1);
+    Bus::assertNothingBatched();
+});
+
+it('keeps a suspension that a job records again while resume is requeueing it', function () {
+    Bus::fake();
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+    suspendSpanish('scripted-driver:default');
+    $inner = app(LocaleSource::class);
+    app()->instance(LocaleSource::class, new class($inner) implements LocaleSource {
+        public function __construct(private LocaleSource $inner) {}
+
+        public function source(): string {
+            return $this->inner->source();
+        }
+
+        public function targets(): array {
+            # A Job From the Requeued Run Suspends the Same Scope Again While translate() Is Still Running
+            suspendSpanish('scripted-driver:default');
+
+            return $this->inner->targets();
+        }
+
+        public function find(string $code): ?LocaleDescriptor {
+            return $this->inner->find($code);
+        }
+    });
+    app()->forgetInstance(Translator::class);
+
+    $this->artisan('prosetta:resume')->assertSuccessful();
+
+    Bus::assertBatchCount(1);
+    expect(app(Suspensions::class)->all())->toHaveCount(1);
 });
