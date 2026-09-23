@@ -43,7 +43,7 @@ final class ResumeCommand extends Command {
             }
 
             $scope = $suspended['scope'];
-            $translator->translate($scope->locales, $scope->namespaces, $scope->keys, $scope->force);
+            $translator->translate($scope->locales, $scope->namespaces, $scope->keys, $scope->force, forcedBefore: $scope->force ? $scope->startedAt : null);
             $suspensions->clear($id);
             $resumed[$name] = ($resumed[$name] ?? 0) + 1;
         }

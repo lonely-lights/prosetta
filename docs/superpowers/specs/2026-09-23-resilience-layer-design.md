@@ -68,7 +68,7 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
 
 ## 6. Suspend and resume
 
-**Suspending** records the run's scope in the cache under `prosetta:suspended`: circuit name, locales, namespaces, keys, the `force` flag, the reason and the time. Scopes with the same locales, namespaces and keys are merged, so repeated suspensions don't pile up.
+**Suspending** records the run's scope in the cache under `prosetta:suspended`: circuit name, locales, namespaces, keys, the `force` flag, the time the run started, the reason and the time. Scopes with the same locales, namespaces, keys and `force` flag are merged (the start time isn't part of that identity), so repeated suspensions don't pile up. Resuming a forced run forces only keys with no translation, or one last drafted or updated before the run started, so what it drafted before it stopped, and anything edited since, isn't translated or billed again.
 
 **`php artisan prosetta:resume`** does the following for each circuit that has suspended work:
 - **Circuit open, cooldown not over:** nothing happens.

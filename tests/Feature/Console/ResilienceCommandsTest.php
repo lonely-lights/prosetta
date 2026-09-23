@@ -1,18 +1,23 @@
 <?php
 
+use Illuminate\Bus\PendingBatch;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Data\TranslationBatch;
+use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Events\TranslationResumed;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
+use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\HealthCheckedScriptedDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
+use LonelyLights\Prosetta\Translation\Translator;
 
 beforeEach(function () {
     $this->useFixtureApp();
@@ -126,4 +131,46 @@ it('logs circuit and suspension events', function () {
     Log::shouldReceive('warning')->once();
 
     event(new \LonelyLights\Prosetta\Events\CircuitOpened('scripted-driver:default', 300, 5, 'down'));
+});
+
+it('resumes a forced run without re-translating what it already drafted', function () {
+    Bus::fake();
+    config(['prosetta.ai.batch' => 1]);
+    $ids = collect(app(Translator::class)->workList(['es'], ['identity']))->flatten()->all();
+    expect($ids)->toHaveCount(2);
+    $driver = new class extends ScriptedDriver {
+        public function translate(TranslationBatch $batch): TranslationBatchResult {
+            if ($this->calls !== []) {
+                $this->fail(new ProviderUnavailable('down'));
+            }
+
+            return parent::translate($batch);
+        }
+    };
+    app()->instance(TranslationDriver::class, $driver);
+
+    $report = app(Translator::class)->translate(['es'], ['identity'], force: true, queue: false);
+    expect($report->drafted)->toHaveCount(1)
+        ->and($report->stopped)->toContain('down');
+
+    $suspended = array_values(app(Suspensions::class)->all());
+    expect($suspended)->toHaveCount(1)
+        ->and($suspended[0]['scope']->force)->toBeTrue()
+        ->and($suspended[0]['scope']->startedAt)->toBe(now()->getTimestamp());
+
+    $this->travel(10)->seconds();
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+    $this->artisan('prosetta:resume')->assertSuccessful();
+
+    Bus::assertBatched(fn (PendingBatch $batch) => $batch->jobs->flatMap(fn (TranslateBatch $job) => $job->keyIds)->all() === [$ids[1]]
+        && $batch->jobs->first()->force === true
+        && $batch->jobs->first()->scope['started_at'] === now()->subSeconds(10)->getTimestamp());
+});
+
+it('merges repeated suspensions of the same run whatever their start time', function () {
+    app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 100), 'outage');
+    app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 200), 'outage');
+
+    expect(app(Suspensions::class)->all())->toHaveCount(1)
+        ->and(RunScope::fromArray((new RunScope(['es'], [], [], true, 100))->toArray())->startedAt)->toBe(100);
 });

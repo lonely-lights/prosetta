@@ -36,9 +36,10 @@ final readonly class Translator {
      * @param list<string> $locales
      * @param list<string> $namespaces
      * @param list<string> $keys key references
+     * @param int|null $forcedBefore with $force, force only keys with no translation, or one last drafted or updated before this Unix time (resuming a forced run)
      * @return array<string, array<int, list<int>>> locale => file id => key ids
      */
-    public function workList(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false): array {
+    public function workList(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, ?int $forcedBefore = null): array {
         $targets = array_values(array_filter(
             array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets()),
             fn (string $code) => $locales === [] || in_array($code, $locales, true),
@@ -72,7 +73,10 @@ final readonly class Translator {
 
             foreach ($candidates as $key) {
                 /** @var TranslationKey $key */
-                if ($force || WorkState::needsWork($key, $existing->get($key->getKey()))) {
+                $translation = $existing->get($key->getKey());
+                $forced = $force && ($forcedBefore === null || $translation?->updated_at === null || $translation->updated_at->getTimestamp() < $forcedBefore);
+
+                if ($forced || WorkState::needsWork($key, $translation)) {
                     $work[$locale][(int) $key->file_id][] = (int) $key->getKey();
                 }
             }
@@ -85,12 +89,13 @@ final readonly class Translator {
      * @param list<string> $locales
      * @param list<string> $namespaces
      * @param list<string> $keys
+     * @param int|null $forcedBefore when resuming a forced run: its start time, so what it already drafted isn't forced again
      * @throws Throwable when the queued batch cannot be dispatched
      */
-    public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true): Batch|TranslateReport {
-        $work = $this->workList($locales, $namespaces, $keys, $force);
+    public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true, ?int $forcedBefore = null): Batch|TranslateReport {
+        $work = $this->workList($locales, $namespaces, $keys, $force, $forcedBefore);
         $size = max(1, (int) config('prosetta.ai.batch', 25));
-        $scope = new RunScope(array_values($locales), array_values($namespaces), array_values($keys), $force);
+        $scope = new RunScope(array_values($locales), array_values($namespaces), array_values($keys), $force, $forcedBefore ?? now()->getTimestamp());
 
         if (! $queue) {
             $report = new TranslateReport;
