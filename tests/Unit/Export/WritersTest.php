@@ -9,6 +9,8 @@ it('writes readable PHP with short arrays and a header', function () {
     expect($php)->toBe(<<<'PHP'
 <?php
 
+declare(strict_types=1);
+
 /*
  * Line one
  * Line two
@@ -17,8 +19,8 @@ it('writes readable PHP with short arrays and a header', function () {
 return [
     'title' => 'Ajustes',
     'steps' => [
-        0 => 'Abre el menú',
-        1 => 'Elige un idioma',
+        'Abre el menú',
+        'Elige un idioma',
     ],
 ];
 
@@ -35,7 +37,12 @@ it('round-trips awkward characters', function () {
 });
 
 it('writes an empty array compactly', function () {
-    expect((new PhpArrayWriter)->render([]))->toBe("<?php\n\nreturn [];\n");
+    expect((new PhpArrayWriter)->render([]))->toBe("<?php\n\ndeclare(strict_types=1);\n\nreturn [];\n");
+});
+
+it('keeps the keys of an integer-keyed array that is not a list', function () {
+    expect((new PhpArrayWriter)->render(['levels' => [1 => 'Uno', 3 => 'Tres']]))->toContain("        1 => 'Uno',
+        3 => 'Tres',");
 });
 
 it('writes JSON with readable unicode and slashes, always as an object', function () {

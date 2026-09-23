@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Export;
 
-/** Renders a lang array as readable PHP: short arrays, four-space indents, single quotes, real Unicode. */
+/**
+ * Renders a lang array as readable PHP, the way a person would write it:
+ * strict types, short arrays, four-space indents, single quotes, real
+ * Unicode, and lists without their index keys.
+ */
 final readonly class PhpArrayWriter {
     /** @param array<array-key, mixed> $data */
     public function render(array $data, string $header = ''): string {
-        $output = "<?php\n\n";
+        $output = "<?php\n\ndeclare(strict_types=1);\n\n";
 
         if ($header !== '') {
             $lines = array_map(fn (string $line) => rtrim(' * '.$line), explode("\n", $header));
@@ -25,11 +29,12 @@ final readonly class PhpArrayWriter {
         }
 
         $indent = str_repeat('    ', $depth + 1);
+        $isList = array_is_list($data);
         $lines = [];
 
         foreach ($data as $key => $value) {
             $rendered = is_array($value) ? $this->array($value, $depth + 1) : $this->string((string) $value);
-            $lines[] = $indent.(is_int($key) ? (string) $key : $this->string($key)).' => '.$rendered.',';
+            $lines[] = $indent.($isList ? '' : (is_int($key) ? (string) $key : $this->string($key)).' => ').$rendered.',';
         }
 
         return "[\n".implode("\n", $lines)."\n".str_repeat('    ', $depth).']';
