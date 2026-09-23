@@ -52,3 +52,10 @@ it('filters by namespace, origin and search', function () {
         ->and(app(ReviewQueue::class)->forLocale('es', ['search' => 'Límite'])->total())->toBe(1)
         ->and(app(ReviewQueue::class)->forLocale('es', ['search' => 'nothing like this'])->total())->toBe(0);
 });
+
+it('searches case-insensitively and treats % and _ as literal characters', function () {
+    expect(app(ReviewQueue::class)->forLocale('es', ['search' => 'REGISTRATION'])->total())->toBe(1)
+        ->and(app(ReviewQueue::class)->forLocale('es', ['search' => '%'])->total())->toBe(0)
+        ->and(app(ReviewQueue::class)->missing('es', ['search' => 'LOGIN ATTEMPTS'])->total())->toBe(1)
+        ->and(app(ReviewQueue::class)->missing('es', ['search' => '_'])->total())->toBe(0);
+});

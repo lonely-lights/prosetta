@@ -20,10 +20,13 @@ final class ExportReport {
     /** @var array<string, list<string>> path => keys whose on-disk value Prosetta did not write; the file was left alone */
     public array $conflicts = [];
 
+    /** @var list<string> target files whose source group no longer exists; left untouched */
+    public array $orphaned = [];
+
     public function __construct(public readonly bool $dryRun = false) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts];
+        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned];
     }
 }

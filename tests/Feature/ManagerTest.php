@@ -40,3 +40,19 @@ it('requires Translate for each locale it drafts as a user', function () {
 
     expect(fn () => Prosetta::translate(['ar'], by: $this->user()))->toThrow(AuthorizationException::class);
 });
+
+it('limits the check to the namespaces asked for', function () {
+    Prosetta::sync();
+
+    # identity: es 2 missing (inUse was imported), ar 3, en_GB 3
+    expect(Prosetta::sync(['identity'], check: true)->outstanding)->toBe(8);
+});
+
+it('counts a draft that also has issues once', function () {
+    Prosetta::sync();
+    app()->instance(\LonelyLights\Prosetta\Contracts\TranslationDriver::class, (new \LonelyLights\Prosetta\Testing\FakeTranslationDriver)->dropPlaceholders());
+    Prosetta::translate(['es'], ['identity'], queue: false);
+
+    # es: capReached (draft with issues) + timedOut (draft); ar 3; en_GB 3
+    expect(app(\LonelyLights\Prosetta\Queries\Stats::class)->outstanding(['identity']))->toBe(8);
+});

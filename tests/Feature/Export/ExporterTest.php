@@ -223,3 +223,28 @@ it('exports what reviewers approved without needing drafts', function () {
     expect(array_keys($accessCode))->toBe(['capReached', 'inUse', 'timedOut'])
         ->and($accessCode['capReached'])->toContain(':minutes');
 });
+
+it('leaves out a list until every item has a value', function () {
+    foreach (['admin/settings.title' => 'Ajustes', 'admin/settings.steps.1' => 'Elige un idioma'] as $ref => $value) {
+        $key = app(KeyFinder::class)->find($ref);
+        Translation::query()->create([
+            'key_id' => $key->id, 'locale' => 'es', 'value' => $value, 'source_hash' => $key->source_hash,
+            'approved_value' => $value, 'approved_source_hash' => $key->source_hash, 'status' => TranslationStatus::Approved,
+        ]);
+    }
+
+    app(Exporter::class)->export(['es']);
+
+    expect(require $this->fixture.'/lang/es/admin/settings.php')->toBe(['title' => 'Ajustes']);
+});
+
+it('leaves the target files of a removed source group alone and reports them', function () {
+    unlink($this->fixture.'/lang/en/auth.php');
+    app(Syncer::class)->sync();
+    $before = file_get_contents($this->fixture.'/lang/es/auth.php');
+
+    $report = app(Exporter::class)->export(['es']);
+
+    expect($report->orphaned)->toContain($this->fixture.'/lang/es/auth.php')
+        ->and(file_get_contents($this->fixture.'/lang/es/auth.php'))->toBe($before);
+});

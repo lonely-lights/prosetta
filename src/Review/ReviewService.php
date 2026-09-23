@@ -113,11 +113,14 @@ final readonly class ReviewService {
      */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null): ApproveReport {
         $report = new ApproveReport;
+        $translations = array_map(fn ($id) => $this->load((int) $id), (array) $translationIds);
 
-        foreach ((array) $translationIds as $id) {
-            $translation = $this->load((int) $id);
+        # Check Every Locale First, so a Mixed Batch Never Half-Applies
+        foreach ($translations as $translation) {
             $this->authorizer->authorize($by, Ability::Review, $translation->locale);
+        }
 
+        foreach ($translations as $translation) {
             if (($reason = $this->refusal($translation, $by)) !== null) {
                 $report->skipped[(int) $translation->getKey()] = $reason;
 

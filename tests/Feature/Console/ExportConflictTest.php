@@ -19,3 +19,13 @@ it('fails an export that would overwrite unsynced edits, and lets --force overri
 
     expect(require $this->fixture.'/lang/es/auth.php')->toBe(['failed' => 'Estas credenciales no coinciden con nuestros registros.']);
 });
+
+it('says which target files it left alone because their source group is gone', function () {
+    $this->artisan('prosetta:sync')->assertSuccessful();
+    unlink($this->fixture.'/lang/en/auth.php');
+    $this->artisan('prosetta:sync')->assertSuccessful();
+
+    $this->artisan('prosetta:export --locale=es')
+        ->expectsOutputToContain('source group no longer exists')
+        ->assertSuccessful();
+});

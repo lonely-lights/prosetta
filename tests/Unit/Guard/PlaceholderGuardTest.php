@@ -131,3 +131,11 @@ it('stores issues as arrays and knows which block', function () {
         ->and(Issue::store([]))->toBeNull()
         ->and(Issue::fromArray($stored[1])->isBlocking())->toBeTrue();
 });
+
+it('treats a pipe without plural markers or :count as literal text', function () {
+    $guard = new PlaceholderGuard;
+
+    expect($guard->check('Home | :app', 'ホーム | :app', 'ja'))->toBe([])
+        ->and(codes($guard->check('Home | :app', 'ホーム :app', 'ja')))->toBe(['pipe_count'])
+        ->and($guard->check('Home | :app', 'ホーム :app', 'ja')[0]->severity)->toBe(Severity::Warning);
+});

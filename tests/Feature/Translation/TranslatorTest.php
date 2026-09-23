@@ -36,6 +36,7 @@ it('narrows the work list to named keys', function () {
 
 it('queues one batch of jobs on the configured queue', function () {
     Bus::fake();
+    app()->instance(TranslationDriver::class, new FakeTranslationDriver);
     config()->set('prosetta.ai.batch', 2);
 
     app(Translator::class)->translate(['es'], ['identity']);
@@ -70,4 +71,13 @@ it('survives being released for rate limiting or overlap without exhausting its 
         ->and($job->retryUntil()->getTimestamp())->toBeGreaterThan(now()->addHour()->getTimestamp())
         ->and($job->timeout)->toBeGreaterThan(0)
         ->and($middleware[1]->expiresAfter)->toBeGreaterThan(0);
+});
+
+it('refuses to queue work when no driver is bound', function () {
+    Bus::fake();
+
+    expect(fn () => app(Translator::class)->translate(['es'], ['identity']))
+        ->toThrow(\LonelyLights\Prosetta\Exceptions\MissingDriverException::class);
+
+    Bus::assertNothingBatched();
 });

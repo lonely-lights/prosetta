@@ -19,7 +19,7 @@ final readonly class Settings {
     }
 
     public static function table(string $name): string {
-        return (string) (config("prosetta.table_names.$name") ?? config("prosetta.tableNames.$name") ?? "prosetta_$name");
+        return (string) (config("prosetta.table_names.$name") ?? "prosetta_$name");
     }
 
     /** @return class-string */

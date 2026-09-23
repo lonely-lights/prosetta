@@ -18,13 +18,29 @@ final readonly class PlaceholderGuard {
             return [Issue::error('empty_value', 'The translation is empty.')];
         }
 
-        $isPlural = str_contains($source, '|');
+        $isPlural = $this->isPlural($source);
 
         return [
             ...($isPlural ? $this->pluralPlaceholders($source, $candidate) : $this->placeholders($source, $candidate)),
-            ...$this->plurals($source, $candidate, $locale),
+            ...($isPlural ? $this->plurals($source, $candidate, $locale) : $this->literalPipes($source, $candidate)),
             ...$this->html($source, $candidate),
         ];
+    }
+
+    /**
+     * A "|" means plural forms only when the string also carries range markers
+     * or a :count placeholder; otherwise it is literal text (e.g. "Home | :app").
+     */
+    private function isPlural(string $source): bool {
+        return str_contains($source, '|')
+            && ($this->ranges(explode('|', $source)) !== [] || str_contains($source, ':count'));
+    }
+
+    /** @return list<Issue> */
+    private function literalPipes(string $source, string $candidate): array {
+        return substr_count($source, '|') === substr_count($candidate, '|')
+            ? []
+            : [Issue::warning('pipe_count', 'The source contains a literal "|" a different number of times than the translation.')];
     }
 
     /** @return list<Issue> */

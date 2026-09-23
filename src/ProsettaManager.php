@@ -62,7 +62,7 @@ readonly class ProsettaManager {
 
         try {
             $report = $this->syncer->sync($namespaces, quiet: true);
-            $report->outstanding = $this->stats->outstanding();
+            $report->outstanding = $this->stats->outstanding($namespaces);
         } finally {
             DB::rollBack();
         }

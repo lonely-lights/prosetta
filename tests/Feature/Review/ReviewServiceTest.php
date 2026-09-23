@@ -121,3 +121,12 @@ it('bulk-approves every clean current candidate for a locale', function () {
     expect($report->approved)->toBe([$good->id])
         ->and($report->skipped)->toBe([$bad->id => 'issues']);
 });
+
+it('authorizes every locale in a bulk approval before approving any', function () {
+    $spanish = draftFor('identity::onboarding.toast.accessCode.capReached', 'es', 'Límite de :minutes minutos.');
+    $arabic = draftFor('identity::onboarding.toast.accessCode.timedOut', 'ar', 'x');
+
+    expect(fn () => app(ReviewService::class)->approve([$spanish->id, $arabic->id], $this->user()))
+        ->toThrow(AuthorizationException::class)
+        ->and($spanish->fresh()->status)->toBe(TranslationStatus::Draft);
+});

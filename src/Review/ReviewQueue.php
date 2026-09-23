@@ -55,7 +55,7 @@ final readonly class ReviewQueue {
         $search = $filters['search'] ?? null;
 
         if (is_string($search) && $search !== '') {
-            $query->where(fn ($where) => $where->where("$k.source_value", 'like', "%$search%")->orWhere("$t.value", 'like', "%$search%"));
+            $query->where(fn ($where) => $this->contains($where, "$k.source_value", $search)->orWhere(fn ($or) => $this->contains($or, "$t.value", $search)));
         }
 
         return $query->orderBy("$f.namespace")->orderBy("$f.group")->orderBy("$k.id")
@@ -96,11 +96,21 @@ final readonly class ReviewQueue {
         $search = $filters['search'] ?? null;
 
         if (is_string($search) && $search !== '') {
-            $query->where("$k.source_value", 'like', "%$search%");
+            $this->contains($query, "$k.source_value", $search);
         }
 
         return $query->orderBy("$f.namespace")->orderBy("$f.group")->orderBy("$k.id")
             ->paginate($perPage)
             ->through(fn (TranslationKey $key) => MissingItem::fromKey($key, $locale));
+    }
+
+    /**
+     * Case-insensitive "contains" that treats % and _ in the search as literal
+     * characters. Works the same on Postgres, MySQL and SQLite.
+     */
+    private function contains(mixed $query, string $column, string $search): mixed {
+        $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search));
+
+        return $query->whereRaw("lower($column) like ? escape '!'", ['%'.$escaped.'%']);
     }
 }

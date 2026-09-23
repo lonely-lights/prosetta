@@ -8,15 +8,17 @@ it('merges the package config', function () {
         ->and(config('prosetta.exclude_paths'))->toBe(['lang/vendor', 'vendor']);
 });
 
-it('resolves table names, falling back to the legacy camelCase key', function () {
+it('resolves table names from table_names', function () {
     expect(Settings::table('locales'))->toBe('prosetta_locales');
 
+    config()->set('prosetta.table_names.locales', 'custom_locales');
+
+    expect(Settings::table('locales'))->toBe('custom_locales');
+});
+
+it('ignores the removed legacy camelCase table key', function () {
     config()->set('prosetta.table_names.locales', null);
     config()->set('prosetta.tableNames.locales', 'legacy_locales');
-
-    expect(Settings::table('locales'))->toBe('legacy_locales');
-
-    config()->set('prosetta.tableNames.locales', null);
 
     expect(Settings::table('locales'))->toBe('prosetta_locales');
 });

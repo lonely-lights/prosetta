@@ -93,6 +93,15 @@ final readonly class Exporter {
             return;
         }
 
+        # The Source Group Is Gone: Leave Its Target Files as They Are, and Say So
+        if ($order === []) {
+            if (is_file($path)) {
+                $report->orphaned[] = $path;
+            }
+
+            return;
+        }
+
         if (! $force && ($conflicts = $this->conflicts($root, $file, $locale)) !== []) {
             $report->conflicts[$path] = $conflicts;
 
@@ -111,8 +120,13 @@ final readonly class Exporter {
 
             if ($value !== null) {
                 $values[$key] = $value;
-                $written[] = [$translation, $value];
+                $written[$key] = [$translation, $value];
             }
+        }
+
+        if ($file->format === FileFormat::Php) {
+            $values = $this->withoutIncompleteLists($order, $values);
+            $written = array_intersect_key($written, $values);
         }
 
         $exists = is_file($path);
@@ -181,6 +195,46 @@ final readonly class Exporter {
         }
 
         return $conflicts;
+    }
+
+    /**
+     * A list (keys ending .0 … .n-1) is exported whole or not at all, so no
+     * item shifts position and code iterating it never meets a gap; Laravel
+     * falls back to the source list until every item is translated. Keys that
+     * merely look numeric (errors.404) are not a list and are left alone.
+     *
+     * @param list<string> $order
+     * @param array<array-key, string> $values
+     * @return array<array-key, string>
+     */
+    private function withoutIncompleteLists(array $order, array $values): array {
+        $lists = [];
+
+        foreach ($order as $key) {
+            if (preg_match('/^(.+)\.(\d+)$/', $key, $match) === 1) {
+                $lists[$match[1]][(int) $match[2]] = $key;
+            }
+        }
+
+        foreach ($lists as $items) {
+            ksort($items);
+
+            if (array_keys($items) !== range(0, count($items) - 1)) {
+                continue;
+            }
+
+            foreach ($items as $key) {
+                if (! array_key_exists($key, $values)) {
+                    foreach ($items as $drop) {
+                        unset($values[$drop]);
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        return $values;
     }
 
     private function pick(Translation $translation, bool $includeDrafts): ?string {

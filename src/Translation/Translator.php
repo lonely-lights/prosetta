@@ -7,6 +7,8 @@ namespace LonelyLights\Prosetta\Translation;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
+use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
@@ -108,6 +110,11 @@ final readonly class Translator {
 
         if ($jobs === []) {
             return new TranslateReport;
+        }
+
+        # Fail Here, Not in Every Queued Job
+        if (! app()->bound(TranslationDriver::class)) {
+            throw MissingDriverException::make();
         }
 
         $pending = Bus::batch($jobs)->name('prosetta:translate')->allowFailures();
