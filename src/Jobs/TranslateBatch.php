@@ -39,6 +39,12 @@ final class TranslateBatch implements ShouldQueue {
     public int $timeout = 300;
 
     /**
+     * Exceptions Prosetta doesn't handle (genuine bugs) fail the job after this many, via Laravel's own counter.
+     * Provider trouble never counts: it is caught and released, waited out or suspended.
+     */
+    public int $maxExceptions = 3;
+
+    /**
      * @param list<int> $keyIds
      * @param array<string, mixed>|null $scope the run's RunScope::toArray(), to suspend and resume it whole
      */
@@ -49,12 +55,6 @@ final class TranslateBatch implements ShouldQueue {
         public bool $force = false,
         public ?array $scope = null,
     ) {}
-
-    /**
-     * Exceptions Prosetta doesn't handle (genuine bugs) fail the job after this many, via Laravel's own counter.
-     * Provider trouble never counts: it is caught and released, waited out or suspended.
-     */
-    public int $maxExceptions = 3;
 
     /**
      * Releases for rate limits, overlap and open circuits all consume
