@@ -105,12 +105,64 @@ final readonly class SourceChange {
 
     /**
      * Split text into words using whitespace as delimiter.
+     * For scripts without spaces (Han, Hiragana, Katakana, Thai, Lao, Khmer, Myanmar),
+     * split each character individually while keeping runs of other characters together.
      *
      * @return list<string>
      */
     private static function wordArray(string $text): array {
-        $words = preg_split('/\s+/u', trim($text));
-        return $words !== false ? array_filter($words, fn ($w) => $w !== '') : [];
+        $text = trim($text);
+        if ($text === '') {
+            return [];
+        }
+
+        // First split on whitespace
+        $tokens = preg_split('/\s+/u', $text);
+        if ($tokens === false) {
+            return [];
+        }
+
+        $words = [];
+        foreach ($tokens as $token) {
+            if ($token === '') {
+                continue;
+            }
+
+            // Split tokens containing CJK/Thai/Lao/Khmer/Myanmar characters
+            // Keep runs of other characters together (Latin, digits, punctuation, placeholders)
+            $tokenWords = self::splitScriptTokens($token);
+            $words = array_merge($words, $tokenWords);
+        }
+
+        return $words;
+    }
+
+    /**
+     * Split a token into sub-tokens, separating CJK and other script characters.
+     * Characters from \p{Han}, \p{Hiragana}, \p{Katakana}, \p{Thai}, \p{Lao}, \p{Khmer}, \p{Myanmar}
+     * each become their own token. Runs of other characters stay together.
+     *
+     * @return list<string>
+     */
+    private static function splitScriptTokens(string $token): array {
+        // Use capturing group to keep matched script characters
+        $scriptPattern = '/(\p{Han}|\p{Hiragana}|\p{Katakana}|\p{Thai}|\p{Lao}|\p{Khmer}|\p{Myanmar})/u';
+
+        // Split the token at each script character, keeping the delimiters
+        $parts = preg_split($scriptPattern, $token, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) {
+            return [$token];
+        }
+
+        $result = [];
+        foreach ($parts as $part) {
+            // Filter out empty strings
+            if ($part !== '' && $part !== null) {
+                $result[] = $part;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -184,6 +236,7 @@ final readonly class SourceChange {
 
     /**
      * Group adjacent removed or added words in the diff array.
+     * Extracts words from brackets, groups them, and re-brackets the group.
      *
      * @param list<string> $diff
      * @return list<string>
@@ -194,48 +247,75 @@ final readonly class SourceChange {
         }
 
         $grouped = [];
-        $current = null;
+        $currentWords = [];
         $type = null; // 'removed', 'added', or null for normal words
 
         foreach ($diff as $item) {
-            if (preg_match('/^-\[(.+)-\]$/', $item, $matches)) {
-                // Removed word
+            if (preg_match('/^\[-(.+)-\]$/', $item, $matches)) {
+                // Removed word - extract the content
+                $word = $matches[1];
                 if ($type === 'removed') {
-                    $current .= ' ' . $item;
+                    // Continue accumulating removed words
+                    $currentWords[] = $word;
                 } else {
-                    if ($current !== null) {
-                        $grouped[] = $current;
+                    // Flush any previous group
+                    if (!empty($currentWords)) {
+                        $grouped[] = self::formatGroupedDiff($currentWords, $type);
+                        $currentWords = [];
                     }
-                    $current = $item;
+                    // Start new removed group
+                    $currentWords[] = $word;
                     $type = 'removed';
                 }
             } elseif (preg_match('/^\{\+(.+)\+\}$/', $item, $matches)) {
-                // Added word
+                // Added word - extract the content
+                $word = $matches[1];
                 if ($type === 'added') {
-                    $current .= ' ' . $item;
+                    // Continue accumulating added words
+                    $currentWords[] = $word;
                 } else {
-                    if ($current !== null) {
-                        $grouped[] = $current;
+                    // Flush any previous group
+                    if (!empty($currentWords)) {
+                        $grouped[] = self::formatGroupedDiff($currentWords, $type);
+                        $currentWords = [];
                     }
-                    $current = $item;
+                    // Start new added group
+                    $currentWords[] = $word;
                     $type = 'added';
                 }
             } else {
                 // Normal word
-                if ($current !== null) {
-                    $grouped[] = $current;
+                if (!empty($currentWords)) {
+                    $grouped[] = self::formatGroupedDiff($currentWords, $type);
+                    $currentWords = [];
+                    $type = null;
                 }
                 $grouped[] = $item;
-                $current = null;
-                $type = null;
             }
         }
 
-        if ($current !== null) {
-            $grouped[] = $current;
+        // Flush any remaining group
+        if (!empty($currentWords)) {
+            $grouped[] = self::formatGroupedDiff($currentWords, $type);
         }
 
         return $grouped;
+    }
+
+    /**
+     * Format a group of words with appropriate brackets.
+     *
+     * @param list<string> $words
+     * @param string|null $type 'removed' or 'added'
+     */
+    private static function formatGroupedDiff(array $words, ?string $type): string {
+        $content = implode(' ', $words);
+        if ($type === 'removed') {
+            return "[-{$content}-]";
+        } elseif ($type === 'added') {
+            return "{+{$content}+}";
+        }
+        return $content;
     }
 
     /**
