@@ -16,6 +16,7 @@ use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
 use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
+use LonelyLights\Prosetta\Console\HealthCommand;
 use LonelyLights\Prosetta\Console\InstallCommand;
 use LonelyLights\Prosetta\Console\RenameCommand;
 use LonelyLights\Prosetta\Console\ResumeCommand;
@@ -64,7 +65,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
             $this->commands([
                 InstallCommand::class, SyncCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
-                ResumeCommand::class, CircuitCommand::class, CycleCommand::class,
+                ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class,
             ]);
         }
 

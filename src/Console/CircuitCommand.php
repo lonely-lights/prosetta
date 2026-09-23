@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\Suspensions;
+use LonelyLights\Prosetta\Support\State;
 
 final class CircuitCommand extends Command {
     protected $signature = 'prosetta:circuit
@@ -45,6 +46,11 @@ final class CircuitCommand extends Command {
 
         foreach ($budget->usage() as $period => ['used' => $used, 'limit' => $limit]) {
             $this->line("$period: $used / ".($limit ?? 'no limit').' tokens');
+        }
+
+        $lastRun = State::get('cycle.last_run');
+        if ($lastRun !== null) {
+            $this->line('Last cycle: '.date('Y-m-d H:i:s', (int) $lastRun));
         }
 
         return self::SUCCESS;
