@@ -159,3 +159,14 @@ it('names the run it belongs to when counting tokens', function () {
     expect(fn () => app(TranslationRunner::class)->run('es', keyIds('auth.throttle'), runId: 'run-9'))
         ->toThrow(\LonelyLights\Prosetta\Resilience\BudgetExhausted::class);
 });
+
+it('runs the glossary guard with the target\'s glossary', function () {
+    config(['prosetta.resilience.cache_store' => 'array']);
+    \LonelyLights\Prosetta\Models\Locale::findByCode('es')->update(['glossary' => [['source' => 'credentials', 'target' => 'credenciales', 'banned' => []]]]);
+    app()->instance(TranslationDriver::class, new \LonelyLights\Prosetta\Testing\ScriptedDriver);
+
+    app(TranslationRunner::class)->run('es', keyIds('auth.failed'), force: true);
+
+    $issues = Translation::query()->where('key_id', keyIds('auth.failed')[0])->where('locale', 'es')->value('issues');
+    expect(collect($issues)->pluck('code')->all())->toContain('glossary_missing');
+});

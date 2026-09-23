@@ -19,6 +19,7 @@ use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\TranslationDrafted;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
+use LonelyLights\Prosetta\Guard\GlossaryGuard;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
@@ -41,6 +42,7 @@ final readonly class TranslationRunner {
         private Container $container,
         private LocaleSource $locales,
         private PlaceholderGuard $guard,
+        private GlossaryGuard $glossary,
         private Dispatcher $events,
         private ProviderGate $gate,
     ) {}
@@ -159,7 +161,7 @@ final readonly class TranslationRunner {
                 'value' => $refusal === null && is_string($value) ? $value : null,
                 'issues' => match (true) {
                     $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
-                    is_string($value) => $this->guard->check($item->source, $value, $locale),
+                    is_string($value) => [...$this->guard->check($item->source, $value, $locale), ...$this->glossary->check($item->source, $value, $batch->target->glossary)],
                     default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
                 },
                 'provider' => $result->provider,
