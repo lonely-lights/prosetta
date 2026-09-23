@@ -6,6 +6,7 @@ use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\CircuitOpened;
 use LonelyLights\Prosetta\Resilience\Circuits;
+use LonelyLights\Prosetta\Resilience\Decision;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
 
@@ -144,4 +145,62 @@ it('serializes mutations through a write lock, so a concurrent worker cannot rac
     $this->circuit->recordFailure('boom');
 
     expect($this->circuit->state()['failures'])->toBe(1);
+});
+
+it('keeps an open circuit open when a late in-flight call succeeds', function () {
+    foreach (range(1, 3) as $ignored) {
+        $this->circuit->recordFailure('boom');
+    }
+    $call = Decision::call();
+
+    $this->circuit->recordSuccess($call);
+    $this->circuit->recordSuccess();
+
+    expect($this->circuit->state()['state'])->toBe('open')
+        ->and($this->circuit->decision()->kind)->toBe('wait');
+    Event::assertNotDispatched(CircuitClosed::class);
+});
+
+it('keeps a halted circuit halted when a late in-flight call succeeds', function () {
+    config(['prosetta.resilience.halt_hold' => null]);
+    $this->circuit->trip('rejected', 'bad key');
+
+    $this->circuit->recordSuccess(Decision::call());
+
+    expect($this->circuit->decision()->kind)->toBe('held');
+    Event::assertNotDispatched(CircuitClosed::class);
+});
+
+it('does not raise the cooldown when a late in-flight call fails, but keeps its message', function () {
+    foreach (range(1, 3) as $ignored) {
+        $this->circuit->recordFailure('boom');
+    }
+
+    $this->circuit->recordFailure('late one', Decision::call());
+    $this->circuit->recordFailure('later one');
+
+    expect($this->circuit->state()['cooldown'])->toBe(300)
+        ->and($this->circuit->decision()->seconds)->toBe(300)
+        ->and($this->circuit->state()['message'])->toBe('later one');
+});
+
+it('does not re-hold a halted circuit when a late in-flight call fails', function () {
+    config(['prosetta.resilience.halt_hold' => 600]);
+    $this->circuit->trip('quota', 'no credits');
+    $this->travel(400)->seconds();
+
+    $this->circuit->recordFailure('late one', Decision::call());
+
+    expect($this->circuit->decision()->seconds)->toBe(200);
+});
+
+it('never takes the write lock for a success on a healthy circuit', function () {
+    Sleep::fake(true, true);
+    $writeLock = Settings::cache()->lock('prosetta:circuit:fake:model:write', 10);
+    expect($writeLock->get())->toBeTrue();
+
+    $this->circuit->recordSuccess(Decision::call());
+
+    expect($this->circuit->state()['state'])->toBe('closed');
+    $writeLock->release();
 });

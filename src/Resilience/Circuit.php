@@ -64,13 +64,30 @@ final class Circuit {
         return $lock->get() ? Decision::test($lock) : Decision::wait(60);
     }
 
+    /**
+     * Only the test call ($decision of kind 'test') may close an open circuit:
+     * a late success from a call that was already in flight when it opened
+     * proves nothing about the provider now. A healthy circuit (closed, no
+     * failures) is left alone without taking the write lock, so a paid-for
+     * result is never thrown away by a lock timeout.
+     */
     public function recordSuccess(?Decision $decision = null): void {
-        $this->mutate(function () {
+        $state = $this->state();
+
+        if ($state['state'] === 'closed' && $state['failures'] === 0) {
+            $decision?->release();
+
+            return;
+        }
+
+        $this->mutate(function () use ($decision) {
             $state = $this->state();
 
             if ($state['state'] === 'open') {
-                $this->events->dispatch(new CircuitClosed($this->name, now()->getTimestamp() - (int) $state['opened_at']));
-                $this->cache->forget($this->key());
+                if ($this->isTest($decision)) {
+                    $this->events->dispatch(new CircuitClosed($this->name, now()->getTimestamp() - (int) $state['opened_at']));
+                    $this->cache->forget($this->key());
+                }
             } elseif ($state['failures'] > 0) {
                 $this->cache->forget($this->key());
             }
@@ -79,8 +96,14 @@ final class Circuit {
         $decision?->release();
     }
 
+    /**
+     * Counts a failure on a closed circuit, opening it at the threshold. On an
+     * open circuit only the test call re-opens it (a longer cooldown, or
+     * another halt_hold); a late failure from a call already in flight only
+     * updates the message, so N workers don't raise the cooldown N times.
+     */
     public function recordFailure(string $message, ?Decision $decision = null): void {
-        $this->mutate(function () use ($message) {
+        $this->mutate(function () use ($message, $decision) {
             $state = $this->state();
             $now = now()->getTimestamp();
             $state['message'] = $message;
@@ -96,6 +119,8 @@ final class Circuit {
                 } else {
                     $this->save($state);
                 }
+            } elseif (! $this->isTest($decision)) {
+                $this->save($state);
             } elseif ($state['reason'] === 'halt') {
                 $hold = $this->haltHold();
                 $this->save([...$state, 'until' => $hold === null ? null : $now + $hold]);
@@ -145,6 +170,10 @@ final class Circuit {
     /** Serializes a read-compute-write transition through a short blocking lock, separate from the test lock. */
     private function mutate(Closure $change): mixed {
         return $this->cache->lock($this->key().':write', self::WRITE_LOCK_SECONDS)->block(self::WRITE_LOCK_WAIT_SECONDS, $change);
+    }
+
+    private function isTest(?Decision $decision): bool {
+        return $decision?->kind === 'test';
     }
 
     private function key(): string {
