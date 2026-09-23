@@ -16,7 +16,8 @@ use LonelyLights\Prosetta\Translation\SourceChange;
 /**
  * What a cycle sends to the AI: in every target language, approved
  * translations whose English changed substantively (update mode), and in
- * auto-translate languages, keys with nothing yet (draft mode).
+ * auto-translate languages, every other key that needs work: nothing yet,
+ * only a rejected candidate, or an unapproved draft made from older English.
  */
 final readonly class CycleWork {
     public function __construct(private LocaleSource $locales) {}
@@ -33,7 +34,11 @@ final readonly class CycleWork {
             foreach ($keys as $key) {
                 $translation = $existing->get($key->getKey());
 
-                if ($this->needsUpdate($key, $translation) || (in_array($locale, $auto, true) && WorkState::isMissing($key, $translation))) {
+                $needed = WorkState::isStale($key, $translation)
+                    ? $this->needsUpdate($key, $translation)
+                    : in_array($locale, $auto, true) && WorkState::needsWork($key, $translation);
+
+                if ($needed) {
                     $work[$locale][(int) $key->file_id][] = (int) $key->getKey();
                 }
             }

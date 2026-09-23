@@ -67,8 +67,8 @@ final readonly class Cycle {
             return $this->finish($runId, $startedAt, $confirmed);
         }
 
-        # A Suspension Keeps Only These Locales, so prosetta:resume Stays Within Them
-        $scope = new RunScope(array_keys($work), [], [], false, $startedAt);
+        # Marked as a Cycle, so prosetta:resume Clears a Suspension of It Instead of Re-Translating a Wider Scope
+        $scope = new RunScope(array_keys($work), [], [], false, $startedAt, cycle: true);
 
         if ($sync) {
             /** @var TranslateReport $report */
@@ -104,7 +104,7 @@ final readonly class Cycle {
         $approvedPerLocale = [];
 
         foreach ($this->approvable($touched) as $locale) {
-            $approved = count($this->review->approveClean($locale, strict: true)->approved);
+            $approved = count($this->review->approveClean($locale, strict: true, since: $startedAt)->approved);
 
             if ($approved > 0) {
                 $approvedPerLocale[$locale] = $approved;

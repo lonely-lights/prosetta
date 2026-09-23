@@ -334,3 +334,60 @@ it('does not schedule the cycle by default', function () {
 
     expect($events)->toHaveCount(0);
 });
+
+it('approves only its own clean drafts, never an older draft or a person\'s pending edit', function () {
+    cycleAutoTranslate('es');
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+    $this->travel(-1)->hours();
+    app(LonelyLights\Prosetta\Translation\TranslationRunner::class)->run('es', [app(KeyFinder::class)->find('auth.throttle')->id]);
+    $this->travelBack();
+    app(ReviewService::class)->write('messages.welcome', 'es', '¡Bienvenido, :name!', null);
+
+    $report = app(Cycle::class)->run(sync: true);
+
+    $older = cycleTranslation('auth.throttle', 'es');
+    $manual = cycleTranslation('messages.welcome', 'es');
+    expect($older->status)->toBe(TranslationStatus::Draft)
+        ->and($older->issues)->toBeNull()
+        ->and($manual->status)->toBe(TranslationStatus::NeedsReview)
+        ->and($manual->issues)->toBeNull()
+        ->and(cycleTranslation('messages.terms', 'es')->status)->toBe(TranslationStatus::Approved)
+        ->and($report->drafted)->toBeGreaterThan(0)
+        ->and($report->approved)->toBe($report->drafted);
+});
+
+it('re-drafts an unapproved AI draft in an auto language when its English changes', function () {
+    cycleAutoTranslate('es');
+    $driver = new ScriptedDriver;
+    app()->instance(TranslationDriver::class, $driver);
+    $throttle = app(KeyFinder::class)->find('auth.throttle');
+    app(LonelyLights\Prosetta\Translation\TranslationRunner::class)->run('es', [$throttle->id]);
+    config(['prosetta.automation.approve' => 'none']);
+    $path = $this->fixture.'/lang/en/auth.php';
+    file_put_contents($path, str_replace('Too many login attempts.', 'Too many sign-in attempts.', file_get_contents($path)));
+    $driver->calls = [];
+
+    app(Cycle::class)->run(sync: true);
+
+    $sent = collect($driver->calls)->flatMap(fn (TranslationBatch $batch) => array_map(fn (TranslationItem $item) => $item->keyRef, $batch->items));
+    $draft = cycleTranslation('auth.throttle', 'es');
+    expect($sent)->toContain('auth.throttle')
+        ->and($draft->value)->toBe('Too many sign-in attempts. Please try again in :seconds seconds. [es]')
+        ->and($draft->source_hash)->toBe($draft->key->source_hash)
+        ->and($draft->status)->toBe(TranslationStatus::Draft);
+});
+
+it('clears a suspended cycle run on resume instead of re-translating its scope', function () {
+    Bus::fake();
+    $suspensions = app(LonelyLights\Prosetta\Resilience\Suspensions::class);
+    $scope = new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], [], false, now()->getTimestamp(), cycle: true);
+    $suspensions->suspend('scripted-driver:default', $scope, 'outage');
+
+    expect(LonelyLights\Prosetta\Resilience\RunScope::fromArray($scope->toArray())->cycle)->toBeTrue()
+        ->and($scope->id())->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], []))->id());
+
+    $this->artisan('prosetta:resume')->expectsOutputToContain('Cleared 1 suspended cycle run(s)')->assertSuccessful();
+
+    Bus::assertNothingBatched();
+    expect($suspensions->all())->toBe([]);
+});

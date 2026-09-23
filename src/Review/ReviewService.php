@@ -195,9 +195,11 @@ final readonly class ReviewService {
     /**
      * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
      * With $strict, only candidates with no issues at all: warnings (glossary, rewrite) hold one back too.
+     * With $since (a Unix time), only AI drafts written since then, with no issues: one run's own
+     * drafts, never a person's pending edit or an older draft.
      * @throws Throwable when a database transaction fails
      */
-    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false): ApproveReport {
+    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false, ?int $since = null): ApproveReport {
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -213,7 +215,11 @@ final readonly class ReviewService {
             ->whereColumn("$t.source_hash", "$k.source_hash")
             ->when($namespace !== null, fn ($query) => $query->where("$f.namespace", $namespace))
             ->when($group !== null, fn ($query) => $query->where("$f.group", $group))
-            ->when($strict, fn ($query) => $query->whereNull("$t.issues"))
+            ->when($strict || $since !== null, fn ($query) => $query->whereNull("$t.issues"))
+            ->when($since !== null, fn ($query) => $query
+                ->where("$t.origin", TranslationOrigin::Ai->value)
+                ->where("$t.status", TranslationStatus::Draft->value)
+                ->where("$t.updated_at", '>=', now()->setTimestamp((int) $since)))
             ->orderBy("$t.id")
             ->pluck("$t.id")
             ->map(fn ($id) => (int) $id)

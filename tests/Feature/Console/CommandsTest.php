@@ -63,7 +63,8 @@ it('publishes config and workflow migrations on install, leaving an existing loc
             unlink(config_path('prosetta.php'));
         }
 
-        foreach (glob(database_path('migrations/*prosetta*.php')) ?: [] as $migration) {
+        # The Background-Mode Migration's Name Doesn't Contain "prosetta", so Match It Too or It Leaks Into the Testbench App
+        foreach ([...glob(database_path('migrations/*prosetta*.php')) ?: [], ...glob(database_path('migrations/*add_automation_columns*.php')) ?: []] as $migration) {
             unlink($migration);
         }
     }
