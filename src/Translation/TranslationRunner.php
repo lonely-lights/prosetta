@@ -23,6 +23,8 @@ use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Resilience\Circuits;
+use LonelyLights\Prosetta\Resilience\ProviderGate;
 use LonelyLights\Prosetta\Support\LocaleCode;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
@@ -40,13 +42,14 @@ final readonly class TranslationRunner {
         private LocaleSource $locales,
         private PlaceholderGuard $guard,
         private Dispatcher $events,
+        private ProviderGate $gate,
     ) {}
 
     /**
      * @param list<int> $keyIds
-     * @throws Throwable when a database transaction fails
+     * @throws Throwable when a database transaction fails, or a ProviderException, CallDeferred or BudgetExhausted when the provider can't be called
      */
-    public function run(string $locale, array $keyIds, bool $force = false): TranslateReport {
+    public function run(string $locale, array $keyIds, bool $force = false, ?string $runId = null): TranslateReport {
         $report = new TranslateReport;
         $target = $this->locales->find($locale) ?? throw new ProsettaException("Unknown locale [$locale].");
         $keyModel = Settings::model('key');
@@ -75,28 +78,38 @@ final readonly class TranslationRunner {
 
         $source = $this->locales->source();
         $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
-        $outcomes = $this->attempt($driver, $batch, $locale);
+        $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+        $stopped = null;
 
-        for ($retries = (int) config('prosetta.ai.retries_on_issues', 1); $retries > 0; $retries--) {
-            $failing = array_filter($outcomes, fn (array $outcome) => $this->blocking($outcome['issues']));
+        try {
+            for ($retries = (int) config('prosetta.ai.retries_on_issues', 1); $retries > 0; $retries--) {
+                $failing = array_filter($outcomes, fn (array $outcome) => $this->blocking($outcome['issues']) && ! $this->refused($outcome['issues']));
 
-            if ($failing === []) {
-                break;
+                if ($failing === []) {
+                    break;
+                }
+
+                $feedback = array_map(fn (array $outcome) => array_map(fn (Issue $issue) => $issue->message, $outcome['issues']), $failing);
+                $retryItems = array_values(array_filter($items, fn (TranslationItem $item) => array_key_exists($item->id, $failing)));
+                $retried = $this->attempt($driver, $batch->withItems($retryItems)->withFeedback($feedback), $locale, $runId);
+
+                foreach ($retried as $id => $outcome) {
+                    $outcome['input'] += $outcomes[$id]['input'];
+                    $outcome['output'] += $outcomes[$id]['output'];
+                    $outcomes[$id] = $outcome;
+                }
             }
-
-            $feedback = array_map(fn (array $outcome) => array_map(fn (Issue $issue) => $issue->message, $outcome['issues']), $failing);
-            $retryItems = array_values(array_filter($items, fn (TranslationItem $item) => array_key_exists($item->id, $failing)));
-            $retried = $this->attempt($driver, $batch->withItems($retryItems)->withFeedback($feedback), $locale);
-
-            foreach ($retried as $id => $outcome) {
-                $outcome['input'] += $outcomes[$id]['input'];
-                $outcome['output'] += $outcomes[$id]['output'];
-                $outcomes[$id] = $outcome;
-            }
+        } catch (Throwable $e) {
+            # The First Attempt Is Already Paid For: Keep It, Then Let the Caller Deal With the Failure
+            $stopped = $e;
         }
 
         foreach ($outcomes as $id => $outcome) {
             $this->persist($keys->get((int) $id), $existing->get((int) $id), $locale, $outcome, $report);
+        }
+
+        if ($stopped !== null) {
+            throw $stopped;
         }
 
         return $report;
@@ -126,8 +139,8 @@ final readonly class TranslationRunner {
     }
 
     /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int}> */
-    private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale): array {
-        $result = $driver->translate($batch);
+    private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale, ?string $runId): array {
+        $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch));
         $weights = [];
 
         foreach ($batch->items as $item) {
@@ -140,12 +153,15 @@ final readonly class TranslationRunner {
 
         foreach ($batch->items as $item) {
             $value = $result->values[$item->id] ?? null;
+            $refusal = $result->refused[$item->id] ?? null;
 
             $outcomes[$item->id] = [
-                'value' => is_string($value) ? $value : null,
-                'issues' => is_string($value)
-                    ? $this->guard->check($item->source, $value, $locale)
-                    : [Issue::error('missing_value', 'The driver returned no value for this key.')],
+                'value' => $refusal === null && is_string($value) ? $value : null,
+                'issues' => match (true) {
+                    $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
+                    is_string($value) => $this->guard->check($item->source, $value, $locale),
+                    default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
+                },
                 'provider' => $result->provider,
                 'model' => $result->model,
                 'invocation' => $result->invocationId,
@@ -168,6 +184,10 @@ final readonly class TranslationRunner {
 
         if ($outcome['value'] === null) {
             $report->failed[] = $ref;
+
+            if ($this->refused($outcome['issues'])) {
+                $report->refused[] = $ref;
+            }
 
             return;
         }
@@ -202,6 +222,17 @@ final readonly class TranslationRunner {
     private function blocking(array $issues): bool {
         foreach ($issues as $issue) {
             if ($issue->isBlocking()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<Issue> $issues */
+    private function refused(array $issues): bool {
+        foreach ($issues as $issue) {
+            if ($issue->code === 'refused') {
                 return true;
             }
         }

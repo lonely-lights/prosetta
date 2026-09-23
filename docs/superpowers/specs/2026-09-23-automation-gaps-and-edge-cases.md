@@ -10,14 +10,14 @@ Each of these is something a person caught or did by hand.
 
 | # | What happened | Status | What the pipeline needs |
 |---|---|---|---|
-| G1 | **No backoff, circuit breaker or error classification.** A job that throws is retried by the worker immediately, again and again until `retryUntil` (2 h). Every job in a batch does the same, so a 72-job run during an outage sends a constant stream of failing requests for two hours. A bad API key or a rejected request is retried like a transient outage. | **Gap (critical)** | See §3. |
+| G1 | **No backoff, circuit breaker or error classification.** A job that throws is retried by the worker immediately, again and again until `retryUntil` (2 h). Every job in a batch does the same, so a 72-job run during an outage sends a constant stream of failing requests for two hours. A bad API key or a rejected request is retried like a transient outage. | **Fixed** `feat/resilience-layer`, `b478d03..9affbb2` | — |
 | G2 | **A rename broke the next export.** `prosetta:rename` moved the translation but the old key stayed on disk, so the export reported a conflict. | **Fixed** `8270ea1` | — |
 | G3 | **No "still correct" action.** After a spelling-only source edit, 28 Spanish strings went stale although the Spanish was right. Confirming them used `edit()`, which marks the origin `manual` and loses the AI provenance. Prosetta also keeps only the source *hash*, not the previous source text, so neither a person nor a program can see *what* changed. | **Gap** | Keep the previous source value (or a short history). Add a `confirm` action: re-approve the same value against the new source, keeping the origin, logged as `Confirmed`. Classify source changes automatically: if the old and new source differ only in spelling, whitespace or punctuation, confirm without spending tokens; otherwise re-translate. |
 | G4 | **Long-running workers keep old code and config.** The translations worker didn't see the new style note until restarted; the run used `--sync` instead. | **Host** | `php artisan queue:restart` (or `horizon:terminate`) on every deploy and whenever translation config changes. Better: read style notes and glossaries from the database, not config, so they take effect without a restart. |
 | G5 | **The guard checks structure, not meaning.** Across 1,795 drafts it flagged nothing, yet review found 17 problems: register (tú/usted), a double colon, "uno entre" for "one in", and "configuración regional" for "locale" 14 times. | **Gap** | Automated checks per language: **glossary** (required and banned terms, e.g. `locale → idioma`, banned "configuración regional"); **register** heuristics (formal verb forms and pronouns when the note says informal); **wrapper text** ("Here is the translation:", added quotes or markdown, which the guard currently lets through); **untranslated** output (value equals source when the source isn't a proper noun, URL or code); **wrong language** (language-ID the output); **length** against `max_length` and against the batch's usual ratio. Then a **quality estimate** (an LLM judge or a QE metric) scoring each draft. |
 | G6 | **Approval is a person running commands.** | **Gap** | An approval policy per language: auto-approve drafts that are clean on every check and above a quality threshold; send the rest, plus a random sample of the approved ones, to human review. Trust per language can rise as its sample stays clean. |
 | G7 | **`prosetta:sync --check` can't gate CI.** It fails on every outstanding string in every language, including languages nobody has started (6,611 at the time). | **Gap** | Scope the check: fail only on *stale* or *broken* strings in languages that are complete, or on a configured set; report the rest without failing. |
-| G8 | **No cost control.** The estimate was off by 40% on output tokens. Nothing stops a run, a retry storm or a new 100-language backlog from spending without limit. | **Gap** | An estimate command (`--dry-run` that prices the run). Budgets per run, per day and per month, checked before each batch; when one is hit, stop and alert instead of continuing. |
+| G8 | **No cost control.** The estimate was off by 40% on output tokens. Nothing stops a run, a retry storm or a new 100-language backlog from spending without limit. | **Partly fixed** | Token budgets (per run, per day, per month) and `prosetta:translate --estimate` are done. Money budgets still need the price catalogue (Step 8), so cost, not just tokens, isn't capped yet. |
 | G9 | **Nobody is told when something goes wrong.** Batch progress, failures, circuit state and spend are only visible by querying. | **Gap** | Events already exist; add a run record (who, what, when, tokens, cost, outcome) and notifications for failed batches, circuit opened and closed, and budget reached. |
 | G10 | **The model's answer isn't checked for chatter.** "Here is the translation: Hola" passes the guard; empty answers are caught. | **Gap** | Part of G5. |
 | G11 | **Keys that mirror code identifiers** (`organisations.php`, `organisationRequests`, the `cancelled` status) couldn't be renamed without renaming the domain. | **Host** (policy) | A key-naming convention: keys that mirror enums, models or routes follow the code; purely textual keys follow the language. |
@@ -30,13 +30,13 @@ Each of these is something a person caught or did by hand.
 
 | Case | Status | Graceful handling |
 |---|---|---|
-| Provider down for minutes or hours | **Gap** (G1) | Circuit breaker (§3): stop calling, pause the queue, probe occasionally, resume on success. |
-| Rate limited (429), with or without `Retry-After` | **Gap** | Release the job for `Retry-After` (or backoff); count towards the circuit only if persistent. laravel/ai throws `RateLimitedException`. |
-| Provider overloaded (529/503) | **Gap** | Backoff with jitter; circuit after repeated failures. `ProviderOverloadedException`. |
-| Connection failure or timeout | **Gap** | Same as overload. `ProviderConnectionException`. |
-| Out of credits or quota | **Gap** | **Stop everything** and alert; don't retry, and don't fail over to a more expensive provider without a budget. `InsufficientCreditsException`. |
-| Invalid API key, unknown or retired model, bad request (4xx) | **Gap** | Fail fast, don't retry, alert. These won't fix themselves. |
-| Content refused by the provider's safety filter for some strings | **Gap** | Mark those items refused (not failed), route them to another engine or a person; don't retry the same call. |
+| Provider down for minutes or hours | **Handled** | Circuit breaker (§3): stop calling, pause the queue, probe occasionally, resume on success. |
+| Rate limited (429), with or without `Retry-After` | **Handled** | Release the job for `Retry-After` (or backoff); count towards the circuit only if persistent. laravel/ai throws `RateLimitedException`. |
+| Provider overloaded (529/503) | **Handled** | Backoff with jitter; circuit after repeated failures. `ProviderOverloadedException`. |
+| Connection failure or timeout | **Handled** | Same as overload. `ProviderConnectionException`. |
+| Out of credits or quota | **Partly handled** | **Stop everything**: circuit trips, job ends quietly, batch cancelled, run suspended; don't retry, and don't fail over to a more expensive provider without a budget. `InsufficientCreditsException` → `ProviderQuotaExhausted`. "Alert" is still just `TranslationHalted` plus a warning-level log line — no one is actually notified yet (G9). |
+| Invalid API key, unknown or retired model, bad request (4xx) | **Partly handled** | Fail fast, don't retry: same halt path as above. These won't fix themselves. "Alert" is the same event-and-log-line as above, not a real notification (G9). |
+| Content refused by the provider's safety filter for some strings | **Partly handled** | `TranslationBatchResult::$refused` marks the item; the runner records it in the run report as both `refused` and `failed`, saves no draft, and leaves it out of the issue-retry loop, so it isn't retried. Still missing: routing it to another engine (once named engines exist) or to a person through the review pages — today it just sits unresolved until someone notices the report. |
 | Timeout after the provider finished (billed, but the answer is lost) | **Gap** | Record the invocation; on retry, only resend items still without a value. Accept some double billing, but count it. |
 | Failover to another provider | Handled by laravel/ai (`FailoverableException`) | Make failover respect budgets and the engine's placeholder handling (engines design). |
 | Slow degradation (answers getting slower) | **Gap** | Record latency per call; alert when it drifts. |
@@ -118,3 +118,31 @@ Each of these is something a person caught or did by hand.
 4. **Fatal and budget errors** fail the job without retry, cancel the rest of the batch, and raise an event.
 5. **`retryUntil`** can then be long (e.g. 24 h), because the circuit, not the deadline, keeps traffic down during an outage.
 6. **Separate limits** for background runs and member-facing work, each with its own queue, limiter and circuit, so a background backlog never delays a reader.
+
+## 3. Follow-ups from the resilience layer build (2026-09-23)
+
+Minor findings the task and whole-branch reviews deferred or parked. None blocks the layer; fix them before tagging a release.
+
+- Circuits::for() name-registry read-then-write can drop a name under a first-use race (self-heals on next for()).
+- Circuit::decision() lock-contention wait of 60 s is a literal, not config.
+- setting()/haltHold() near-duplicate clamping.
+- CircuitOpened/CircuitClosed dispatch inside the write lock — a listener that re-enters the same circuit would block; Task 8's logging listener doesn't.
+- commit f58decd put the trailers on the subject line (single-line message).
+- no test for record() with tokens <= 0 or for two periods exhausted at once.
+- used()/limit() re-resolve cache/config per period.
+- RunScope::id() sort helper uses a needless IIFE inside an arrow fn (verbatim from the plan).
+- after a failed health check, a second decision() of kind 'test' (only with 1 s cooldown/hold) is overwritten and its lock leaks until TTL.
+- no tests for a health check throwing ProviderRejected during a halt test, or a real call failing after a passed health check.
+- untested branches — held→halted, CallDeferred outage=true, quota, job budget branches (per_run no-suspend / daily suspend), batch cancel, TranslateCommand FAILURE on stopped.
+- legacy null-scope fallback suspends the whole locale; add a comment.
+- no resume test for a held circuit (shares the tested wait path); a batch-dispatch failure aborts the rest of a resume run (documented only as @throws).
+- Estimator::history() loads every AI draft row for a locale (unbounded over time); an aggregate SUM query would scale better. No 49-draft boundary test. output_tokens null not filtered.
+- G1 cites a commit range rather than one SHA (more useful; fine).
+- health-check test closure lacks a type hint and JSON_THROW_ON_ERROR (verbatim from the plan).
+- suspension-reason vocabulary (sync class_basename vs job words; unknown halts suspend as rejected) — fix before tagging a release.
+- Undaunted checkHealth() ignores prosetta.ai.models (empty today).
+- Undaunted overload e2e test calls capReachedBatch() defined only in TranslationDriverTest.php, so in a parallel worker it may open the circuit on 'undefined function' errors — Ruling: real, test-only, Minor; move the helper to tests/Pest.php as a follow-up — cost if wrong: that test doesn't prove the overload mapping (the mapping itself is proven by TranslationDriverTest's dataset).
+- sync-run report over-counts failed and drops drafted/tokens when a batch rejection hits the retry pass — Ruling: reporting-only, no data loss — cost if wrong: misleading numbers in one rare case.
+- spec §6 list broken by an inserted paragraph; spec §5 still says failed_jobs reserved for bugs (ProviderBatchRejected now lands there) — Ruling: doc tidy-up follow-up — cost if wrong: two stale sentences.
+- merge test doesn't read the stored started_at; last-writer-wins can restore an earlier start time — Ruling: narrow edge, Minor — cost if wrong: rare skipped re-force of human-edited keys.
+- Translator::refs() orders by 'id' not the model key name — Ruling: harmless with default models — cost if wrong: breaks only a custom key model.

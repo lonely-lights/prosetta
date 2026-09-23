@@ -22,8 +22,9 @@ New exceptions in `LonelyLights\Prosetta\Exceptions\Provider`, all extending an 
 |---|---|---|
 | `ProviderUnavailable` | Down, overloaded, connection failure, timeout, 5xx | Backoff; counts towards the circuit |
 | `ProviderRateLimited(?int $retryAfter)` | 429 | Wait `retryAfter` seconds (or the backoff); counts towards the circuit |
-| `ProviderRejected` | Invalid key, unknown or retired model, malformed request | **Halt** (§5) |
+| `ProviderRejected` | Invalid key, unknown or retired model, no access (HTTP 401, 403, 404) | **Halt** (§5) |
 | `ProviderQuotaExhausted` | Out of credits or quota | **Halt** (§5) |
+| `ProviderBatchRejected` | The provider refused this batch's request (context too long, invalid input: HTTP 400 or 422); the provider itself is fine | **Fails that job** into `failed_jobs` with its error; the batch allows failures and carries on. Never touches the circuit and never halts. A synchronous run records the chunk's keys as failed and goes on to the next chunk |
 
 Any other `Throwable` from the driver is handled according to `resilience.unknown_errors`: `'transient'` (default, treated as `ProviderUnavailable`) or `'halt'` (treated as `ProviderRejected`).
 
@@ -50,9 +51,9 @@ A `ProviderUnavailable` (or a `ProviderRateLimited` without `retryAfter`) releas
 
 - **Closed.** Calls go through. Each success resets the failure count. After `circuit.failure_threshold` consecutive countable failures, the circuit **opens**.
 - **Open.** No calls are made. A job that finds the circuit open releases itself until the cooldown ends, plus jitter, without touching the provider. The first cooldown is `circuit.cooldown`; each re-opening multiplies it by `circuit.cooldown_multiplier`, up to `circuit.max_cooldown`. Opening raises `CircuitOpened`.
-- **Testing** (after a cooldown ends). Exactly **one** caller, holding an atomic cache lock, tests the provider: through `checkHealth()` if the driver has it, otherwise by running its own real batch. Everyone else keeps waiting. Success **closes** the circuit, resets the cooldown to its first value and raises `CircuitClosed` with the downtime. Failure **re-opens** it with the next, longer cooldown.
+- **Testing** (after a cooldown ends). Exactly **one** caller, holding an atomic cache lock, tests the provider: through `checkHealth()` if the driver has it, otherwise by running its own real batch. Everyone else keeps waiting. Success **closes** the circuit, resets the cooldown to its first value and raises `CircuitClosed` with the downtime. Failure **re-opens** it with the next, longer cooldown. Only that test call moves an open circuit: a call that was already in flight when the circuit opened updates its last error message and nothing else, so a late success doesn't close it (or lift a halt) and N workers don't raise the cooldown N times. A halt trips the circuit from any call.
 
-**Downtime timeout.** When a circuit has been open (including failed tests) for `resilience.outage_timeout` seconds without a break, jobs stop retrying. Each one **suspends** its scope (§6) and ends without being marked failed, and Prosetta raises `TranslationSuspended`. The circuit itself keeps cycling. Because no jobs are left to test it, the scheduled `prosetta:resume` does the testing (§6). Jobs' `retryUntil()` becomes `outage_timeout` plus the longest cooldown, so a job is never expired by Laravel before Prosetta decides.
+**Downtime timeout.** When a circuit has been open (including failed tests) for `resilience.outage_timeout` seconds without a break, jobs stop retrying. Each one **suspends** its scope (§6) and ends without being marked failed, and Prosetta raises `TranslationSuspended`. The circuit itself keeps cycling. Because no jobs are left to test it, the scheduled `prosetta:resume` does the testing (§6). Jobs' `retryUntil()` is a long horizon, seven days: Laravel fixes it in the payload at dispatch and `release()` keeps it, so anything shorter would expire jobs on a long run with no outage at all. The circuit and `outage_timeout` decide when to suspend, not the deadline. Genuine bugs (exceptions Prosetta doesn't handle) are bounded separately by `$maxExceptions = 3` and a `backoff()` of 30, 120 and 600 seconds, and those jobs do land in `failed_jobs`.
 
 ## 5. Halts
 
@@ -68,17 +69,19 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
 
 ## 6. Suspend and resume
 
-**Suspending** records the run's scope in the cache under `prosetta:suspended`: circuit name, locales, namespaces, keys, the `force` flag, the reason and the time. Scopes with the same locales, namespaces and keys are merged, so repeated suspensions don't pile up.
+**Suspending** records the run's scope in the cache under `prosetta:suspended`: circuit name, locales, namespaces, keys, the `force` flag, the time the run started, the reason and the time. Scopes with the same locales, namespaces, keys and `force` flag are merged (the start time isn't part of that identity), so repeated suspensions don't pile up. Resuming a forced run forces only keys with no translation, or one last drafted or updated before the run started, so what it drafted before it stopped, and anything edited since, isn't translated or billed again.
 
 **`php artisan prosetta:resume`** does the following for each circuit that has suspended work:
 - **Circuit open, cooldown not over:** nothing happens.
 - **Circuit ready to test, driver has `checkHealth()`:** run the health check.
   - **On success:** the circuit closes; each suspended scope is queued again through the ordinary `translate()` path, which skips anything already done; the suspension is cleared; `TranslationResumed` is raised.
   - **On failure:** the circuit re-opens with the next cooldown.
-- **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request.
+- **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request. Waiting on that test call never counts as an outage, even when `outage_timeout` has passed, so the waiting jobs don't suspend and cancel the batch mid-test.
+
+Each suspension is cleared **before** its scope is queued again, so a requeued job that suspends the same scope straight away isn't wiped. If queueing throws, the scope is suspended again and the error is rethrown.
 - **Circuit closed:** the scope is queued again straight away.
 
-**Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. `null` leaves scheduling to the host. The command is also safe to run by hand.
+**Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. The interval is a `*/N` cron, so it's clamped to 1–59 minutes. `null` leaves scheduling to the host. The command is also safe to run by hand.
 
 ## 7. Token budgets
 
@@ -92,7 +95,7 @@ Budgets are in **tokens** (input plus output plus reasoning, as the driver repor
 
 `null` means no limit. Budgets are a separate gate from circuits: reaching one never trips a circuit, and `prosetta:resume` checks the budget before requeueing. Spending is counted in the cache (per run, day and month) after each call. A call is refused **before** it's made when the counter is already at or over the limit. A single batch can overshoot a limit by at most one batch's tokens, which is the accepted trade-off for not estimating every call. Reaching a limit raises `BudgetReached` (period, used, limit) once per period, and the stopped jobs end quietly as in §5.
 
-**`php artisan prosetta:translate --estimate`** prints, for the run it would start: strings, source characters and expected input and output tokens, without calling anything. The per-character rates come from the locale's own history when it has at least 50 AI drafts, otherwise from defaults (`budgets.estimate` in config). It also prints how the estimate compares with each remaining budget.
+**`php artisan prosetta:translate --estimate`** prints, for the run it would start: strings, source characters and expected input and output tokens, without calling anything. The per-character rates come from the locale's own history when it has at least 50 AI drafts, otherwise from defaults (`budgets.estimate` in config). It also prints the `per_run` limit and whether the whole estimate fits under it, and what's left of the daily and monthly budgets.
 
 ## 8. Synchronous runs
 
@@ -106,10 +109,12 @@ All are in `LonelyLights\Prosetta\Events`. The host listens and decides how to n
 |---|---|
 | `CircuitOpened` | circuit, cooldown seconds, failure count, last error message |
 | `CircuitClosed` | circuit, downtime seconds |
-| `TranslationHalted` | circuit, reason (`rejected`, `quota`, `unknown`), message, scope |
+| `TranslationHalted` | circuit, reason (`rejected`, `quota`, `unknown`), message |
 | `TranslationSuspended` | circuit, reason, scope |
 | `TranslationResumed` | circuit, scopes queued |
 | `BudgetReached` | period, used, limit |
+
+`TranslationHalted` carries no scope: the circuit trips independently of any one run. The `TranslationSuspended` raised for the same halt (§5 step 3) carries the scope, since that is what `prosetta:resume` needs to queue again.
 
 Prosetta also writes a line to `log_channel` for each: warning for opened, halted, suspended and budget; info for closed and resumed.
 
@@ -140,7 +145,7 @@ Package defaults:
     'outage_timeout' => 21600,           // 6 h open without a break: stop retrying, suspend
     'halt_hold' => null,                 // seconds a halt lasts before testing; null = until prosetta:circuit reset
     'unknown_errors' => 'transient',     // or 'halt'
-    'resume_every' => null,              // minutes; null = the host schedules prosetta:resume itself
+    'resume_every' => null,              // minutes, clamped to 1-59; null = the host schedules prosetta:resume itself
 ],
 
 'budgets' => [
@@ -170,10 +175,12 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
   - `RateLimitedException` → `ProviderRateLimited`, with `retryAfter` when laravel/ai exposes it;
   - `ProviderOverloadedException` and `ProviderConnectionException` → `ProviderUnavailable`;
   - `InsufficientCreditsException` → `ProviderQuotaExhausted`;
-  - an HTTP 401, 403, 404 or 400 from the provider → `ProviderRejected`;
+  - an HTTP 401, 403 or 404 from the provider → `ProviderRejected`;
+  - an HTTP 400 or 422 → `ProviderBatchRejected` (a problem with that batch, such as too much context or invalid input: halting the whole provider for it would bring the same bad chunk back on every resume, forever);
+  - an HTTP 408 or 5xx → `ProviderUnavailable`;
   - anything else is left to `unknown_errors`.
 - **It implements `checkHealth()`** by asking the Translator agent to translate the single word "OK" into Spanish with the configured model. That costs a handful of tokens, is recorded in `ai_usage` like any call, and proves both the key and the model.
-- **Listeners** for the §9 events log to the app log for now. Notifications (mail or the Bridge) come later.
+- **Logging needs no listeners:** Prosetta logs every §9 event to `log_channel` itself (`LogResilienceEvents`). Listeners are optional, for notifications (mail or the Bridge), which come later.
 - **The translations worker** needs `queue:restart` on deploy (G4). That's noted in the README, not solved here.
 
 ## 13. Testing
@@ -184,11 +191,12 @@ The defaults for `estimate` fit the Spanish run: 1,795 strings of 63,094 source 
 - Circuit: opens at the threshold; stays open, releasing jobs without calling the driver; allows exactly one test after the cooldown when two jobs arrive at once; closes on success and resets the cooldown; re-opens on failure with a doubled cooldown, capped at the maximum.
 - Health check used for the test when the driver has it, and a real job used when it doesn't.
 - Halts: `ProviderRejected` and `ProviderQuotaExhausted` end the job quietly (not in `failed_jobs`), cancel the batch, trip the circuit and suspend the scope. `halt_hold = null` waits for a reset; a number tests after the hold.
-- Outage timeout: jobs suspend instead of retrying, and `retryUntil` covers the timeout.
+- Outage timeout: jobs suspend instead of retrying; `retryUntil` is days, not hours; `maxExceptions` and `backoff()` bound unhandled exceptions.
 - Resume: queues suspended scopes after a successful test and clears them; doesn't when the test fails; merges duplicate scopes.
 - Budgets: per-run stops that run only, without suspending or tripping a circuit; daily and monthly stop, suspend and are requeued by `prosetta:resume` after the period ends; a call is refused when the counter is already over.
 - Refused strings are recorded as failed with `refused` and not retried.
 - `unknown_errors` both ways.
+- `ProviderBatchRejected` fails only its own job, leaves the circuit alone and raises no halt; a synchronous run records the chunk as failed and carries on.
 - `--sync` stops with the right message in each state.
 - `--estimate` from history and from defaults.
 - Events raised once per state change, not once per job.

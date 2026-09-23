@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Support;
 
+use Illuminate\Contracts\Cache\Repository;
+use Illuminate\Support\Facades\Cache;
+use LonelyLights\Prosetta\Resilience\CacheStore;
+
 /** Reads Prosetta's config with its defaults, so no other class repeats them. */
 final readonly class Settings {
     private const array MODELS = [
@@ -25,5 +29,17 @@ final readonly class Settings {
     /** @return class-string */
     public static function model(string $name): string {
         return (string) (config("prosetta.models.$name") ?? self::MODELS[$name]);
+    }
+
+    /** The cache store that holds circuits, budgets and suspended work. */
+    public static function cache(): Repository {
+        $store = config('prosetta.resilience.cache_store');
+
+        return Cache::store(is_string($store) && $store !== '' ? $store : null);
+    }
+
+    /** The resilience cache, wrapped so cache errors surface as ProsettaExceptions and locks come from the store. */
+    public static function cacheStore(): CacheStore {
+        return new CacheStore(self::cache());
     }
 }
