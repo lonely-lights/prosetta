@@ -30,9 +30,6 @@
         "pestphp/pest": "^5.1",
         "pestphp/pest-plugin-laravel": "^5.0"
     },
-    "suggest": {
-        "spatie/laravel-translatable": "Planned: translate Eloquent model content through Prosetta's review workflow."
-    },
     "autoload": {
         "psr-4": {
             "LonelyLights\\Prosetta\\": "src/"

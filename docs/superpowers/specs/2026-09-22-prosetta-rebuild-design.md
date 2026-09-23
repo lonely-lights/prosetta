@@ -380,7 +380,7 @@ interface LocaleSource {
    - remove the `Cache::forget('activeLocales')` lines (also in the Bridge `MakeDefaultController` and `ReorderController`).
 4. Permissions: `translations.manage`, plus `translations.translate.{code}` and `translations.review.{code}` for each target locale.
 5. Horizon: a supervisor for the `translations` queue.
-6. Bridge: remove `locale_initials` from `UpdateController::FIELDS` and its request rules (codes are immutable).
+6. Bridge: no change is needed for immutable codes. `UpdateLocaleRequest` never accepts `locale_initials`; `UpdateController::FIELDS` only snapshots it for the audit.
 7. Tests: keep `LocaleCoverageTest` as the file-level guard, and add `php artisan prosetta:sync --check` to CI.
 
 ## 14. Testing (package)
@@ -432,6 +432,13 @@ These refine the approved design and don't change behaviour anyone agreed to:
 2. **Default `exclude_paths` is `['lang/vendor', 'vendor']`.** Without `vendor`, discovery would pick up third-party packages' `loadTranslationsFrom()` namespaces and export into `vendor/`.
 3. **Locale caching:** the Locale model keeps no cache, so there's nothing for `booted()` to clear. `DatabaseLocaleSource` queries each time; there are few rows and it's safe in long-lived queue workers.
 4. **Imported values with blocking issues:** a first-import target value with a blocking guard issue (for example a missing `:placeholder`) imports as `needs_review` with no `approved_value`, so it counts as outstanding and is never exported as approved.
+
+## 16b. Decisions after the MVP shipped (2026-09-22)
+
+1. **No spatie/laravel-translatable dependency.** Eloquent content translation (§12), when built, stores its values in Prosetta's own tables rather than JSON columns. The `suggest` entry is dropped. An optional spatie adapter can be revisited only if a host needs one.
+2. **Undaunted's canonical `en` uses US spelling.** `en_GB` carries British spelling; `en_US` duplicates the source and should be retired in Undaunted.
+3. **The Alexandria copy** (`C:\Websites\alexandria\packages\prosetta`) is updated to match this repository.
+4. **Publishing timing** is to be decided.
 
 ## 17. Risks and open questions
 
