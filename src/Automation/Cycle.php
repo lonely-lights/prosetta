@@ -93,7 +93,10 @@ final readonly class Cycle {
             return $this->finish($runId, $startedAt, $confirmed, $batch);
         }
 
-        State::put('cycle.batch', ['batch_id' => $batch->id, 'started_at' => $startedAt]);
+        # On a Sync Queue (or a Fast Worker) the Batch and Its FinishCycle Can Complete Inside dispatch(): Then There's Nothing to Guard
+        if (State::get('cycle.finished_batch') !== $batch->id) {
+            State::put('cycle.batch', ['batch_id' => $batch->id, 'started_at' => $startedAt]);
+        }
 
         return new CycleReport(confirmed: $confirmed, batchId: $batch->id);
     }
@@ -136,6 +139,11 @@ final readonly class Cycle {
         );
 
         State::put('cycle.last_run', now()->getTimestamp());
+
+        if ($batchId !== null) {
+            State::put('cycle.finished_batch', $batchId);
+        }
+
         $stored = State::get('cycle.batch');
 
         # Release Only Our Own Guard: a Late FinishCycle Must Never Unblock a Newer Cycle

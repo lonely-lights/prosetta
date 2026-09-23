@@ -481,3 +481,41 @@ it('keeps a manual run and a cycle run over the same locales as separate suspens
     expect($all)->toHaveCount(2)
         ->and(collect($all)->map(fn (array $row) => $row['scope']->cycle)->sort()->values()->all())->toBe([false, true]);
 });
+
+it('leaves no guard behind when a queued cycle completes inside dispatch on a sync queue', function () {
+    # A Real Batch Repository Needs Laravel's job_batches Table, Which the Package's Test Database Lacks
+    Illuminate\Support\Facades\Schema::create('job_batches', function (Illuminate\Database\Schema\Blueprint $table) {
+        $table->string('id')->primary();
+        $table->string('name');
+        $table->integer('total_jobs');
+        $table->integer('pending_jobs');
+        $table->integer('failed_jobs');
+        $table->longText('failed_job_ids');
+        $table->mediumText('options')->nullable();
+        $table->integer('cancelled_at')->nullable();
+        $table->integer('created_at');
+        $table->integer('finished_at')->nullable();
+    });
+    config(['queue.default' => 'sync', 'prosetta.queue.connection' => 'sync', 'cache.default' => 'array']);
+    Event::fake([CycleCompleted::class]);
+    cycleAutoTranslate('es');
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
+
+    $first = app(Cycle::class)->run();
+
+    expect($first->batchId)->not->toBeNull()
+        ->and(Bus::findBatch($first->batchId)->finished())->toBeTrue()
+        ->and(State::get('cycle.finished_batch'))->toBe($first->batchId)
+        ->and(State::get('cycle.batch'))->toBeNull()
+        ->and(cycleAiDrafts('es'))->toBeGreaterThan(0)
+        ->and(Translation::query()->where('locale', 'es')->where('origin', TranslationOrigin::Ai->value)->where('status', '!=', TranslationStatus::Approved->value)->count())->toBe(0);
+    Event::assertDispatched(CycleCompleted::class, fn (CycleCompleted $event) => $event->report->batchId === $first->batchId && $event->report->approved === cycleAiDrafts('es'));
+
+    # Nothing Left to Do: the Second Cycle Runs (Not Skipped) and Finishes Empty
+    $second = app(Cycle::class)->run();
+
+    expect($second->skipped)->toBeFalse()
+        ->and($second->batchId)->toBeNull()
+        ->and(State::get('cycle.batch'))->toBeNull();
+    Event::assertDispatchedTimes(CycleCompleted::class, 2);
+});
