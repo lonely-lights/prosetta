@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Guard\Issue;
@@ -56,12 +57,32 @@ class Translation extends Model {
         return Settings::table('translations');
     }
 
+    /** @return BelongsTo<TranslationKey, $this> */
     public function key(): BelongsTo {
         return $this->belongsTo(Settings::model('key'), 'key_id');
     }
 
+    /** @return HasMany<TranslationReview, $this> */
     public function reviews(): HasMany {
         return $this->hasMany(Settings::model('review'), 'translation_id');
+    }
+
+    /**
+     * Appends one row to this translation's audit trail. Prosetta builds every
+     * value itself, so the row is force-filled rather than mass-assigned.
+     */
+    public function logReview(ReviewAction $action, ?string $reviewerId, ?string $previousValue = null, ?string $newValue = null, ?string $notes = null): TranslationReview {
+        /** @var TranslationReview $review */
+        $review = $this->reviews()->make();
+        $review->forceFill([
+            'reviewer_id' => $reviewerId,
+            'action' => $action,
+            'previous_value' => $previousValue,
+            'new_value' => $newValue,
+            'notes' => $notes,
+        ])->save();
+
+        return $review;
     }
 
     public function hasBlockingIssues(): bool {

@@ -13,9 +13,9 @@ use Stringable;
  * at the first dot; groups may contain "/" (nested folders) but never ".".
  */
 final readonly class KeyRef implements Stringable {
-    public const ROOT = '*';
-    public const JSON_GROUP = '*';
-    private const JSON_PREFIX = 'json:';
+    public const string ROOT = '*';
+    public const string JSON_GROUP = '*';
+    private const string JSON_PREFIX = 'json:';
 
     public function __construct(
         public string $namespace,

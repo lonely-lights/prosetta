@@ -7,6 +7,7 @@ namespace LonelyLights\Prosetta\Console;
 use Illuminate\Bus\Batch;
 use Illuminate\Console\Command;
 use LonelyLights\Prosetta\ProsettaManager;
+use Throwable;
 
 final class TranslateCommand extends Command {
     protected $signature = 'prosetta:translate
@@ -18,6 +19,7 @@ final class TranslateCommand extends Command {
 
     protected $description = 'Draft missing and stale translations with the bound TranslationDriver.';
 
+    /** @throws Throwable when the queued batch cannot be dispatched */
     public function handle(ProsettaManager $prosetta): int {
         $result = $prosetta->translate(
             $this->option('locale'),

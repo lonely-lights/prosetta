@@ -26,6 +26,7 @@ use LonelyLights\Prosetta\Models\TranslationFile;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Fingerprint;
 use LonelyLights\Prosetta\Support\Settings;
+use Throwable;
 
 /**
  * Reads the source locale's files into keys, then imports what the target
@@ -41,7 +42,10 @@ final readonly class Syncer {
         private Dispatcher $events,
     ) {}
 
-    /** @param list<string>|null $namespaces */
+    /**
+     * @param list<string>|null $namespaces
+     * @throws Throwable when a database transaction fails
+     */
     public function sync(?array $namespaces = null, bool $quiet = false): SyncReport {
         $report = new SyncReport;
         $pending = [];
@@ -118,7 +122,7 @@ final readonly class Syncer {
     }
 
     /**
-     * @param array<string, string> $values
+     * @param array<array-key, string> $values
      * @param list<object> $pending
      * @return Collection<string, TranslationKey>
      */
@@ -128,6 +132,7 @@ final readonly class Syncer {
         $current = new Collection;
 
         foreach ($values as $key => $value) {
+            # A Numeric Key Like "404" Arrives as an Int; KeyRef and the key Column Need the String
             $key = (string) $key;
             $hash = Fingerprint::of($value);
             /** @var TranslationKey|null $model */
@@ -224,10 +229,7 @@ final readonly class Syncer {
                 'status' => TranslationStatus::NeedsReview, 'origin' => TranslationOrigin::Manual,
                 'issues' => $issues, 'exported_hash' => $fileHash,
             ]);
-            $translation->reviews()->create([
-                'reviewer_id' => null, 'action' => ReviewAction::Imported,
-                'previous_value' => $previous, 'new_value' => $value, 'notes' => 'Edited by hand in the lang file.',
-            ]);
+            $translation->logReview(ReviewAction::Imported, null, $previous, $value, 'Edited by hand in the lang file.');
             $report->handEdits[] = $locale.' '.$model->ref()->toString();
         }
     }

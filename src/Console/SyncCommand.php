@@ -6,6 +6,7 @@ namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
 use LonelyLights\Prosetta\ProsettaManager;
+use Throwable;
 
 final class SyncCommand extends Command {
     protected $signature = 'prosetta:sync
@@ -14,6 +15,7 @@ final class SyncCommand extends Command {
 
     protected $description = "Read the source-language files and bring Prosetta's keys and imported translations up to date.";
 
+    /** @throws Throwable when a database transaction fails */
     public function handle(ProsettaManager $prosetta): int {
         $namespaces = $this->option('namespace');
         $check = (bool) $this->option('check');

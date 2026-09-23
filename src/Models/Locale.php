@@ -119,7 +119,7 @@ class Locale extends Model {
     public function getDisplayName(): string {
         return $this->native_name === $this->english_name
             ? $this->english_name
-            : "{$this->native_name} ({$this->english_name})";
+            : "$this->native_name ($this->english_name)";
     }
 
     public function isRtl(): bool {

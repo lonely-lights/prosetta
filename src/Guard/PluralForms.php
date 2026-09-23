@@ -9,7 +9,7 @@ use LonelyLights\Prosetta\Support\LocaleCode;
 
 /** How many plural forms a language has, derived from Laravel's own plural rules. */
 final readonly class PluralForms {
-    private const SAMPLES = [1.5, 1000, 1001, 1002, 1011, 1021, 1100];
+    private const array SAMPLES = [1.5, 1000, 1001, 1002, 1011, 1021, 1100];
 
     public static function count(string $locale): int {
         $selector = new MessageSelector;

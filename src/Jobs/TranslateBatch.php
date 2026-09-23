@@ -12,6 +12,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use LonelyLights\Prosetta\Translation\TranslationRunner;
+use Throwable;
 
 /** One chunk of one file for one locale. Idempotent: the runner re-checks before calling the AI. */
 final class TranslateBatch implements ShouldQueue {
@@ -40,10 +41,11 @@ final class TranslateBatch implements ShouldQueue {
     public function middleware(): array {
         return [
             new RateLimited('prosetta-ai'),
-            (new WithoutOverlapping("prosetta:{$this->locale}:{$this->fileId}"))->releaseAfter(30)->expireAfter(600),
+            (new WithoutOverlapping("prosetta:$this->locale:$this->fileId"))->releaseAfter(30)->expireAfter(600),
         ];
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function handle(TranslationRunner $runner): void {
         if ($this->batch()?->cancelled()) {
             return;

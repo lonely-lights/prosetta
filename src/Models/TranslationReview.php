@@ -27,6 +27,7 @@ class TranslationReview extends Model {
         return Settings::table('reviews');
     }
 
+    /** @return BelongsTo<Translation, $this> */
     public function translation(): BelongsTo {
         return $this->belongsTo(Settings::model('translation'), 'translation_id');
     }

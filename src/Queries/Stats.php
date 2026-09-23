@@ -12,7 +12,7 @@ use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
 
 final readonly class Stats {
-    private const EMPTY = ['keys' => 0, 'approved' => 0, 'drafts' => 0, 'needs_review' => 0, 'stale' => 0, 'missing' => 0, 'issues' => 0, 'tokens' => 0];
+    private const array EMPTY = ['keys' => 0, 'approved' => 0, 'drafts' => 0, 'needs_review' => 0, 'stale' => 0, 'missing' => 0, 'issues' => 0, 'tokens' => 0];
 
     public function __construct(private LocaleSource $locales) {}
 

@@ -50,10 +50,12 @@ class TranslationKey extends Model {
         });
     }
 
+    /** @return BelongsTo<TranslationFile, $this> */
     public function file(): BelongsTo {
         return $this->belongsTo(Settings::model('file'), 'file_id');
     }
 
+    /** @return HasMany<Translation, $this> */
     public function translations(): HasMany {
         return $this->hasMany(Settings::model('translation'), 'key_id');
     }

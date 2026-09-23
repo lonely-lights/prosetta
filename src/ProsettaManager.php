@@ -27,6 +27,7 @@ use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Sync\SyncReport;
 use LonelyLights\Prosetta\Translation\TranslateReport;
 use LonelyLights\Prosetta\Translation\Translator;
+use Throwable;
 
 /** The public surface: what host controllers, commands and the facade call. */
 readonly class ProsettaManager {
@@ -48,6 +49,7 @@ readonly class ProsettaManager {
      * back: nothing is kept, and $report->outstanding says how much work waits.
      *
      * @param list<string>|null $namespaces
+     * @throws Throwable when a database transaction fails
      */
     public function sync(?array $namespaces = null, bool $check = false, ?Authenticatable $by = null): SyncReport {
         $this->authorizer->authorize($by, Ability::Manage);
@@ -72,6 +74,7 @@ readonly class ProsettaManager {
      * @param list<string> $locales
      * @param list<string> $namespaces
      * @param list<string> $keys
+     * @throws Throwable when the queued batch cannot be dispatched
      */
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true, ?Authenticatable $by = null): Batch|TranslateReport {
         $codes = $locales !== [] ? $locales : array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets());
@@ -93,23 +96,30 @@ readonly class ProsettaManager {
         return $this->queue->missing($locale, $filters, $perPage);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
         return $this->reviews->write($keyRef, $locale, $value, $by, $notes, $approve);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
         return $this->reviews->edit($translationId, $value, $by, $notes, $approve);
     }
 
-    /** @param int|list<int> $translationIds */
+    /**
+     * @param int|list<int> $translationIds
+     * @throws Throwable when a database transaction fails
+     */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null): ApproveReport {
         return $this->reviews->approve($translationIds, $by, $notes);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null): ApproveReport {
         return $this->reviews->approveClean($locale, $namespace, $group, $by);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
         return $this->reviews->reject($translationId, $by, $notes);
     }
@@ -124,6 +134,7 @@ readonly class ProsettaManager {
         return $this->exporter->export($locales, $namespaces, $includeDrafts, $dryRun, $force);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function rename(string $from, string $to, ?Authenticatable $by = null): TranslationKey {
         $this->authorizer->authorize($by, Ability::Manage);
 

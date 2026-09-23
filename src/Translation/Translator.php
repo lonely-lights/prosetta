@@ -14,6 +14,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
+use Throwable;
 
 final readonly class Translator {
     public function __construct(
@@ -75,6 +76,7 @@ final readonly class Translator {
      * @param list<string> $locales
      * @param list<string> $namespaces
      * @param list<string> $keys
+     * @throws Throwable when the queued batch cannot be dispatched
      */
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true): Batch|TranslateReport {
         $work = $this->workList($locales, $namespaces, $keys, $force);
@@ -99,7 +101,7 @@ final readonly class Translator {
         foreach ($work as $locale => $files) {
             foreach ($files as $fileId => $ids) {
                 foreach (array_chunk($ids, $size) as $chunk) {
-                    $jobs[] = new TranslateBatch($locale, (int) $fileId, $chunk, $force);
+                    $jobs[] = new TranslateBatch($locale, $fileId, $chunk, $force);
                 }
             }
         }

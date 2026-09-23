@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Translation;
 
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
@@ -25,6 +26,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\LocaleCode;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
+use Throwable;
 
 /**
  * Translates one chunk of keys for one locale. Re-checks every key first, so
@@ -40,7 +42,10 @@ final readonly class TranslationRunner {
         private Dispatcher $events,
     ) {}
 
-    /** @param list<int> $keyIds */
+    /**
+     * @param list<int> $keyIds
+     * @throws Throwable when a database transaction fails
+     */
     public function run(string $locale, array $keyIds, bool $force = false): TranslateReport {
         $report = new TranslateReport;
         $target = $this->locales->find($locale) ?? throw new ProsettaException("Unknown locale [$locale].");
@@ -152,7 +157,10 @@ final readonly class TranslationRunner {
         return $outcomes;
     }
 
-    /** @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int} $outcome */
+    /**
+     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int} $outcome
+     * @throws Throwable when a database transaction fails
+     */
     private function persist(TranslationKey $key, ?Translation $existing, string $locale, array $outcome, TranslateReport $report): void {
         $ref = $locale.' '.$key->ref()->toString();
         $report->inputTokens += $outcome['input'];
@@ -178,10 +186,7 @@ final readonly class TranslationRunner {
                 'ai_invocation_id' => $outcome['invocation'],
             ])->save();
 
-            $translation->reviews()->create([
-                'reviewer_id' => null, 'action' => ReviewAction::Submitted,
-                'new_value' => $outcome['value'], 'notes' => 'Machine translation by '.$outcome['model'].'.',
-            ]);
+            $translation->logReview(ReviewAction::Submitted, null, newValue: $outcome['value'], notes: 'Machine translation by '.$outcome['model'].'.');
         });
 
         $report->drafted[] = $ref;
@@ -216,6 +221,10 @@ final readonly class TranslationRunner {
             throw MissingDriverException::make();
         }
 
-        return $this->container->make(TranslationDriver::class);
+        try {
+            return $this->container->make(TranslationDriver::class);
+        } catch (BindingResolutionException $e) {
+            throw new ProsettaException("The bound TranslationDriver could not be built: {$e->getMessage()}", 0, $e);
+        }
     }
 }

@@ -24,6 +24,7 @@ class TranslationFile extends Model {
         return Settings::table('files');
     }
 
+    /** @return HasMany<TranslationKey, $this> */
     public function keys(): HasMany {
         return $this->hasMany(Settings::model('key'), 'file_id');
     }

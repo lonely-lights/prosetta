@@ -10,7 +10,7 @@ namespace LonelyLights\Prosetta\Guard;
  * manual edit and every imported value.
  */
 final readonly class PlaceholderGuard {
-    private const RANGE = '/^\s*[\{\[][-?\d|*,\.*]*[\}\]]/';
+    private const string RANGE = '/^\s*[\{\[][-?\d|*,\.*]*[\}\]]/';
 
     /** @return list<Issue> */
     public function check(string $source, string $candidate, string $locale): array {
@@ -54,7 +54,7 @@ final readonly class PlaceholderGuard {
             $recased = array_values(array_filter($actual, fn (string $found) => $found !== $token && strcasecmp($found, $token) === 0));
 
             $issues[] = $recased !== []
-                ? Issue::error('placeholder_case', "Placeholder $token changed case to {$recased[0]}$context; Laravel treats case as formatting.")
+                ? Issue::error('placeholder_case', "Placeholder $token changed case to $recased[0]$context; Laravel treats case as formatting.")
                 : Issue::error('placeholder_missing', "Placeholder $token is missing$context.");
         }
 

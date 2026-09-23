@@ -45,7 +45,7 @@ final readonly class LangReader {
             : $root->path.'/'.$locale.'/'.$group.'.php';
     }
 
-    /** @return array<string, string> */
+    /** @return array<array-key, string> numeric keys come back as ints, as PHP arrays do */
     public function read(LangRoot $root, string $locale, string $group, FileFormat $format): array {
         $path = $this->path($root, $locale, $group, $format);
 
@@ -76,7 +76,7 @@ final readonly class LangReader {
         return $data;
     }
 
-    /** @return array<string, string> */
+    /** @return array<array-key, string> */
     private function readJson(string $path): array {
         try {
             $data = json_decode($this->files->get($path), true, 512, JSON_THROW_ON_ERROR);
@@ -101,7 +101,7 @@ final readonly class LangReader {
 
     /**
      * @param array<array-key, mixed> $data
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     private function flatten(array $data, string $prefix = ''): array {
         $values = [];

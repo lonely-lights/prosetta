@@ -76,6 +76,21 @@ it('knows when a translation carries blocking issues', function () {
         ->and((new Translation)->hasBlockingIssues())->toBeFalse();
 });
 
+it('appends a review row to a translation\'s audit trail', function () {
+    $translation = makeKey()->translations()->create(['locale' => 'es', 'value' => 'En uso.']);
+
+    $review = $translation->logReview(ReviewAction::Edited, 'user-7', 'Antes', 'En uso.', 'Tightened');
+
+    expect($review->exists)->toBeTrue()
+        ->and($review->translation_id)->toBe($translation->id)
+        ->and($review->reviewer_id)->toBe('user-7')
+        ->and($review->action)->toBe(ReviewAction::Edited)
+        ->and($review->previous_value)->toBe('Antes')
+        ->and($review->new_value)->toBe('En uso.')
+        ->and($review->notes)->toBe('Tightened')
+        ->and($translation->reviews()->count())->toBe(1);
+});
+
 it('scopes to current keys', function () {
     makeKey(key: 'a');
     makeKey(key: 'b')->update(['obsolete_at' => now()]);

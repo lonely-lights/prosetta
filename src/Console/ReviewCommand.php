@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use LonelyLights\Prosetta\ProsettaManager;
 use LonelyLights\Prosetta\Review\ReviewItem;
+use Throwable;
 
 final class ReviewCommand extends Command {
     protected $signature = 'prosetta:review
@@ -18,6 +19,7 @@ final class ReviewCommand extends Command {
 
     protected $description = 'List what waits for review in a locale, or approve every clean candidate.';
 
+    /** @throws Throwable when a database transaction fails */
     public function handle(ProsettaManager $prosetta): int {
         $locale = (string) $this->argument('locale');
         $namespace = $this->option('namespace');

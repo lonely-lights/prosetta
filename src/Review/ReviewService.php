@@ -23,6 +23,7 @@ use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
+use Throwable;
 
 /** Every human action on a translation. Each one checks the locale, leaves a review row and fires an event. */
 final readonly class ReviewService {
@@ -38,6 +39,7 @@ final readonly class ReviewService {
      * Replaces the candidate with a human's value. With $approve, the edit and
      * the approval happen together or not at all: a value with blocking issues,
      * or a self-approval that config forbids, is refused before anything changes.
+     * @throws Throwable when a database transaction fails
      */
     public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
         $translation = $this->load($translationId);
@@ -50,7 +52,7 @@ final readonly class ReviewService {
             throw new ProsettaException('Not approved: issues.');
         }
 
-        if ($approve && $by !== null && ! (bool) config('prosetta.review.allow_self_approval', true)) {
+        if ($approve && $by !== null && ! config('prosetta.review.allow_self_approval', true)) {
             throw new ProsettaException('Not approved: self_approval.');
         }
 
@@ -60,10 +62,7 @@ final readonly class ReviewService {
                 'status' => TranslationStatus::NeedsReview, 'origin' => TranslationOrigin::Manual,
                 'issues' => $issues,
             ]);
-            $translation->reviews()->create([
-                'reviewer_id' => $this->id($by), 'action' => ReviewAction::Edited,
-                'previous_value' => $previous, 'new_value' => $value, 'notes' => $notes,
-            ]);
+            $translation->logReview(ReviewAction::Edited, $this->id($by), $previous, $value, $notes);
 
             if ($approve) {
                 $this->markApproved($translation, $by, $notes);
@@ -82,6 +81,7 @@ final readonly class ReviewService {
     /**
      * Writes a human translation for any current key and target locale,
      * including keys with no translation yet, through the same review trail.
+     * @throws Throwable when a database transaction fails
      */
     public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
         $key = $this->finder->find($keyRef);
@@ -107,7 +107,10 @@ final readonly class ReviewService {
         });
     }
 
-    /** @param int|list<int> $translationIds */
+    /**
+     * @param int|list<int> $translationIds
+     * @throws Throwable when a database transaction fails
+     */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null): ApproveReport {
         $report = new ApproveReport;
 
@@ -135,22 +138,17 @@ final readonly class ReviewService {
             'approved_value' => $translation->value, 'approved_source_hash' => $translation->source_hash,
             'status' => TranslationStatus::Approved, 'reviewed_by' => $this->id($by), 'reviewed_at' => now(),
         ]);
-        $translation->reviews()->create([
-            'reviewer_id' => $this->id($by), 'action' => ReviewAction::Approved,
-            'new_value' => $translation->value, 'notes' => $notes,
-        ]);
+        $translation->logReview(ReviewAction::Approved, $this->id($by), newValue: $translation->value, notes: $notes);
     }
 
+    /** @throws Throwable when a database transaction fails */
     public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
         $translation = $this->load($translationId);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
 
         DB::transaction(function () use ($translation, $by, $notes): void {
             $translation->update(['status' => TranslationStatus::Rejected, 'reviewed_by' => $this->id($by), 'reviewed_at' => now()]);
-            $translation->reviews()->create([
-                'reviewer_id' => $this->id($by), 'action' => ReviewAction::Rejected,
-                'previous_value' => $translation->value, 'notes' => $notes,
-            ]);
+            $translation->logReview(ReviewAction::Rejected, $this->id($by), $translation->value, notes: $notes);
         });
 
         $this->events->dispatch(new TranslationRejected($translation, $this->id($by)));
@@ -158,7 +156,10 @@ final readonly class ReviewService {
         return $translation->refresh();
     }
 
-    /** Approves every current draft or needs-review candidate for a locale (optionally one namespace or group). */
+    /**
+     * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
+     * @throws Throwable when a database transaction fails
+     */
     public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null): ApproveReport {
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
@@ -202,7 +203,7 @@ final readonly class ReviewService {
             return 'already_approved';
         }
 
-        if ($by !== null && ! (bool) config('prosetta.review.allow_self_approval', true)) {
+        if ($by !== null && ! config('prosetta.review.allow_self_approval', true)) {
             $last = $translation->reviews()
                 ->whereIn('action', [ReviewAction::Edited->value, ReviewAction::Submitted->value])
                 ->latest('id')
