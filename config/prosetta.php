@@ -74,6 +74,45 @@ return [
         'reviews' => 'prosetta_reviews',
     ],
 
+    /*
+    | How Prosetta treats a provider that fails. Backoff spaces out retries of
+    | one job; the circuit stops every job from calling a provider that keeps
+    | failing, tests it with one call after a cooldown, and suspends work after
+    | outage_timeout seconds of downtime. A halt (bad key, no credits) trips the
+    | circuit for halt_hold seconds (null = until prosetta:circuit reset).
+    | Suspended work is requeued by prosetta:resume, scheduled every
+    | resume_every minutes when set. Use a shared cache store (Redis) with more
+    | than one worker, so every worker sees the same circuit.
+    */
+    'resilience' => [
+        'cache_store' => env('PROSETTA_CACHE_STORE'),
+        'backoff' => [30, 60, 120, 300, 600, 900],
+        'jitter' => 0.2,
+        'circuit' => [
+            'failure_threshold' => 5,
+            'cooldown' => 300,
+            'cooldown_multiplier' => 2,
+            'max_cooldown' => 3600,
+        ],
+        'outage_timeout' => 21600,
+        'halt_hold' => null,
+        'unknown_errors' => 'transient',
+        'resume_every' => null,
+    ],
+
+    /*
+    | Token budgets (input + output, as drivers report them); null = no limit.
+    | per_run stops only that run; daily and monthly stop every run and
+    | suspend it until the period changes. estimate holds the rates
+    | prosetta:translate --estimate uses before a locale has 50 AI drafts.
+    */
+    'budgets' => [
+        'per_run' => null,
+        'daily' => null,
+        'monthly' => null,
+        'estimate' => ['input_per_char' => 0.3, 'output_per_char' => 0.3, 'input_per_item' => 12, 'output_per_item' => 8],
+    ],
+
     'log_channel' => null,
 
 ];

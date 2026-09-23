@@ -33,3 +33,19 @@ it('resolves model classes from config', function () {
 it('fingerprints values with sha256', function () {
     expect(Fingerprint::of('abc'))->toBe(hash('sha256', 'abc'))->toHaveLength(64);
 });
+
+it('ships the resilience and budget defaults', function () {
+    expect(config('prosetta.resilience.circuit'))->toBe(['failure_threshold' => 5, 'cooldown' => 300, 'cooldown_multiplier' => 2, 'max_cooldown' => 3600])
+        ->and(config('prosetta.resilience.outage_timeout'))->toBe(21600)
+        ->and(config('prosetta.resilience.halt_hold'))->toBeNull()
+        ->and(config('prosetta.resilience.unknown_errors'))->toBe('transient')
+        ->and(config('prosetta.resilience.resume_every'))->toBeNull()
+        ->and(config('prosetta.budgets.daily'))->toBeNull()
+        ->and(config('prosetta.budgets.estimate'))->toBe(['input_per_char' => 0.3, 'output_per_char' => 0.3, 'input_per_item' => 12, 'output_per_item' => 8]);
+});
+
+it('keeps a driver result compatible when it reports no refusals', function () {
+    $result = new \LonelyLights\Prosetta\Data\TranslationBatchResult(['1' => 'Hola'], 'fake', 'm');
+
+    expect($result->refused)->toBe([]);
+});
