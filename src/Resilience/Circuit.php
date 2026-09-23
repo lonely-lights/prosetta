@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Resilience;
 
+use Closure;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use LonelyLights\Prosetta\Events\CircuitClosed;
@@ -15,10 +16,21 @@ use LonelyLights\Prosetta\Events\CircuitOpened;
  * then exactly one caller (holding a lock) tests; success closes it, failure
  * re-opens it with a longer cooldown. A halt trips it for halt_hold seconds,
  * or until reset when halt_hold is null.
+ *
+ * Every state transition (recordSuccess, recordFailure, trip) is serialized
+ * through a short write lock, so two workers racing the same circuit can't
+ * both observe the pre-transition state and double-fire CircuitOpened or a
+ * halt trip.
  */
 final class Circuit {
     /** Seconds the test lock is held before it expires on its own: a job's timeout plus a margin. */
     private const int TEST_LOCK_SECONDS = 330;
+
+    /** Seconds the write lock is held before it expires on its own, well past the time any mutation needs. */
+    private const int WRITE_LOCK_SECONDS = 10;
+
+    /** Seconds a mutation blocks waiting for the write lock before giving up. */
+    private const int WRITE_LOCK_WAIT_SECONDS = 5;
 
     public function __construct(public readonly string $name, private readonly Repository $cache, private readonly Dispatcher $events) {}
 
@@ -53,56 +65,65 @@ final class Circuit {
     }
 
     public function recordSuccess(?Decision $decision = null): void {
-        $state = $this->state();
+        $this->mutate(function () {
+            $state = $this->state();
 
-        if ($state['state'] === 'open') {
-            $this->events->dispatch(new CircuitClosed($this->name, now()->getTimestamp() - (int) $state['opened_at']));
-            $this->cache->forget($this->key());
-        } elseif ($state['failures'] > 0) {
-            $this->cache->forget($this->key());
-        }
+            if ($state['state'] === 'open') {
+                $this->events->dispatch(new CircuitClosed($this->name, now()->getTimestamp() - (int) $state['opened_at']));
+                $this->cache->forget($this->key());
+            } elseif ($state['failures'] > 0) {
+                $this->cache->forget($this->key());
+            }
+        });
 
         $decision?->release();
     }
 
     public function recordFailure(string $message, ?Decision $decision = null): void {
-        $state = $this->state();
-        $now = now()->getTimestamp();
-        $state['message'] = $message;
+        $this->mutate(function () use ($message) {
+            $state = $this->state();
+            $now = now()->getTimestamp();
+            $state['message'] = $message;
 
-        if ($state['state'] === 'closed') {
-            $state['failures']++;
+            if ($state['state'] === 'closed') {
+                $state['failures']++;
 
-            if ($state['failures'] >= $this->setting('failure_threshold', 5)) {
-                $cooldown = $this->setting('cooldown', 300);
-                $state = [...$state, 'state' => 'open', 'opened_at' => $now, 'cooldown' => $cooldown, 'until' => $now + $cooldown, 'reason' => 'outage'];
-                $this->save($state);
-                $this->events->dispatch(new CircuitOpened($this->name, $cooldown, $state['failures'], $message));
+                if ($state['failures'] >= $this->setting('failure_threshold', 5)) {
+                    $cooldown = $this->setting('cooldown', 300);
+                    $state = [...$state, 'state' => 'open', 'opened_at' => $now, 'cooldown' => $cooldown, 'until' => $now + $cooldown, 'reason' => 'outage'];
+                    $this->save($state);
+                    $this->events->dispatch(new CircuitOpened($this->name, $cooldown, $state['failures'], $message));
+                } else {
+                    $this->save($state);
+                }
+            } elseif ($state['reason'] === 'halt') {
+                $hold = $this->haltHold();
+                $this->save([...$state, 'until' => $hold === null ? null : $now + $hold]);
             } else {
-                $this->save($state);
+                $cooldown = min($this->setting('max_cooldown', 3600), (int) round(max(1, $state['cooldown']) * max(1.0, (float) config('prosetta.resilience.circuit.cooldown_multiplier', 2))));
+                $this->save([...$state, 'cooldown' => $cooldown, 'until' => $now + $cooldown]);
             }
-        } elseif ($state['reason'] === 'halt') {
-            $hold = $this->haltHold();
-            $this->save([...$state, 'until' => $hold === null ? null : $now + $hold]);
-        } else {
-            $cooldown = min($this->setting('max_cooldown', 3600), (int) round(max(1, $state['cooldown']) * max(1.0, (float) config('prosetta.resilience.circuit.cooldown_multiplier', 2))));
-            $this->save([...$state, 'cooldown' => $cooldown, 'until' => $now + $cooldown]);
-        }
+        });
 
         $decision?->release();
     }
 
     /** Trips the circuit for a halt; true when it wasn't already halted, so the caller raises TranslationHalted once. */
     public function trip(string $halt, string $message, ?Decision $decision = null): bool {
-        $state = $this->state();
-        $now = now()->getTimestamp();
-        $hold = $this->haltHold();
-        $new = ! ($state['state'] === 'open' && $state['reason'] === 'halt');
+        $new = $this->mutate(function () use ($halt, $message) {
+            $state = $this->state();
+            $now = now()->getTimestamp();
+            $hold = $this->haltHold();
+            $new = ! ($state['state'] === 'open' && $state['reason'] === 'halt');
 
-        $this->save([
-            ...$state, 'state' => 'open', 'reason' => 'halt', 'halt' => $halt, 'message' => $message,
-            'opened_at' => $state['opened_at'] ?? $now, 'cooldown' => $hold ?? 0, 'until' => $hold === null ? null : $now + $hold,
-        ]);
+            $this->save([
+                ...$state, 'state' => 'open', 'reason' => 'halt', 'halt' => $halt, 'message' => $message,
+                'opened_at' => $state['opened_at'] ?? $now, 'cooldown' => $hold ?? 0, 'until' => $hold === null ? null : $now + $hold,
+            ]);
+
+            return $new;
+        });
+
         $decision?->release();
 
         return $new;
@@ -119,6 +140,11 @@ final class Circuit {
     public function reset(): void {
         $this->cache->forget($this->key());
         $this->cache->lock($this->key().':test')->forceRelease();
+    }
+
+    /** Serializes a read-compute-write transition through a short blocking lock, separate from the test lock. */
+    private function mutate(Closure $change): mixed {
+        return $this->cache->lock($this->key().':write', self::WRITE_LOCK_SECONDS)->block(self::WRITE_LOCK_WAIT_SECONDS, $change);
     }
 
     private function key(): string {

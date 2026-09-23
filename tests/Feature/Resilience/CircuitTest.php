@@ -1,9 +1,12 @@
 <?php
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\CircuitOpened;
 use LonelyLights\Prosetta\Resilience\Circuits;
+use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
 
 beforeEach(function () {
@@ -126,4 +129,19 @@ it('remembers every circuit it has handed out', function () {
     app(Circuits::class)->for('other:model');
 
     expect(app(Circuits::class)->names())->toBe(['fake:model', 'other:model']);
+});
+
+it('serializes mutations through a write lock, so a concurrent worker cannot race a state change', function () {
+    Sleep::fake(true, true);
+
+    $writeLock = Settings::cache()->lock('prosetta:circuit:fake:model:write', 10);
+    expect($writeLock->get())->toBeTrue();
+
+    expect(fn () => $this->circuit->recordFailure('boom'))
+        ->toThrow(LockTimeoutException::class);
+
+    $writeLock->release();
+    $this->circuit->recordFailure('boom');
+
+    expect($this->circuit->state()['failures'])->toBe(1);
 });
