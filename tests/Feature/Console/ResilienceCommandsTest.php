@@ -175,8 +175,10 @@ it('merges repeated suspensions of the same run whatever their start time', func
     app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 100), 'outage');
     app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 200), 'outage');
 
-    expect(app(Suspensions::class)->all())->toHaveCount(1)
-        ->and(RunScope::fromArray((new RunScope(['es'], [], [], true, 100))->toArray())->startedAt)->toBe(100);
+    $suspended = array_values(app(Suspensions::class)->all());
+
+    expect($suspended)->toHaveCount(1)
+        ->and($suspended[0]['scope']->startedAt)->toBe(200);
 });
 
 it('keeps a suspension when requeueing it throws', function () {

@@ -61,7 +61,7 @@ A **halt** is a stop for a provider problem that retrying won't fix. It happens 
 
 On a halt:
 1. The circuit is **tripped**: open, with a cooldown of `resilience.halt_hold` seconds. When `halt_hold` is `null`, it stays open until `php artisan prosetta:circuit reset`.
-2. The current job ends quietly (it is deleted from the queue, not marked failed), and its batch is cancelled. The runner's cancelled-batch check already makes the batch's other jobs skip. `failed_jobs` stays reserved for genuine bugs.
+2. The current job ends quietly (it is deleted from the queue, not marked failed), and its batch is cancelled. The runner's cancelled-batch check already makes the batch's other jobs skip. `failed_jobs` stays reserved for genuine bugs and batches the provider rejected.
 3. The run's scope is **suspended** (§6), so nothing is lost.
 4. `TranslationHalted` is raised, with the reason (`rejected`, `quota`, `unknown`) and the exception message.
 
@@ -77,9 +77,9 @@ When `halt_hold` ends, the circuit moves to **testing**, exactly as after an out
   - **On success:** the circuit closes; each suspended scope is queued again through the ordinary `translate()` path, which skips anything already done; the suspension is cleared; `TranslationResumed` is raised.
   - **On failure:** the circuit re-opens with the next cooldown.
 - **Circuit ready to test, no health check:** the scope is queued again. The circuit's own testing state (§4) then lets exactly one of those jobs make the test call while the others wait, so the provider still sees a single request. Waiting on that test call never counts as an outage, even when `outage_timeout` has passed, so the waiting jobs don't suspend and cancel the batch mid-test.
+- **Circuit closed:** the scope is queued again straight away.
 
 Each suspension is cleared **before** its scope is queued again, so a requeued job that suspends the same scope straight away isn't wiped. If queueing throws, the scope is suspended again and the error is rethrown.
-- **Circuit closed:** the scope is queued again straight away.
 
 **Scheduling.** When `resilience.resume_every` is set (minutes), the service provider registers `prosetta:resume` with Laravel's scheduler at that interval, using `withoutOverlapping()`. The interval is a `*/N` cron, so it's clamped to 1–59 minutes. `null` leaves scheduling to the host. The command is also safe to run by hand.
 

@@ -18,6 +18,7 @@ use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\TranslationDrafted;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Guard\GlossaryGuard;
 use LonelyLights\Prosetta\Guard\Issue;
@@ -110,6 +111,10 @@ final readonly class TranslationRunner {
         }
 
         if ($stopped !== null) {
+            if ($stopped instanceof ProviderException) {
+                $stopped->partial = $report;
+            }
+
             throw $stopped;
         }
 

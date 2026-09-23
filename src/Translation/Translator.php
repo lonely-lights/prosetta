@@ -12,8 +12,11 @@ use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
+use LonelyLights\Prosetta\Enums\SuspensionReason;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Models\TranslationKey;
@@ -123,9 +126,19 @@ final readonly class Translator {
                     foreach (array_chunk($ids, $size) as $chunk) {
                         try {
                             $report->merge($this->runner->run($locale, $chunk, $force, $runId));
-                        } catch (ProviderBatchRejected) {
-                            # Only This Chunk Was Refused: Record It as Failed and Go On
-                            $report->failed = [...$report->failed, ...$this->refs($locale, $chunk)];
+                        } catch (ProviderBatchRejected $rejected) {
+                            # Only This Chunk Was Refused: Keep What the Retry Interrupted, and Record the Rest as Failed
+                            $drafted = [];
+
+                            if ($rejected->partial !== null) {
+                                $report->merge($rejected->partial);
+                                $drafted = $rejected->partial->drafted;
+                            }
+
+                            $report->failed = array_values(array_unique([
+                                ...$report->failed,
+                                ...array_diff($this->refs($locale, $chunk), $drafted),
+                            ]));
                         } catch (CallDeferred|ProviderException|BudgetExhausted $e) {
                             $report->stopped = $e->getMessage();
                             $this->suspendSync($e, $scope);
@@ -177,7 +190,9 @@ final readonly class Translator {
      * @return list<string> "{locale} {ref}", as the report lists them
      */
     private function refs(string $locale, array $keyIds): array {
-        return Settings::model('key')::query()->whereKey($keyIds)->orderBy('id')->get()
+        $keyModel = Settings::model('key');
+
+        return $keyModel::query()->whereKey($keyIds)->orderBy((new $keyModel)->getKeyName())->get()
             ->map(fn (TranslationKey $key) => $locale.' '.$key->ref()->toString())->values()->all();
     }
 
@@ -185,8 +200,9 @@ final readonly class Translator {
     private function suspendSync(CallDeferred|ProviderException|BudgetExhausted $e, RunScope $scope): void {
         [$circuit, $reason] = match (true) {
             $e instanceof BudgetExhausted => ['budget', $e->period],
-            $e instanceof CallDeferred => [$e->circuit, $e->reason === 'held' ? 'halted' : 'outage'],
-            default => [(string) $e->circuit, class_basename($e)],
+            $e instanceof CallDeferred => [$e->circuit, ($e->reason === 'held' ? SuspensionReason::Halted : SuspensionReason::Outage)->value],
+            $e instanceof ProviderRejected, $e instanceof ProviderQuotaExhausted => [(string) $e->circuit, SuspensionReason::forHalt($e)->value],
+            default => [(string) $e->circuit, SuspensionReason::Outage->value],
         };
 
         if ($reason !== 'per_run') {
