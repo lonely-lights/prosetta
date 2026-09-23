@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Support;
 
 /** Locale codes are stored exactly as folders name them; these helpers read them loosely. */
-final class LocaleCode {
+final readonly class LocaleCode {
     public static function language(string $code): string {
         return strtolower((string) (preg_split('/[-_]/', $code)[0] ?? $code));
     }

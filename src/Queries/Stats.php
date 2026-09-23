@@ -11,10 +11,10 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
 
-final class Stats {
+final readonly class Stats {
     private const EMPTY = ['keys' => 0, 'approved' => 0, 'drafts' => 0, 'needs_review' => 0, 'stale' => 0, 'missing' => 0, 'issues' => 0, 'tokens' => 0];
 
-    public function __construct(private readonly LocaleSource $locales) {}
+    public function __construct(private LocaleSource $locales) {}
 
     /** @return array<string, array<string, array{keys: int, approved: int, drafts: int, needs_review: int, stale: int, missing: int, issues: int, tokens: int}>> */
     public function summary(?string $locale = null): array {

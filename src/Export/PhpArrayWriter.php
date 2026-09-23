@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Export;
 
 /** Renders a lang array as readable PHP: short arrays, four-space indents, single quotes, real Unicode. */
-final class PhpArrayWriter {
+final readonly class PhpArrayWriter {
     /** @param array<array-key, mixed> $data */
     public function render(array $data, string $header = ''): string {
         $output = "<?php\n\n";

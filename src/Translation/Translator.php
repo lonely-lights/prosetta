@@ -15,11 +15,11 @@ use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\WorkState;
 
-final class Translator {
+final readonly class Translator {
     public function __construct(
-        private readonly LocaleSource $locales,
-        private readonly KeyFinder $finder,
-        private readonly TranslationRunner $runner,
+        private LocaleSource $locales,
+        private KeyFinder $finder,
+        private TranslationRunner $runner,
     ) {}
 
     /**

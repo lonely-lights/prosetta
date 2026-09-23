@@ -6,6 +6,6 @@ namespace LonelyLights\Prosetta\Events;
 
 use LonelyLights\Prosetta\Models\TranslationKey;
 
-final class KeyAdded {
-    public function __construct(public readonly TranslationKey $key) {}
+final readonly class KeyAdded {
+    public function __construct(public TranslationKey $key) {}
 }

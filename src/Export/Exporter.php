@@ -34,16 +34,16 @@ use LonelyLights\Prosetta\Support\Settings;
  * not yet synced, a file never synced, a key the source lacks) is left
  * alone and reported as a conflict unless the export is forced.
  */
-final class Exporter {
+final readonly class Exporter {
     public function __construct(
-        private readonly RootDiscovery $discovery,
-        private readonly LangReader $reader,
-        private readonly LocaleSource $locales,
-        private readonly PathFilter $filter,
-        private readonly PhpArrayWriter $php,
-        private readonly JsonWriter $json,
-        private readonly Filesystem $files,
-        private readonly Dispatcher $events,
+        private RootDiscovery $discovery,
+        private LangReader $reader,
+        private LocaleSource $locales,
+        private PathFilter $filter,
+        private PhpArrayWriter $php,
+        private JsonWriter $json,
+        private Filesystem $files,
+        private Dispatcher $events,
     ) {}
 
     /**

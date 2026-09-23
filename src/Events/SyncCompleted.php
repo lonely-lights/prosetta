@@ -6,6 +6,6 @@ namespace LonelyLights\Prosetta\Events;
 
 use LonelyLights\Prosetta\Sync\SyncReport;
 
-final class SyncCompleted {
-    public function __construct(public readonly SyncReport $report) {}
+final readonly class SyncCompleted {
+    public function __construct(public SyncReport $report) {}
 }

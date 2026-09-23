@@ -29,18 +29,18 @@ use LonelyLights\Prosetta\Translation\TranslateReport;
 use LonelyLights\Prosetta\Translation\Translator;
 
 /** The public surface: what host controllers, commands and the facade call. */
-class ProsettaManager {
+readonly class ProsettaManager {
     public function __construct(
-        private readonly Syncer $syncer,
-        private readonly Renamer $renamer,
-        private readonly Translator $translator,
-        private readonly ReviewService $reviews,
-        private readonly ReviewQueue $queue,
-        private readonly Exporter $exporter,
-        private readonly Stats $stats,
-        private readonly KeyFinder $finder,
-        private readonly Authorizer $authorizer,
-        private readonly LocaleSource $locales,
+        private Syncer $syncer,
+        private Renamer $renamer,
+        private Translator $translator,
+        private ReviewService $reviews,
+        private ReviewQueue $queue,
+        private Exporter $exporter,
+        private Stats $stats,
+        private KeyFinder $finder,
+        private Authorizer $authorizer,
+        private LocaleSource $locales,
     ) {}
 
     /**

@@ -10,7 +10,7 @@ use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Support\Settings;
 
 /** Reads the locales table on every call: few rows, and always fresh in long-lived queue workers. */
-final class DatabaseLocaleSource implements LocaleSource {
+final readonly class DatabaseLocaleSource implements LocaleSource {
     public function source(): string {
         return Settings::sourceLocale();
     }

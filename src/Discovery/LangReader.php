@@ -11,8 +11,8 @@ use LonelyLights\Prosetta\Support\KeyRef;
 use Throwable;
 
 /** Reads lang files the way Laravel loads them, flattened to dot keys in source order. */
-final class LangReader {
-    public function __construct(private readonly Filesystem $files) {}
+final readonly class LangReader {
+    public function __construct(private Filesystem $files) {}
 
     /** @return list<array{group: string, format: FileFormat}> */
     public function groups(LangRoot $root, string $locale): array {

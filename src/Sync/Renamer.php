@@ -14,8 +14,8 @@ use LonelyLights\Prosetta\Queries\KeyFinder;
  * run sync (old key obsolete, new key added), then rename: the translations
  * and their review history move to the new key and the old key is deleted.
  */
-final class Renamer {
-    public function __construct(private readonly KeyFinder $finder) {}
+final readonly class Renamer {
+    public function __construct(private KeyFinder $finder) {}
 
     public function rename(string $from, string $to): TranslationKey {
         $old = $this->finder->find($from) ?? throw new ProsettaException("No key [$from]. Run prosetta:sync first if you only just renamed it.");

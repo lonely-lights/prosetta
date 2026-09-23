@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Support;
 
 /** Applies prosetta.exclude_paths: skipped when reading, refused when writing. */
-final class PathFilter {
+final readonly class PathFilter {
     public static function normalize(string $path): string {
         $real = realpath($path);
 

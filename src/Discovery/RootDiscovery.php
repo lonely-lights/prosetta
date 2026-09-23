@@ -12,8 +12,8 @@ use LonelyLights\Prosetta\Support\PathFilter;
  * hint the translator knows (resolving the translator first so providers'
  * hints are registered), plus config('prosetta.paths') overrides.
  */
-final class RootDiscovery {
-    public function __construct(private readonly PathFilter $filter) {}
+final readonly class RootDiscovery {
+    public function __construct(private PathFilter $filter) {}
 
     /**
      * @param list<string>|null $only limit to these namespaces
@@ -22,7 +22,7 @@ final class RootDiscovery {
     public function roots(?array $only = null): array {
         $candidates = [KeyRef::ROOT => lang_path()];
 
-        if ((bool) config('prosetta.namespaces.discover', true)) {
+        if (config('prosetta.namespaces.discover', true)) {
             $loader = app('translator')->getLoader();
 
             if (method_exists($loader, 'namespaces')) {

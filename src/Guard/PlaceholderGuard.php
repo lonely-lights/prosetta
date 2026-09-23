@@ -9,7 +9,7 @@ namespace LonelyLights\Prosetta\Guard;
  * plural segments and ranges, and HTML tags. Runs on every AI result, every
  * manual edit and every imported value.
  */
-final class PlaceholderGuard {
+final readonly class PlaceholderGuard {
     private const RANGE = '/^\s*[\{\[][-?\d|*,\.*]*[\}\]]/';
 
     /** @return list<Issue> */

@@ -6,6 +6,6 @@ namespace LonelyLights\Prosetta\Events;
 
 use LonelyLights\Prosetta\Export\ExportReport;
 
-final class ExportCompleted {
-    public function __construct(public readonly ExportReport $report) {}
+final readonly class ExportCompleted {
+    public function __construct(public ExportReport $report) {}
 }

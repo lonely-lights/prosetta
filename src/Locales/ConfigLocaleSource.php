@@ -10,7 +10,7 @@ use LonelyLights\Prosetta\Support\LocaleCode;
 use LonelyLights\Prosetta\Support\Settings;
 
 /** For apps without the locales table: prosetta.locales.fallback lists the codes; names are the codes. */
-final class ConfigLocaleSource implements LocaleSource {
+final readonly class ConfigLocaleSource implements LocaleSource {
     private const RTL = ['ar', 'arc', 'ckb', 'dv', 'fa', 'he', 'ks', 'ps', 'sd', 'ug', 'ur', 'yi'];
 
     public function source(): string {

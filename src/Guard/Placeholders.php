@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Guard;
 
 /** Laravel's ":name" replacement tokens. Case matters: :name, :Name and :NAME format differently. */
-final class Placeholders {
+final readonly class Placeholders {
     private const PATTERN = '/:[A-Za-z_][A-Za-z0-9_]*/';
 
     /** @return list<string> */

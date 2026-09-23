@@ -9,7 +9,7 @@ use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 
 /** The derived work states. Nothing is stored; everything follows from hashes and statuses. */
-final class WorkState {
+final readonly class WorkState {
     /** No approved value and no candidate worth reviewing. */
     public static function isMissing(TranslationKey $key, ?Translation $translation): bool {
         if ($translation === null) {

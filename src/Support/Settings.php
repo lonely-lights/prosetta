@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Support;
 
 /** Reads Prosetta's config with its defaults, so no other class repeats them. */
-final class Settings {
+final readonly class Settings {
     private const MODELS = [
         'locale' => \LonelyLights\Prosetta\Models\Locale::class,
         'file' => \LonelyLights\Prosetta\Models\TranslationFile::class,

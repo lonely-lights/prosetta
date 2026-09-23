@@ -11,7 +11,7 @@ use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
 
-final class ReviewQueue {
+final readonly class ReviewQueue {
     /**
      * @param array{status?: string|list<string>, stale?: bool, namespace?: string, group?: string, origin?: string, issues?: bool, search?: string} $filters
      * @return LengthAwarePaginator<int, ReviewItem>

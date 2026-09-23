@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Export;
 
-final class JsonWriter {
+final readonly class JsonWriter {
     /** @param array<array-key, string> $values */
     public function render(array $values): string {
         return json_encode(

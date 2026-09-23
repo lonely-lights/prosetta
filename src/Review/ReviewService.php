@@ -25,13 +25,13 @@ use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
 
 /** Every human action on a translation. Each one checks the locale, leaves a review row and fires an event. */
-final class ReviewService {
+final readonly class ReviewService {
     public function __construct(
-        private readonly Authorizer $authorizer,
-        private readonly PlaceholderGuard $guard,
-        private readonly Dispatcher $events,
-        private readonly KeyFinder $finder,
-        private readonly LocaleSource $locales,
+        private Authorizer $authorizer,
+        private PlaceholderGuard $guard,
+        private Dispatcher $events,
+        private KeyFinder $finder,
+        private LocaleSource $locales,
     ) {}
 
     /**

@@ -32,12 +32,12 @@ use LonelyLights\Prosetta\Support\WorkState;
  * nothing. Results pass the guard; failures get one retry with feedback, and
  * anything still broken is saved as a draft carrying its issues.
  */
-final class TranslationRunner {
+final readonly class TranslationRunner {
     public function __construct(
-        private readonly Container $container,
-        private readonly LocaleSource $locales,
-        private readonly PlaceholderGuard $guard,
-        private readonly Dispatcher $events,
+        private Container $container,
+        private LocaleSource $locales,
+        private PlaceholderGuard $guard,
+        private Dispatcher $events,
     ) {}
 
     /** @param list<int> $keyIds */

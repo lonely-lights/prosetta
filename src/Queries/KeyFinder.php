@@ -8,7 +8,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\KeyRef;
 use LonelyLights\Prosetta\Support\Settings;
 
-final class KeyFinder {
+final readonly class KeyFinder {
     public function find(KeyRef|string $ref): ?TranslationKey {
         $ref = is_string($ref) ? KeyRef::parse($ref) : $ref;
         $fileModel = Settings::model('file');

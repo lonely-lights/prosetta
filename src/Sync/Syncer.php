@@ -32,13 +32,13 @@ use LonelyLights\Prosetta\Support\Settings;
  * locales' files already say. Never writes a file. One transaction: a
  * broken source file aborts everything, so nothing is wrongly obsoleted.
  */
-final class Syncer {
+final readonly class Syncer {
     public function __construct(
-        private readonly RootDiscovery $discovery,
-        private readonly LangReader $reader,
-        private readonly LocaleSource $locales,
-        private readonly PlaceholderGuard $guard,
-        private readonly Dispatcher $events,
+        private RootDiscovery $discovery,
+        private LangReader $reader,
+        private LocaleSource $locales,
+        private PlaceholderGuard $guard,
+        private Dispatcher $events,
     ) {}
 
     /** @param list<string>|null $namespaces */
