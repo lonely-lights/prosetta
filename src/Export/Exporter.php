@@ -183,18 +183,46 @@ final readonly class Exporter {
         $keys = $file->keys()->get()->keyBy(fn (TranslationKey $key) => $key->key);
         $translationModel = Settings::model('translation');
         $translations = $translationModel::query()->where('locale', $locale)->whereIn('key_id', $keys->modelKeys())->get()->keyBy('key_id');
-        $conflicts = [];
+        $unknown = [];
 
         foreach ($onDisk as $key => $value) {
             $model = $keys->get((string) $key);
             $translation = $model === null ? null : $translations->get($model->getKey());
 
             if ($translation === null || $translation->exported_hash !== Fingerprint::of($value)) {
-                $conflicts[] = (string) $key;
+                $unknown[(string) $key] = Fingerprint::of($value);
             }
         }
 
-        return $conflicts;
+        return array_keys(array_diff_key($unknown, $this->moved($unknown, $keys, $onDisk, $locale)));
+    }
+
+    /**
+     * The unknown on-disk keys that hold exactly what Prosetta last exported
+     * for a translation whose own key is not in the file: a key renamed with
+     * prosetta:rename, whose old name is still on disk. Their values are
+     * Prosetta's own, so the export drops them instead of reporting them.
+     *
+     * @param  array<string, string>  $unknown  on-disk key => fingerprint of its value
+     * @param  Collection<string, TranslationKey>  $keys
+     * @param  array<array-key, mixed>  $onDisk
+     * @return array<string, string>
+     */
+    private function moved(array $unknown, Collection $keys, array $onDisk, string $locale): array {
+        if ($unknown === []) {
+            return [];
+        }
+
+        $present = $keys->filter(fn (TranslationKey $key, string $name) => array_key_exists($name, $onDisk))->modelKeys();
+        $translationModel = Settings::model('translation');
+        $exported = $translationModel::query()
+            ->where('locale', $locale)
+            ->whereIn('exported_hash', array_values($unknown))
+            ->whereNotIn('key_id', $present)
+            ->pluck('exported_hash')
+            ->all();
+
+        return array_filter($unknown, fn (string $hash) => in_array($hash, $exported, true));
     }
 
     /**

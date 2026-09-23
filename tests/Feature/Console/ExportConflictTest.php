@@ -29,3 +29,29 @@ it('says which target files it left alone because their source group is gone', f
         ->expectsOutputToContain('source group no longer exists')
         ->assertSuccessful();
 });
+
+it('treats a key it renamed as its own, dropping the old key instead of reporting a conflict', function () {
+    $this->artisan('prosetta:sync')->assertSuccessful();
+    $this->artisan('prosetta:export --locale=es')->assertSuccessful();
+    $source = $this->fixture.'/modules/Identity/Lang/en/onboarding.php';
+    file_put_contents($source, str_replace("'inUse' =>", "'inUseElsewhere' =>", file_get_contents($source)));
+    $this->artisan('prosetta:sync')->assertSuccessful();
+    $this->artisan('prosetta:rename identity::onboarding.toast.accessCode.inUse identity::onboarding.toast.accessCode.inUseElsewhere')->assertSuccessful();
+
+    $this->artisan('prosetta:export --locale=es')->doesntExpectOutputToContain('Conflict')->assertSuccessful();
+
+    $accessCode = (require $this->fixture.'/modules/Identity/Lang/es/onboarding.php')['toast']['accessCode'];
+    expect($accessCode)->not->toHaveKey('inUse')
+        ->and($accessCode['inUseElsewhere'])->toStartWith('Este código de acceso');
+});
+
+it('still reports an unknown key whose value Prosetta never wrote', function () {
+    $this->artisan('prosetta:sync')->assertSuccessful();
+    $this->artisan('prosetta:export --locale=es')->assertSuccessful();
+    $target = $this->fixture.'/modules/Identity/Lang/es/onboarding.php';
+    $values = require $target;
+    $values['toast']['accessCode']['addedByHand'] = 'Escrito a mano.';
+    file_put_contents($target, '<?php return '.var_export($values, true).';');
+
+    $this->artisan('prosetta:export --locale=es')->expectsOutputToContain('addedByHand')->assertFailed();
+});
