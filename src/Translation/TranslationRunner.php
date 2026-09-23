@@ -141,7 +141,7 @@ final readonly class TranslationRunner {
 
     /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool}> */
     private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale, ?string $runId): array {
-        $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch));
+        $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch), $locale);
         $weights = [];
 
         foreach ($batch->items as $item) {

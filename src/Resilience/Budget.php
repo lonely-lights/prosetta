@@ -9,18 +9,18 @@ use LonelyLights\Prosetta\Events\BudgetReached;
 use LonelyLights\Prosetta\Support\Settings;
 
 /**
- * Token budgets per run, day and month, counted in the cache after each
- * call and checked before the next. A batch can overshoot by at most its own
- * tokens; that is the price of not estimating every call.
+ * Token budgets per run, day and month, summed from the durable usage
+ * ledger and checked before the next call. A batch can overshoot by at most
+ * its own tokens; that is the price of not estimating every call.
  */
 final readonly class Budget {
-    public function __construct(private Dispatcher $events) {}
+    public function __construct(private Dispatcher $events, private UsageLedger $ledger) {}
 
     public function exhausted(?string $runId): ?string {
-        foreach ($this->periods($runId) as $period => [$key]) {
+        foreach ($this->periods($runId) as $period => $bounds) {
             $limit = $this->limit($period);
 
-            if ($limit !== null && $this->used($key) >= $limit) {
+            if ($limit !== null && $this->used($bounds) >= $limit) {
                 return $period;
             }
         }
@@ -28,19 +28,20 @@ final readonly class Budget {
         return null;
     }
 
+    /** $tokens is unused: the ledger row is the record; this only checks whether a period has just crossed its limit. */
     public function record(?string $runId, int $tokens): void {
-        if ($tokens <= 0) {
-            return;
-        }
-
         $cache = Settings::cacheStore();
 
-        foreach ($this->periods($runId) as $period => [$key, $ttl]) {
-            $cache->add($key, 0, $ttl);
-            $used = $cache->increment($key, $tokens);
+        foreach ($this->periods($runId) as $period => $bounds) {
             $limit = $this->limit($period);
 
-            if ($limit !== null && $used >= $limit && $cache->add("$key:reached", true, $ttl)) {
+            if ($limit === null) {
+                continue;
+            }
+
+            $used = $this->used($bounds);
+
+            if ($used >= $limit && $cache->add("prosetta:budget:$period:{$bounds['key']}:reached", true, $bounds['ttl'])) {
                 $this->events->dispatch(new BudgetReached($period, $used, $limit));
             }
         }
@@ -50,8 +51,8 @@ final readonly class Budget {
     public function usage(?string $runId = null): array {
         $usage = [];
 
-        foreach ($this->periods($runId) as $period => [$key]) {
-            $usage[$period] = ['used' => $this->used($key), 'limit' => $this->limit($period)];
+        foreach ($this->periods($runId) as $period => $bounds) {
+            $usage[$period] = ['used' => $this->used($bounds), 'limit' => $this->limit($period)];
         }
 
         return $usage;
@@ -61,24 +62,25 @@ final readonly class Budget {
      * Daily, then monthly, then per_run: exhausted() names the first one reached, so a run over
      * both a shared budget and its own is suspended (per_run alone isn't) and resumes later.
      *
-     * @return array<string, array{0: string, 1: int}> period => [cache key, seconds to keep it]
+     * @return array<string, array{key: string, runId: ?string, from: ?\Carbon\CarbonInterface, ttl: int}>
      */
     private function periods(?string $runId): array {
         $now = now();
         $periods = [
-            'daily' => ['prosetta:budget:day:'.$now->format('Y-m-d'), 2 * 86400],
-            'monthly' => ['prosetta:budget:month:'.$now->format('Y-m'), 40 * 86400],
+            'daily' => ['key' => $now->format('Y-m-d'), 'runId' => null, 'from' => $now->copy()->startOfDay(), 'ttl' => 2 * 86400],
+            'monthly' => ['key' => $now->format('Y-m'), 'runId' => null, 'from' => $now->copy()->startOfMonth(), 'ttl' => 40 * 86400],
         ];
 
         if ($runId !== null) {
-            $periods['per_run'] = ["prosetta:budget:run:$runId", 7 * 86400];
+            $periods['per_run'] = ['key' => $runId, 'runId' => $runId, 'from' => null, 'ttl' => 7 * 86400];
         }
 
         return $periods;
     }
 
-    private function used(string $key): int {
-        return (int) Settings::cacheStore()->get($key, 0);
+    /** @param array{key: string, runId: ?string, from: ?\Carbon\CarbonInterface, ttl: int} $bounds */
+    private function used(array $bounds): int {
+        return $this->ledger->sum($bounds['runId'], $bounds['from']);
     }
 
     private function limit(string $period): ?int {

@@ -29,19 +29,41 @@ final readonly class Estimator {
 
         foreach ($this->translator->workList($locales, $namespaces, $keys, $force) as $locale => $files) {
             $ids = array_merge(...array_values($files));
-            $chars = (int) $keyModel::query()->whereKey($ids)->get(['source_value'])->sum(fn ($key) => mb_strlen((string) $key->source_value));
+            $lengths = $keyModel::query()->whereKey($ids)->get(['source_value'])
+                ->map(fn ($key) => mb_strlen((string) $key->source_value))->all();
+            $chars = (int) array_sum($lengths);
             $strings = count($ids);
             $history = $this->history($locale);
 
             $estimates[$locale] = $history !== null
-                ? ['strings' => $strings, 'chars' => $chars, 'input' => (int) round($history['input'] * $chars), 'output' => (int) round($history['output'] * $chars), 'from_history' => true]
+                ? ['strings' => $strings, 'chars' => $chars, 'input' => (int) round($this->fromHistory($history, 'input', $lengths)), 'output' => (int) round($this->fromHistory($history, 'output', $lengths)), 'from_history' => true]
                 : ['strings' => $strings, 'chars' => $chars, 'input' => $this->rate('input', $chars, $strings), 'output' => $this->rate('output', $chars, $strings), 'from_history' => false];
         }
 
         return $estimates;
     }
 
-    /** @return array{input: float, output: float}|null tokens per source character, from this locale's AI drafts */
+    /**
+     * Scales the locale's real per-string cost (the history median) by the default model's
+     * shape, so short-string history no longer inflates long strings: for a work string of
+     * length c, medianPerItem × (defaultTokens(c) ÷ defaultTokens(L)), summed over the list.
+     *
+     * @param array{inPerItem: float, outPerItem: float, l: float} $history
+     * @param list<int> $lengths
+     */
+    private function fromHistory(array $history, string $side, array $lengths): float {
+        $perItem = $side === 'input' ? $history['inPerItem'] : $history['outPerItem'];
+        $atL = $this->defaultTokens($side, $history['l']);
+        $total = 0.0;
+
+        foreach ($lengths as $length) {
+            $total += $atL > 0.0 ? $perItem * ($this->defaultTokens($side, (float) $length) / $atL) : $perItem;
+        }
+
+        return $total;
+    }
+
+    /** @return array{inPerItem: float, outPerItem: float, l: float}|null medians of this locale's AI drafts: tokens per string and source length */
     private function history(string $locale): ?array {
         $translationModel = Settings::model('translation');
         $rows = $translationModel::query()->with('key:id,source_value')
@@ -52,9 +74,32 @@ final readonly class Estimator {
             return null;
         }
 
-        $chars = max(1, (int) $rows->sum(fn ($row) => mb_strlen((string) $row->key?->source_value)));
+        return [
+            'inPerItem' => $this->median($rows->pluck('input_tokens')->map(fn ($v) => (int) $v)->all()),
+            'outPerItem' => $this->median($rows->pluck('output_tokens')->map(fn ($v) => (int) $v)->all()),
+            'l' => $this->median($rows->map(fn ($row) => mb_strlen((string) $row->key?->source_value))->all()),
+        ];
+    }
 
-        return ['input' => $rows->sum('input_tokens') / $chars, 'output' => $rows->sum('output_tokens') / $chars];
+    /** @param list<int> $values */
+    private function median(array $values): float {
+        sort($values);
+        $count = count($values);
+
+        if ($count === 0) {
+            return 0.0;
+        }
+
+        $mid = intdiv($count, 2);
+
+        return $count % 2 === 0 ? ($values[$mid - 1] + $values[$mid]) / 2 : (float) $values[$mid];
+    }
+
+    private function defaultTokens(string $side, float $length): float {
+        $rates = (array) config('prosetta.budgets.estimate', []);
+        $defaultPerItem = $side === 'input' ? 12 : 8;
+
+        return (float) ($rates[$side.'_per_char'] ?? 0.3) * $length + (float) ($rates[$side.'_per_item'] ?? $defaultPerItem);
     }
 
     private function rate(string $side, int $chars, int $strings): int {

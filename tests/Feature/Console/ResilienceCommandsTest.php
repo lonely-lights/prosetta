@@ -17,6 +17,7 @@ use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
+use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\HealthCheckedScriptedDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
@@ -86,7 +87,7 @@ it('tests with the health check after the cooldown and resumes only when it pass
 it('waits for the next day when the daily budget is spent', function () {
     Bus::fake();
     config(['prosetta.budgets.daily' => 10]);
-    app(\LonelyLights\Prosetta\Resilience\Budget::class)->record(null, 10);
+    app(UsageLedger::class)->record(null, 'c', '', 10, 0);
     app()->instance(TranslationDriver::class, new ScriptedDriver);
     suspendSpanish('budget');
 
