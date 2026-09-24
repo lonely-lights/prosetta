@@ -26,7 +26,7 @@ use LonelyLights\Prosetta\Translation\SourceChange;
  * CycleFailures::LIMIT times from its current English.
  */
 final readonly class CycleWork {
-    public function __construct(private LocaleSource $locales, private CycleFailures $failures) {}
+    public function __construct(private LocaleSource $locales, private CycleFailures $failures, private Rejections $rejections) {}
 
     /** @return array<string, array<int, list<int>>> locale => file id => key ids */
     public function build(): array {
@@ -42,6 +42,7 @@ final readonly class CycleWork {
         $auto = $this->locales->autoTranslateTargets();
         $keys = $this->keys();
         $failures = $this->failures->all();
+        $rejections = $this->rejections->all();
         $work = [];
         $held = [];
 
@@ -65,6 +66,8 @@ final readonly class CycleWork {
                     $held[] = "$ref (awaiting human review)";
                 } elseif (CycleFailures::capped($failures, $locale, $key)) {
                     $held[] = sprintf('%s (skipped: translation failed %d times; the cycle tries again once its English changes)', $ref, CycleFailures::LIMIT);
+                } elseif (Rejections::held($rejections, $locale, $key)) {
+                    $held[] = "$ref (held: rejected twice by a reviewer; waiting for a person)";
                 } else {
                     $work[$locale][$key->file_id][] = (int) $key->getKey();
                 }
