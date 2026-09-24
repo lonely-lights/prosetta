@@ -32,6 +32,22 @@ function derivedTranslation(string $ref): ?Translation {
     return Translation::query()->where('key_id', app(KeyFinder::class)->find($ref)->id)->where('locale', 'en_GB')->first();
 }
 
+it('exports only the strings a derived locale changes, keeping a list whole when any item changes', function () {
+    Locale::query()->where('locale_initials', 'en_GB')->update(['replacements' => [
+        ['from' => 'credentials', 'to' => 'details'],
+        ['from' => 'records', 'to' => 'files'],
+        ['from' => 'language', 'to' => 'tongue'],
+    ]]);
+    app(TranslationRunner::class)->run('en_GB', TranslationKey::query()->pluck('id')->map(fn ($id) => (int) $id)->all(), force: true);
+    app(\LonelyLights\Prosetta\Review\ReviewService::class)->approveClean('en_GB');
+
+    app(Exporter::class)->export(['en_GB']);
+
+    expect(require $this->fixture.'/lang/en_GB/auth.php')->toBe(['failed' => 'These details do not match our files.'])
+        ->and(require $this->fixture.'/lang/en_GB/admin/settings.php')->toBe(['steps' => ['Open the menu', 'Choose a tongue']])
+        ->and(file_exists($this->fixture.'/lang/en_GB.json'))->toBeFalse();
+});
+
 it('carries a locale\'s word replacements on its descriptor', function () {
     expect(app(DatabaseLocaleSource::class)->find('en_GB')->replacements)->toBe([
         ['from' => 'credentials', 'to' => 'details'],
