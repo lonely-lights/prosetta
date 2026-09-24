@@ -7,14 +7,15 @@ namespace LonelyLights\Prosetta\Guard;
 /**
  * A language's required and banned terms. When an entry's English term
  * appears in the source (as a whole word, singular or plural, any case), the
- * translation must contain its target (a warning if not) and none of its
- * banned alternatives (an error, which gets the normal retry). The target
- * side is a plain case-insensitive substring match, since many scripts have
- * no word boundaries.
+ * translation must contain its target or one of its accepted forms (a
+ * warning if not) and none of its banned alternatives (an error, which gets
+ * the normal retry). The target side is a plain case-insensitive substring
+ * match, since many scripts have no word boundaries; accept lists the
+ * inflections a substring of the target can't catch (a plural, a possessive).
  */
 final readonly class GlossaryGuard {
     /**
-     * @param list<array{source: string, target: string, banned?: list<string>}> $glossary
+     * @param list<array{source: string, target: string, accept?: list<string>, banned?: list<string>}> $glossary
      * @return list<Issue>
      */
     public function check(string $source, string $translation, array $glossary): array {
@@ -35,11 +36,24 @@ final readonly class GlossaryGuard {
                 }
             }
 
-            if ($target !== '' && mb_stripos($translation, $target) === false) {
+            if ($target !== '' && ! $this->contains($translation, [$target, ...(array) ($entry['accept'] ?? [])])) {
                 $issues[] = Issue::warning('glossary_missing', "\"$term\" should be translated as \"$target\".");
             }
         }
 
         return $issues;
+    }
+
+    /** @param list<mixed> $forms */
+    private function contains(string $translation, array $forms): bool {
+        foreach ($forms as $form) {
+            $form = trim((string) $form);
+
+            if ($form !== '' && mb_stripos($translation, $form) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

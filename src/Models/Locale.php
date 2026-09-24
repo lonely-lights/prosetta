@@ -29,7 +29,7 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property int $sort_order
  * @property bool $auto_translate
  * @property string|null $style_note
- * @property list<array{source: string, target: string, banned: list<string>}> $glossary
+ * @property list<array{source: string, target: string, accept?: list<string>, banned: list<string>}> $glossary
  * @property-read string $code
  *
  * @method static Builder<static> active()

@@ -6,7 +6,7 @@ namespace LonelyLights\Prosetta\Data;
 
 /** What translation needs to know about a locale, with no database attached. */
 final readonly class LocaleDescriptor {
-    /** @param list<array{source: string, target: string, banned: list<string>}> $glossary */
+    /** @param list<array{source: string, target: string, accept?: list<string>, banned: list<string>}> $glossary */
     public function __construct(
         public string $code,
         public string $englishName,
@@ -17,7 +17,7 @@ final readonly class LocaleDescriptor {
         public array $glossary = [],
     ) {}
 
-    /** @return array{code: string, englishName: string, nativeName: string, script: string|null, rtl: bool, styleNote: string|null, glossary: list<array{source: string, target: string, banned: list<string>}>} */
+    /** @return array{code: string, englishName: string, nativeName: string, script: string|null, rtl: bool, styleNote: string|null, glossary: list<array{source: string, target: string, accept?: list<string>, banned: list<string>}>} */
     public function toArray(): array {
         return [
             'code' => $this->code,

@@ -43,3 +43,13 @@ it('lists the auto-translate targets', function () {
 it('ships automation off by default', function () {
     expect(config('prosetta.automation'))->toBe(['every' => null, 'approve' => 'all', 'export' => true, 'rewrite_ratio' => 3.0]);
 });
+
+it('passes a glossary entry\'s accept list through to the descriptor unchanged, also when inherited', function () {
+    $entry = ['source' => 'cohort', 'target' => 'دفعة', 'accept' => ['دفعت', 'دفعات'], 'banned' => ['فوج']];
+    Locale::findByCode('es')->update(['glossary' => [$entry]]);
+    Locale::findByCode('en')->update(['style_note' => 'US spelling.', 'glossary' => [$entry]]);
+
+    expect(app(DatabaseLocaleSource::class)->find('es')->glossary)->toBe([$entry])
+        ->and(app(DatabaseLocaleSource::class)->find('en_GB')->glossary)->toBe([$entry])
+        ->and(app(DatabaseLocaleSource::class)->find('es')->toArray()['glossary'])->toBe([$entry]);
+});

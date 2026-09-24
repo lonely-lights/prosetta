@@ -33,3 +33,25 @@ it('errors on a banned term even when the required term is missing', function ()
 it('checks nothing when the glossary is empty', function () {
     expect((new GlossaryGuard)->check('Your cohort convenes.', 'x', []))->toBe([]);
 });
+
+it('accepts any form in the entry\'s accept list in place of the target', function () {
+    $glossary = [['source' => 'cohort', 'target' => 'دفعة', 'accept' => ['دفعت', 'دفعات'], 'banned' => ['فوج']]];
+
+    expect((new GlossaryGuard)->check('Your cohort convenes.', 'تلتقي دفعتك.', $glossary))->toBe([])
+        ->and((new GlossaryGuard)->check('Two cohorts arrive.', 'تصل دفعات.', $glossary))->toBe([])
+        ->and((new GlossaryGuard)->check('Your Cohort convenes.', 'COHORT', [['source' => 'cohort', 'target' => 'grupo', 'accept' => ['Cohort']]]))->toBe([]);
+});
+
+it('still names the target when neither it nor an accepted form appears', function () {
+    $glossary = [['source' => 'cohort', 'target' => 'دفعة', 'accept' => ['دفعت', 'دفعات']]];
+    $issues = (new GlossaryGuard)->check('Your cohort convenes.', 'يصل الأعضاء.', $glossary);
+
+    expect(array_map(fn ($issue) => $issue->code, $issues))->toBe(['glossary_missing'])
+        ->and($issues[0]->message)->toContain('دفعة')->not->toContain('دفعات');
+});
+
+it('ignores blank accepted forms', function () {
+    $glossary = [['source' => 'cohort', 'target' => 'دفعة', 'accept' => ['', '  ']]];
+
+    expect(array_map(fn ($issue) => $issue->code, (new GlossaryGuard)->check('Your cohort.', 'x', $glossary)))->toBe(['glossary_missing']);
+});
