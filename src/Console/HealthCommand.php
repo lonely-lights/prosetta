@@ -14,36 +14,42 @@ final class HealthCommand extends Command {
 
     protected $description = 'Check the health of the Prosetta automation system.';
 
+    /**
+     * Each problem line starts with a stable code in brackets ([cycle_stale],
+     * [circuit_halted:{name}], [budget:{period}]) and then the human text, so
+     * a host can remove duplicate alerts by the codes while the text changes.
+     */
     public function handle(Circuits $circuits, Budget $budget): int {
         $problems = [];
 
-        // Check if automation is on and last cycle is missing or old
+        # Automation Is On and the Last Cycle Is Missing or Old
         $every = config('prosetta.automation.every');
+
         if ($every !== null && (int) $every > 0) {
             $lastRun = State::get('cycle.last_run');
+            $maxMinutes = (int) $every * 3;
+
             if ($lastRun === null) {
-                $problems[] = 'cycle: automation is on but no cycle has run yet';
-            } else {
-                $maxAge = (int) $every * 3 * 60; // 3 * every minutes in seconds
-                $age = now()->getTimestamp() - (int) $lastRun;
-                if ($age > $maxAge) {
-                    $problems[] = 'cycle: last cycle was '.floor($age / 60).' minutes ago (max: '.(int)($every * 3).')';
-                }
+                $problems[] = '[cycle_stale] automation is on but no cycle has run yet';
+            } elseif (($age = now()->getTimestamp() - (int) $lastRun) > $maxMinutes * 60) {
+                $problems[] = '[cycle_stale] last cycle was '.floor($age / 60)." minutes ago (max: $maxMinutes)";
             }
         }
 
-        // Check if any circuit is halted
+        # A Halted Circuit
         foreach ($circuits->names() as $name) {
             $state = $circuits->for($name)->state();
+
             if ($state['state'] === 'open' && $state['reason'] === 'halt') {
-                $problems[] = "circuit [$name]: halted ({$state['halt']})";
+                $problems[] = "[circuit_halted:$name] circuit [$name]: halted ({$state['halt']})";
             }
         }
 
-        // Check if daily or monthly budget is exhausted
+        # The Daily or Monthly Budget Is Spent
         $exhausted = $budget->exhausted(null);
+
         if ($exhausted !== null) {
-            $problems[] = "$exhausted budget: exhausted";
+            $problems[] = "[budget:$exhausted] $exhausted budget: exhausted";
         }
 
         if ($problems === []) {

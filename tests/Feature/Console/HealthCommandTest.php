@@ -74,3 +74,26 @@ it('shows the last cycle time in prosetta:circuit', function () {
 
     $this->artisan('prosetta:circuit')->expectsOutputToContain('Last cycle:')->assertSuccessful();
 });
+
+it('starts each problem line with a stable code, so the output stays the same as the minutes go by', function () {
+    config(['prosetta.automation.every' => 30, 'prosetta.budgets.daily' => 10]);
+    State::put('cycle.last_run', now()->subMinutes(200)->getTimestamp());
+    app(Circuits::class)->for('test-circuit')->trip('rejected', 'bad key');
+    app(UsageLedger::class)->record(null, 'test', 'es', 10, 0);
+
+    Illuminate\Support\Facades\Artisan::call('prosetta:health');
+    $lines = array_values(array_filter(array_map('trim', explode("\n", Illuminate\Support\Facades\Artisan::output()))));
+
+    expect($lines)->toHaveCount(3)
+        ->and($lines[0])->toStartWith('[cycle_stale] ')->toContain('200 minutes')
+        ->and($lines[1])->toStartWith('[circuit_halted:test-circuit] ')
+        ->and($lines[2])->toStartWith('[budget:daily] ');
+});
+
+it('codes a missing first cycle as stale too', function () {
+    config(['prosetta.automation.every' => 30]);
+
+    Illuminate\Support\Facades\Artisan::call('prosetta:health');
+
+    expect(trim(Illuminate\Support\Facades\Artisan::output()))->toStartWith('[cycle_stale] ');
+});
