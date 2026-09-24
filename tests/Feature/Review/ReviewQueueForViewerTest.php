@@ -104,6 +104,21 @@ it('stops calling a capped key held once a person writes and approves it', funct
         ->and(app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->all())->toBe([]);
 });
 
+it('never calls a key approved when it has no approved value and only an outdated draft, as the cycle still works on it', function () {
+    queueDraft('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.');
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php return ['failed' => 'These credentials do not match our records.', 'throttle' => 'Too many attempts. Wait :seconds seconds.'];");
+    app(Syncer::class)->sync();
+    $key = app(KeyFinder::class)->find('auth.throttle');
+    $translation = Translation::query()->where('key_id', $key->id)->where('locale', 'es')->first();
+
+    expect(\LonelyLights\Prosetta\Review\Status::of($key, $translation, 'es', [], []))->toBe('missing');
+
+    capQueueKey('auth.throttle', 'es');
+    $failures = app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->all();
+
+    expect(\LonelyLights\Prosetta\Review\Status::of($key, $translation, 'es', $failures, []))->toBe('held');
+});
+
 it('shows a person\'s pending value on a capped key as pending, not held', function () {
     capQueueKey('auth.throttle', 'es');
     queueDraft('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.', origin: 'manual');

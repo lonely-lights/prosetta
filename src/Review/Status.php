@@ -35,7 +35,7 @@ final readonly class Status {
 
         # A Capped or Held Key Stays Held Only While It Still Needs Work, as in the Cycle
         if ((CycleFailures::capped($failures, $locale, $key) || Rejections::held($rejections, $locale, $key))
-            && (WorkState::isMissing($key, $translation) || WorkState::isStale($key, $translation))) {
+            && WorkState::needsWork($key, $translation)) {
             return 'held';
         }
 
@@ -43,6 +43,7 @@ final readonly class Status {
             return 'stale';
         }
 
-        return WorkState::isMissing($key, $translation) ? 'missing' : 'approved';
+        # No Approved Value Means Nothing Live, Whatever Outdated Draft Sits There: the Cycle Drafts It Again
+        return $translation?->approved_value === null ? 'missing' : 'approved';
     }
 }
