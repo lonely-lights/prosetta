@@ -120,7 +120,7 @@ Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => 
 });
 ```
 
-`Review` implies `Translate` for the same locale. With no callback, only the `local` environment is allowed. Prosetta also registers the gates `prosetta.translate`, `prosetta.review` and `prosetta.manage`, so `$user->can('prosetta.review', 'ar')` works in policies.
+`Review` implies `Translate` for the same locale, and `Manage` implies `Translate` and `Review` for every locale. With no callback, only the `local` environment is allowed. Prosetta also registers the gates `prosetta.translate`, `prosetta.review` and `prosetta.manage`, so `$user->can('prosetta.review', 'ar')` works in policies.
 
 ## Commands
 
@@ -318,6 +318,43 @@ After an update, `SourceChange::ratio()` compares how much the translation's wor
 ### Notifications, via events
 
 Prosetta raises the event; it doesn't send mail itself (Undaunted's job, a later task). `Cycle::finish()` dispatches `CycleCompleted($report)` — a `CycleReport` with `drafted`, `updated`, `confirmed`, `approved`, `flagged` (a list of `"{locale} {ref}"` for this cycle's drafts with issues, followed by keys that failed this run, keys held back and export-held files, each with its reason in brackets), `files` (paths the export wrote) and `tokens`. Unlike the six resilience events, Prosetta writes no log line for `CycleCompleted` itself. The resilience events that already exist — `TranslationHalted`, `BudgetReached`, `TranslationSuspended` — are the other signals worth listening to: something needs attention, or the cycle stopped running.
+
+## Review core (for review UIs)
+
+A headless layer under `Prosetta::reviewQueue()` and friends, for building a fuller review UI (a queue, a keys matrix, a coverage dashboard) than the one-locale-at-a-time surface above. Every query takes a `Viewer` and every result is a plain data object with `toArray()`, ready for Inertia props or JSON.
+
+**`Viewer::for($user)`** resolves once what a person may do: `translates` and `reviews` (the target locale codes they may translate and review; `Review` implies `Translate`, and a manager gets every target locale), `manages`, and `isEditable`. `Viewer::editable()` reads `prosetta.review.editable` (env `PROSETTA_REVIEW_EDITABLE`); left `null`, it's editable only in the `local` and `staging` environments. It gates people only — a `null` `$by` (the cycle, a command) can always write, in any environment.
+
+**`ReviewQueue::for(Viewer $viewer, array $filters = [], int $page = 1, int $perPage = 50)`** returns a paginator of `QueueItem`, across every locale the viewer can see: everything whose status needs a person. `count()` takes the same arguments without paging; `all()` returns the full unpaginated list. Filters: `locale`, `reason`, `namespace`, `group`, `search`. The reason (from `Status::of()`) is one of:
+
+| Reason | Meaning |
+|---|---|
+| `draft` | The current candidate is AI or derived, with no issues. |
+| `flagged` | The current candidate is AI or derived, with issues. |
+| `pending` | The current candidate is a person's (manual or imported), awaiting review. |
+| `stale` | Approved, but the key's English has changed since. |
+| `held` | Capped: repeated automatic failures, or two rejections from the same English (below). |
+
+**`KeyBrowser::for(Viewer $viewer, array $filters = [], int $page = 1, int $perPage = 50)`** returns a paginator of `KeyRow` — one per current key, with a `cells` map of locale to `KeyCell` — for a matrix or file-by-file editor. Filters: `namespace`, `group`, `locale`, `status`, `search`. A `search` caps at `KeyBrowser::SEARCH_LIMIT` (500) matching rows, to keep the query cheap. `matchCount()` takes the same filters and returns the total. `files()` lists every namespace/group with its key count and how many need work, for a file picker. `key(Viewer $viewer, int $keyId)` returns one key's `KeyDetail` — its `KeyRow` plus each of the viewer's locales' review history — or `null`.
+
+**`Coverage::for(Viewer $viewer)`** returns a `CoverageReport`: per visible locale, its name, native name, mode (`ai` or `derived`), key count, a count per status (including `missing`), and tokens spent this month; plus the last cycle's time and report, each circuit's state, budget usage, `Health::problems()`, and whether review is editable — everything an overview dashboard needs in one call.
+
+**`ReviewDesk`** holds the bigger actions. `approveMatching(Viewer $viewer, array $filters, bool $includeWarnings = false)`, `approveMany(Viewer $viewer, array $expected)` and `rejectMany(Viewer $viewer, array $expected, string $note)` each return a `BatchReport` (`approved`, `rejected`, `skippedWarnings`, `skippedErrors`, `conflicts`, `forbidden` (ids in a language the viewer can't review, or gone, skipped before anything is written), `skipped` by translation id). `estimateRedraft(array $refsByLocale)` returns an array of the `Estimator`'s per-locale estimate (`strings`, `chars`, `input`, `output`, `from_history`); `redraft(Viewer $viewer, array $refsByLocale)` and `runCycle(Viewer $viewer)` return nothing:
+
+- `approveMatching()` approves every reviewable queue item matching `$filters`, skipping anything with blocking issues and, unless `$includeWarnings`, anything with warnings.
+- `approveMany()` and `rejectMany()` act on a chosen set of translation ids. `$expected` maps each id to the fingerprint the page last saw, from `ReviewService::fingerprint()`; one that's changed since is skipped as `conflict` rather than silently overwritten.
+- `estimateRedraft()` prices, and `redraft()` then queues, a fresh forced AI draft for chosen key refs per locale.
+- `runCycle()` requires `Ability::Manage`, then queues one cycle exactly like `prosetta:cycle` run without `--sync` (`Cycle::run()`'s default `$sync = false`).
+
+`approveMatching`, `approveMany`, `rejectMany`, `redraft` and `runCycle` all throw `ReviewLocked` when a person (not the system) acts while review is read-only. `ReviewConflict` is narrower: only `ReviewService`'s single-item `edit()`, `reject()` and `confirm()` throw it, when the fingerprint they're given no longer matches. Batch approval doesn't throw it — `ReviewService::approve()` (and `ReviewDesk::approveMatching()`/`approveMany()` through it) skips a changed item and records `'conflict'` in the report instead; `rejectMany()` calls `reject()` per id and catches `ReviewConflict` itself, counting it the same way.
+
+**Rejection notes and the two-rejection hold.** A note left on `reject()` is sent to the driver with that key's next draft ("A reviewer rejected the previous translation ... {note}"), so the AI sees why last time was refused. `Rejections` (`review.rejections` in `prosetta_state`, per locale and key, with the English's hash and a count) tracks repeats; at `Rejections::LIMIT` (2) rejections from the same English, the key stops going back to the AI and `Status::of()` reports it `held` until a person acts. Editing the English resets the count; a person's own value or an approval clears it.
+
+A controller reading the queue looks like:
+
+```php
+$queue = app(ReviewQueue::class)->for(Viewer::for($request->user()), $request->only(['locale', 'reason', 'namespace', 'group', 'search']));
+```
 
 ## Services for your own admin
 

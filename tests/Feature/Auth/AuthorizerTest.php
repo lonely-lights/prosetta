@@ -46,3 +46,15 @@ it('throws a standard authorization exception', function () {
     expect(fn () => app(Authorizer::class)->authorize($this->user(), Ability::Review, 'es'))
         ->toThrow(AuthorizationException::class, 'review es');
 });
+
+it('lets a manager translate and review every locale, but not a reviewer manage', function () {
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Manage);
+
+    expect(app(Authorizer::class)->allows($this->user(), Ability::Review, 'ar'))->toBeTrue()
+        ->and(app(Authorizer::class)->allows($this->user(), Ability::Translate, 'es'))->toBeTrue();
+
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Review && $locale === 'es');
+
+    expect(app(Authorizer::class)->allows($this->user(), Ability::Manage))->toBeFalse()
+        ->and(app(Authorizer::class)->allows($this->user(), Ability::Manage, 'es'))->toBeFalse();
+});

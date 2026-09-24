@@ -13,6 +13,7 @@ use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\Export\Exporter;
 use LonelyLights\Prosetta\Export\ExportReport;
 use LonelyLights\Prosetta\Models\Translation;
@@ -22,6 +23,7 @@ use LonelyLights\Prosetta\Queries\Stats;
 use LonelyLights\Prosetta\Review\ApproveReport;
 use LonelyLights\Prosetta\Review\ReviewQueue;
 use LonelyLights\Prosetta\Review\ReviewService;
+use LonelyLights\Prosetta\Review\Viewer;
 use LonelyLights\Prosetta\Sync\Renamer;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Sync\SyncReport;
@@ -52,6 +54,10 @@ readonly class ProsettaManager {
      * @throws Throwable when a database transaction fails
      */
     public function sync(?array $namespaces = null, bool $check = false, ?Authenticatable $by = null): SyncReport {
+        if ($by !== null && ! Viewer::editable()) {
+            throw ReviewLocked::make();
+        }
+
         $this->authorizer->authorize($by, Ability::Manage);
 
         if (! $check) {
@@ -77,6 +83,10 @@ readonly class ProsettaManager {
      * @throws Throwable when the queued batch cannot be dispatched
      */
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true, ?Authenticatable $by = null): Batch|TranslateReport {
+        if ($by !== null && ! Viewer::editable()) {
+            throw ReviewLocked::make();
+        }
+
         $codes = $locales !== [] ? $locales : array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets());
 
         foreach ($codes as $code) {
@@ -134,6 +144,10 @@ readonly class ProsettaManager {
      * @param list<string> $namespaces
      */
     public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, ?Authenticatable $by = null, bool $force = false): ExportReport {
+        if ($by !== null && ! Viewer::editable()) {
+            throw ReviewLocked::make();
+        }
+
         $this->authorizer->authorize($by, Ability::Manage);
 
         return $this->exporter->export($locales, $namespaces, $includeDrafts, $dryRun, $force);

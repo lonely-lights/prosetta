@@ -37,6 +37,9 @@ return [
 
     'review' => [
         'allow_self_approval' => true,
+        # null: editable only in the local and staging environments. Writes made by a person
+        # (never by the cycle or a command) are refused when this is false.
+        'editable' => env('PROSETTA_REVIEW_EDITABLE'),
     ],
 
     'ai' => [

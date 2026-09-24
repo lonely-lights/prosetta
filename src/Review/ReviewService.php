@@ -8,6 +8,8 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
 use LonelyLights\Prosetta\Auth\Authorizer;
+use LonelyLights\Prosetta\Automation\CycleFailures;
+use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Enums\Ability;
@@ -18,10 +20,13 @@ use LonelyLights\Prosetta\Events\TranslationApproved;
 use LonelyLights\Prosetta\Events\TranslationRejected;
 use LonelyLights\Prosetta\Events\TranslationSubmitted;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
+use LonelyLights\Prosetta\Exceptions\ReviewConflict;
+use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Support\Fingerprint;
 use LonelyLights\Prosetta\Support\Settings;
 use Throwable;
 
@@ -33,6 +38,8 @@ final readonly class ReviewService {
         private Dispatcher $events,
         private KeyFinder $finder,
         private LocaleSource $locales,
+        private Rejections $rejections,
+        private CycleFailures $failures,
     ) {}
 
     /**
@@ -41,8 +48,10 @@ final readonly class ReviewService {
      * or a self-approval that config forbids, is refused before anything changes.
      * @throws Throwable when a database transaction fails
      */
-    public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
+    public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false, ?string $expected = null): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->current($translation, $expected);
         $this->authorizer->authorize($by, $approve ? Ability::Review : Ability::Translate, $translation->locale);
         $key = $translation->key;
         $previous = $translation->value;
@@ -69,6 +78,9 @@ final readonly class ReviewService {
             }
         });
 
+        $this->rejections->clear($translation->locale, (int) $translation->key_id);
+        $this->failures->clear($translation->locale, (int) $translation->key_id);
+
         $this->events->dispatch(new TranslationSubmitted($translation, $this->id($by)));
 
         if ($approve) {
@@ -84,6 +96,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
+        $this->unlocked($by);
         $key = $this->finder->find($keyRef);
 
         if ($key === null || $key->obsolete_at !== null) {
@@ -109,9 +122,11 @@ final readonly class ReviewService {
 
     /**
      * @param int|list<int> $translationIds
+     * $expected maps a translation id to the fingerprint the page saw; a changed one is skipped as 'conflict'.
      * @throws Throwable when a database transaction fails
      */
-    public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null): ApproveReport {
+    public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null, array $expected = []): ApproveReport {
+        $this->unlocked($by);
         $report = new ApproveReport;
         $translations = array_map(fn ($id) => $this->load((int) $id), (array) $translationIds);
 
@@ -121,6 +136,14 @@ final readonly class ReviewService {
         }
 
         foreach ($translations as $translation) {
+            $id = (int) $translation->getKey();
+
+            if (isset($expected[$id]) && self::fingerprint($translation) !== $expected[$id]) {
+                $report->skipped[$id] = 'conflict';
+
+                continue;
+            }
+
             if (($reason = $this->refusal($translation, $by)) !== null) {
                 $report->skipped[(int) $translation->getKey()] = $reason;
 
@@ -128,6 +151,8 @@ final readonly class ReviewService {
             }
 
             DB::transaction(fn () => $this->markApproved($translation, $by, $notes));
+            $this->rejections->clear($translation->locale, (int) $translation->key_id);
+            $this->failures->clear($translation->locale, (int) $translation->key_id);
 
             $report->approved[] = (int) $translation->getKey();
             $this->events->dispatch(new TranslationApproved($translation, $this->id($by)));
@@ -146,14 +171,22 @@ final readonly class ReviewService {
     }
 
     /** @throws Throwable when a database transaction fails */
-    public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+    public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null, ?string $expected = null): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->current($translation, $expected);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
+        $alreadyRejected = $translation->status === TranslationStatus::Rejected;
 
         DB::transaction(function () use ($translation, $by, $notes): void {
             $translation->update(['status' => TranslationStatus::Rejected, 'reviewed_by' => $this->id($by), 'reviewed_at' => now()]);
             $translation->logReview(ReviewAction::Rejected, $this->id($by), $translation->value, notes: $notes);
         });
+
+        # A Double-Submitted Reject Counts Once Toward Holding the Key
+        if (! $alreadyRejected) {
+            $this->rejections->record($translation);
+        }
 
         $this->events->dispatch(new TranslationRejected($translation, $this->id($by)));
 
@@ -167,8 +200,10 @@ final readonly class ReviewService {
      * whose approval already matches the key's current English.
      * @throws Throwable when a database transaction fails
      */
-    public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+    public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null, ?string $expected = null): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->current($translation, $expected);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
         $key = $translation->key;
 
@@ -200,6 +235,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false, ?int $since = null): ApproveReport {
+        $this->unlocked($by);
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -226,6 +262,19 @@ final readonly class ReviewService {
             ->all();
 
         return $this->approve($ids, $by);
+    }
+
+    /** What a page saw of a translation: any change to its candidate, approval, status or English changes this. */
+    public static function fingerprint(Translation $translation): string {
+        return Fingerprint::of(json_encode([
+            $translation->value, $translation->approved_value, $translation->status->value, $translation->source_hash, $translation->approved_source_hash,
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    private function current(Translation $translation, ?string $expected): void {
+        if ($expected !== null && self::fingerprint($translation) !== $expected) {
+            throw new ReviewConflict((int) $translation->getKey());
+        }
     }
 
     private function refusal(Translation $translation, ?Authenticatable $by): ?string {
@@ -259,6 +308,13 @@ final readonly class ReviewService {
         }
 
         return null;
+    }
+
+    /** People can't change translations where review is read-only; the system (no user) always can. */
+    private function unlocked(?Authenticatable $by): void {
+        if ($by !== null && ! Viewer::editable()) {
+            throw ReviewLocked::make();
+        }
     }
 
     private function load(int $id): Translation {

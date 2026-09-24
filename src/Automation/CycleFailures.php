@@ -14,7 +14,7 @@ use Throwable;
  * cycle.failures as locale => key id => {hash, count, run, ref}. Once a key
  * has failed LIMIT times from the same English, the cycle stops sending it
  * and reports it instead; an English edit starts the count again, and a
- * successful draft removes the entry.
+ * successful draft or a person's value removes the entry.
  */
 final readonly class CycleFailures {
     public const string KEY = 'cycle.failures';
@@ -47,6 +47,27 @@ final readonly class CycleFailures {
                 $count = is_array($entry) && ($entry['hash'] ?? null) === $key->source_hash ? (int) ($entry['count'] ?? 0) : 0;
                 $map[$locale][$id] = ['hash' => $key->source_hash, 'count' => $count + 1, 'run' => $runId, 'ref' => $key->ref()->toString()];
             }
+
+            if (($map[$locale] ?? null) === []) {
+                unset($map[$locale]);
+            }
+
+            return $map === [] ? null : $map;
+        }, []);
+    }
+
+    /**
+     * Forgets a key's failures in one locale, once a person has given it a value.
+     * @throws Throwable when the transaction fails
+     */
+    public function clear(string $locale, int $keyId): void {
+        if (! isset($this->all()[$locale][(string) $keyId])) {
+            return;
+        }
+
+        State::update(self::KEY, function (mixed $stored) use ($locale, $keyId): ?array {
+            $map = is_array($stored) ? $stored : [];
+            unset($map[$locale][(string) $keyId]);
 
             if (($map[$locale] ?? null) === []) {
                 unset($map[$locale]);

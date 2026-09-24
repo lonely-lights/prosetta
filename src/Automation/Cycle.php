@@ -160,6 +160,7 @@ final readonly class Cycle {
         );
 
         State::put('cycle.last_run', now()->getTimestamp());
+        State::put('cycle.last_report', [...$report->toArray(), 'at' => now()->getTimestamp()]);
 
         if ($batchId !== null) {
             State::put('cycle.finished_batch', $batchId);

@@ -19,7 +19,7 @@ beforeEach(function () {
     $this->useFixtureApp();
     $this->seedLocales();
     app(Syncer::class)->sync();
-    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $locale === 'es' || $ability === Ability::Manage);
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $locale === 'es');
 });
 
 function draftFor(string $ref, string $locale, string $value): Translation {

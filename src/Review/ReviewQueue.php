@@ -6,12 +6,17 @@ namespace LonelyLights\Prosetta\Review;
 
 use BackedEnum;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
+use LonelyLights\Prosetta\Automation\CycleFailures;
+use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
 
 final readonly class ReviewQueue {
+    public function __construct(private CycleFailures $failures, private Rejections $rejections) {}
+
     /**
      * @param array{status?: string|list<string>, stale?: bool, namespace?: string, group?: string, origin?: string, issues?: bool, search?: string} $filters
      * @return LengthAwarePaginator<int, ReviewItem>
@@ -102,6 +107,65 @@ final readonly class ReviewQueue {
         return $query->orderBy("$f.namespace")->orderBy("$f.group")->orderBy("$k.id")
             ->paginate($perPage)
             ->through(fn (TranslationKey $key) => MissingItem::fromKey($key, $locale));
+    }
+
+    /**
+     * What needs a person, across the viewer's languages.
+     *
+     * @param array{locale?: ?string, reason?: ?string, namespace?: ?string, group?: ?string, search?: ?string} $filters
+     * @return LengthAwarePaginator<int, QueueItem>
+     */
+    public function for(Viewer $viewer, array $filters = [], int $page = 1, int $perPage = 50): LengthAwarePaginator {
+        $items = $this->all($viewer, $filters);
+
+        return new Paginator(array_slice($items, ($page - 1) * $perPage, $perPage), count($items), $perPage, $page);
+    }
+
+    /** @param array{locale?: ?string, reason?: ?string, namespace?: ?string, group?: ?string, search?: ?string} $filters */
+    public function count(Viewer $viewer, array $filters = []): int {
+        return count($this->all($viewer, $filters));
+    }
+
+    /**
+     * @param array{locale?: ?string, reason?: ?string, namespace?: ?string, group?: ?string, search?: ?string} $filters
+     * @return list<QueueItem>
+     */
+    public function all(Viewer $viewer, array $filters = []): array {
+        $locales = array_values(array_filter($viewer->locales(), fn (string $code) => ($filters['locale'] ?? null) === null || $code === $filters['locale']));
+        $keyModel = Settings::model('key');
+        $translationModel = Settings::model('translation');
+        $keys = $keyModel::query()->with('file')->whereNull('obsolete_at')->orderBy('id')->get()
+            ->filter(fn (TranslationKey $key) => (($filters['namespace'] ?? null) === null || $key->file->namespace === $filters['namespace'])
+                && (($filters['group'] ?? null) === null || $key->file->group === $filters['group']))
+            ->sortBy(fn (TranslationKey $key) => [$key->file->namespace, $key->file->group, $key->getKey()])
+            ->values();
+        $failures = $this->failures->all();
+        $rejections = $this->rejections->all();
+        $search = mb_strtolower((string) ($filters['search'] ?? ''));
+        $items = [];
+
+        foreach ($locales as $locale) {
+            $translations = $translationModel::query()->where('locale', $locale)->whereIn('key_id', $keys->modelKeys())->get()->keyBy('key_id');
+
+            foreach ($keys as $key) {
+                $translation = $translations->get($key->getKey());
+                $reason = Status::of($key, $translation, $locale, $failures, $rejections);
+
+                if (! in_array($reason, Status::NEEDS_PERSON, true) || (($filters['reason'] ?? null) !== null && $reason !== $filters['reason'])) {
+                    continue;
+                }
+
+                $item = QueueItem::from($key, $translation, $locale, $reason);
+
+                if ($search !== '' && ! str_contains(mb_strtolower(implode("\n", [$item->keyRef, $item->source, (string) $item->candidate, (string) $item->approved])), $search)) {
+                    continue;
+                }
+
+                $items[] = $item;
+            }
+        }
+
+        return $items;
     }
 
     /**

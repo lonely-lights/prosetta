@@ -19,6 +19,11 @@ abstract class TestCase extends Orchestra {
         return [ProsettaServiceProvider::class];
     }
 
+    /** Testbench runs as "testing", where review writes are locked by default; the package's own tests edit freely. */
+    protected function defineEnvironment($app): void {
+        $app['config']->set('prosetta.review.editable', true);
+    }
+
     protected function defineDatabaseMigrations(): void {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations/locales');

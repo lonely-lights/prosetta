@@ -81,8 +81,23 @@ final readonly class TranslationRunner {
             return new TranslationItem((string) $key->getKey(), $key->ref()->toString(), $key->source_value, $key->context, $key->max_length, $key->placeholders ?? [], $current?->approved_value, $previousSource);
         })->values()->all();
 
+        # A Reviewer's Rejection Note Goes to the Model With That Key's Next Draft
+        $notes = [];
+
+        foreach ($keys as $id => $key) {
+            $current = $existing->get($id);
+
+            if ($current !== null && $current->status === TranslationStatus::Rejected) {
+                $review = $current->reviews()->where('action', ReviewAction::Rejected->value)->latest('id')->first();
+
+                if ($review !== null && ($review->notes ?? '') !== '') {
+                    $notes[(string) $id] = ["A reviewer rejected the previous translation (\"{$current->value}\"): {$review->notes}"];
+                }
+            }
+        }
+
         $source = $this->locales->source();
-        $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
+        $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items, $notes);
 
         # A Derived Locale Comes From the English by Word Replacement: No Driver, No Provider, No Tokens
         $driver = $target->replacements !== [] ? null : $this->driver();
@@ -107,7 +122,13 @@ final readonly class TranslationRunner {
                     break;
                 }
 
-                $feedback = array_map(fn (array $outcome) => array_map(fn (Issue $issue) => $issue->message, $outcome['issues']), $failing);
+                # Each Retried Key Keeps Its Rejection Note, Followed by What the Guard Found
+                $feedback = [];
+
+                foreach ($failing as $id => $outcome) {
+                    $feedback[$id] = array_merge($notes[(string) $id] ?? [], array_map(fn (Issue $issue) => $issue->message, $outcome['issues']));
+                }
+
                 $retryItems = array_values(array_filter($items, fn (TranslationItem $item) => array_key_exists($item->id, $failing)));
                 $retried = $this->attempt($driver, $batch->withItems($retryItems)->withFeedback($feedback), $locale, $runId);
 

@@ -12,6 +12,8 @@ use LonelyLights\Prosetta\Enums\Ability;
 /**
  * The one place a host decides who may do what, per locale:
  * Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => ...).
+ * A user allowed Manage may also translate and review every locale, and
+ * one allowed Review for a locale may translate it.
  * With no hook, only the local environment is allowed. A null user is the
  * system (console, queue) and is always allowed.
  */
@@ -32,6 +34,11 @@ final class Authorizer {
         }
 
         if (($this->callback)($user, $ability, $locale) === true) {
+            return true;
+        }
+
+        # Manage Covers Every Language; Review Implies Translate
+        if ($ability !== Ability::Manage && ($this->callback)($user, Ability::Manage, null) === true) {
             return true;
         }
 
