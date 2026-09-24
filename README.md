@@ -153,6 +153,8 @@ Any other `Throwable` from the driver is handled according to `resilience.unknow
 
 A halt trips the circuit, ends the current job quietly (deleted, not failed), cancels its batch and suspends the run's scope for `prosetta:resume`.
 
+A synchronous run (`--sync`, or `translate(queue: false)`) can't wait out a transient error the way a queued job does, so it stops at the first one and suspends its scope. The suspension's reason is `outage` only when the circuit has been open longer than `outage_timeout`; a single 503 or an open circuit that hasn't reached it is suspended as `unknown`. A queued job never suspends for a transient error before `outage_timeout`: it releases itself and tries again.
+
 **Per-string refusals** (a provider's safety filter declines some strings) aren't exceptions: `TranslationBatchResult::$refused` (item id => reason) records them as failed with a `refused` issue, and the issue-retry loop leaves them alone.
 
 **`ChecksHealth`** is an optional contract for your driver:
@@ -238,7 +240,7 @@ Three columns on `prosetta_locales` (added by `add_automation_columns`, a Proset
 |---|---|---|
 | `auto_translate` | boolean, default false | The cycle drafts every key that needs work in this language: missing, a stale candidate, or a rejected candidate, not only edited keys. |
 | `style_note` | text, nullable | Sent with every batch for this language, through `LocaleDescriptor::$styleNote`. |
-| `glossary` | json, nullable | A list of `{"source": "cohort", "target": "دفعة", "banned": ["فوج", "مجموعة"]}` entries. `banned` is optional. |
+| `glossary` | json, nullable | A list of `{"source": "cohort", "target": "دفعة", "accept": ["دفعت", "دفعات"], "banned": ["فوج", "مجموعة"]}` entries. `accept` and `banned` are optional. |
 
 `Locale::autoTranslate()` scopes to it, and `DatabaseLocaleSource::autoTranslateTargets()` returns the codes (excluding the source locale). A regional code (`en_GB` of `en`) with no note or glossary of its own falls back to its base language's, field by field: it gets the base's `style_note` only if it has none of its own, and the base's `glossary` only if its own is empty.
 
@@ -247,7 +249,7 @@ Three columns on `prosetta_locales` (added by `add_automation_columns`, a Proset
 `GlossaryGuard` runs after `PlaceholderGuard` in the runner, for every entry whose `source` term appears in the English:
 
 - matched as a whole word, singular or plural (an optional trailing `s` or `es`), case-insensitively, against the source;
-- the translation must then contain `target` — checked as a plain case-insensitive substring, not a word boundary match, because many scripts (Arabic, Chinese, …) have none. Missing it is a **warning**, `glossary_missing`;
+- the translation must then contain `target` or any form in the entry's optional `accept` list — each checked as a plain case-insensitive substring, not a word boundary match, because many scripts (Arabic, Chinese, …) have none. Missing them all is a **warning**, `glossary_missing`, whose message names the `target`. Use `accept` for inflections a substring of the target can't catch: Arabic `دفعة` becomes `دفعات` in the plural and `دفعتك` with a pronoun suffix (the ة turns into ت), so its entry accepts `دفعت` and `دفعات`;
 - if the translation contains any `banned` term (also a case-insensitive substring), that's an **error**, `glossary_banned`. It gets the normal single retry with feedback ("Use \"دفعة\" for \"cohort\", not \"فوج\".").
 
 Warnings (glossary or the rewrite check below) block auto-approval but not export under `include_drafts`.
@@ -264,16 +266,21 @@ After an update, `SourceChange::ratio()` compares how much the translation's wor
 
 **Which languages get updates:** every target language with an approved translation of the edited key, whether or not it's auto-translate. **Which languages get drafts of keys they never had:** only auto-translate languages. `CycleWork::build()` computes this per key and locale.
 
+**What the cycle holds back.** `CycleWork::plan()` leaves two kinds of key out of the work and reports each one as flagged instead, with its reason:
+
+- **A person's candidate.** A key whose row is a non-AI candidate (origin `manual` or `imported`, status `draft` or `needs_review`) is never sent to the AI, whether that candidate was made from the current English or an older one. It shows as `"{locale} {ref} (awaiting human review)"`. This only changes the cycle: `prosetta:translate` is as before.
+- **A key that keeps failing.** When the provider refuses a key, returns no value for it, or rejects its whole batch in a cycle run, the runner adds 1 to that (locale, key)'s count in `prosetta_state` under `cycle.failures`, together with the key's source hash. Once the count reaches 3 (`CycleFailures::LIMIT`) from the key's current English, the cycle stops sending it and flags it as skipped. Editing the English starts the count again, and a successful draft of the key clears it. Each failure is flagged in the cycle it happened in, too. Only cycle runs count; a manual `prosetta:translate` doesn't.
+
 ### The cycle
 
-`prosetta:cycle` (registered by the service provider on a `*/N * * * *` schedule when `automation.every` is set, with `withoutOverlapping()`; also runnable by hand):
+`prosetta:cycle` (registered by the service provider on a `*/N * * * *` schedule when `automation.every` is set, with `withoutOverlapping(max(2 × N, 10))`, so the overlap lock of a cycle killed mid-run expires after two intervals rather than Laravel's default 24 hours; also runnable by hand):
 
 1. **Guard.** The running cycle's batch id is kept in `prosetta_state` (survives a cache clear). If it's still going, the command logs and exits without doing anything. A stored batch counts as abandoned — and a new cycle starts anyway, with a warning logged — only once it's missing, or every job in it has finished or failed (or it was cancelled) *and* that settled for longer than `max(60 minutes, 2 × automation.every)`; until then the guard holds even if `FinishCycle` seems to be taking a while.
 2. **Sync** every namespace.
 3. **Confirm** cosmetic edits (above); no AI.
 4. **Build the work:** update-mode keys (any target language, substantive change) and draft-mode keys (auto-translate languages only).
 5. **Queue** it as one `Translator` run, so budgets, circuits and suspensions all apply. Queued, the batch's `finally` callback dispatches `FinishCycle`; `--sync` runs it inline instead.
-6. **Finish** (`Cycle::finish()`, run by `FinishCycle` or inline): approve this cycle's own clean AI drafts per `automation.approve` — drafts written since the cycle started, with *no* issues at all (not even a glossary or rewrite warning); export the languages that got at least one approval, when `automation.export` is true; record the heartbeat (`cycle.last_run` in `prosetta_state`); raise `CycleCompleted` with a report of what happened.
+6. **Finish** (`Cycle::finish()`, run by `FinishCycle` or inline): approve this cycle's own clean AI drafts per `automation.approve` — drafts written since the cycle started, with *no* issues at all (not even a glossary or rewrite warning); export the languages that got at least one approval, when `automation.export` is true, except for any lang file holding a current non-AI candidate (a hand edit the sync imported for review, say), which is left as it is and flagged as `"{locale} {path} (export held: …)"` so the export doesn't revert the edit (`prosetta:export` still writes such files as before); record the heartbeat (`cycle.last_run` in `prosetta_state`); raise `CycleCompleted` with a report of what happened.
 7. **An empty cycle** (nothing to sync, confirm or translate) still records the heartbeat and raises `CycleCompleted` with zero counts.
 
 **Cycle approval only ever touches this cycle's own AI drafts** — origin AI, status still `draft`, no issues, `updated_at` at or after the moment the cycle started. It never approves a draft from an earlier run, and it never touches a person's pending manual edit (`needs_review`), even one with no issues.
@@ -296,14 +303,14 @@ After an update, `SourceChange::ratio()` compares how much the translation's wor
 | Command | What it does |
 |---|---|
 | `prosetta:cycle [--sync]` | Runs one background cycle. Queued by default; `--sync` runs inline and sets CI-friendly exit codes (see above). |
-| `prosetta:health` | Exits 1 and prints why when automation is on and the last cycle is older than `3 × automation.every`, any circuit is halted, or a daily/monthly budget is spent; exits 0 (`healthy`) otherwise. |
+| `prosetta:health` | Exits 1 and prints why when automation is on and the last cycle is older than `3 × automation.every`, any circuit is halted, or a daily/monthly budget is spent; exits 0 (`healthy`) otherwise. Each problem line starts with a stable code in brackets, then the human text: `[cycle_stale]`, `[circuit_halted:{name}]` or `[budget:{period}]`. The text can change from one run to the next (the cycle's age in minutes), so an alerting host should remove duplicates by the codes, not the whole output. |
 | `prosetta:circuit status` | As before, plus the last cycle's time. |
 
 **In CI:** run `prosetta:cycle --sync` as a gate (like `prosetta:sync --check`); it fails the build on anything flagged, stale or suspended, so review happens in the lang files' git diff, not in Prosetta.
 
 ### Notifications, via events
 
-Prosetta raises the event; it doesn't send mail itself (Undaunted's job, a later task). `Cycle::finish()` dispatches `CycleCompleted($report)` — a `CycleReport` with `drafted`, `updated`, `confirmed`, `approved`, `flagged` (a list of `"{locale} {ref}"`), `files` (paths the export wrote) and `tokens`. Unlike the six resilience events, Prosetta writes no log line for `CycleCompleted` itself. The resilience events that already exist — `TranslationHalted`, `BudgetReached`, `TranslationSuspended` — are the other signals worth listening to: something needs attention, or the cycle stopped running.
+Prosetta raises the event; it doesn't send mail itself (Undaunted's job, a later task). `Cycle::finish()` dispatches `CycleCompleted($report)` — a `CycleReport` with `drafted`, `updated`, `confirmed`, `approved`, `flagged` (a list of `"{locale} {ref}"` for this cycle's drafts with issues, followed by keys that failed this run, keys held back and export-held files, each with its reason in brackets), `files` (paths the export wrote) and `tokens`. Unlike the six resilience events, Prosetta writes no log line for `CycleCompleted` itself. The resilience events that already exist — `TranslationHalted`, `BudgetReached`, `TranslationSuspended` — are the other signals worth listening to: something needs attention, or the cycle stopped running.
 
 ## Services for your own admin
 
