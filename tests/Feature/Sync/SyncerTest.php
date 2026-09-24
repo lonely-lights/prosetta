@@ -69,6 +69,30 @@ it('marks translations stale when the English changes', function () {
         ->and($failed->approved_value)->toBe('Estas credenciales no coinciden con nuestros registros.');
 });
 
+it('fills in the English an older approval was made from, only while the key still has that English', function () {
+    app(Syncer::class)->sync();
+    # Approvals Made Before approved_source_value Existed
+    Translation::query()->update(['approved_source_value' => null]);
+    $inUse = translationFor('identity::onboarding.toast.accessCode.inUse', 'es');
+    $inUse->forceFill(['approved_source_hash' => Fingerprint::of('Older English.')])->save();
+
+    app(Syncer::class)->sync();
+    $failed = translationFor('auth.failed', 'es');
+
+    expect($failed->approved_source_value)->toBe($failed->key->source_value)
+        ->and(translationFor('identity::onboarding.toast.accessCode.inUse', 'es')->approved_source_value)->toBeNull();
+});
+
+it('fills in the approved English before the sync that edits it, so that edit can still be an update', function () {
+    app(Syncer::class)->sync();
+    Translation::query()->update(['approved_source_value' => null]);
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php return ['failed' => 'Those details do not match.', 'throttle' => 'Too many login attempts. Please try again in :seconds seconds.'];");
+
+    app(Syncer::class)->sync();
+
+    expect(translationFor('auth.failed', 'es')->approved_source_value)->toBe('These credentials do not match our records.');
+});
+
 it('obsoletes removed keys and files, and restores keys that come back', function () {
     app(Syncer::class)->sync();
     $original = file_get_contents($this->fixture.'/lang/en/auth.php');
