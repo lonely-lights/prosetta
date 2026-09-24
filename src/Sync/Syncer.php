@@ -55,6 +55,9 @@ final readonly class Syncer {
             $targets = array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets());
             $roots = $this->discovery->roots($namespaces);
 
+            # Before Any Key Takes New English, So an Edit in This Very Sync Still Diffs Against What Was Approved
+            $this->recordApprovedSources();
+
             foreach ($roots as $root) {
                 $this->syncRoot($root, $source, $targets, $report, $pending);
             }
@@ -73,6 +76,24 @@ final readonly class Syncer {
         }
 
         return $report;
+    }
+
+    /**
+     * Fills in approved_source_value for approvals made before it was recorded.
+     * Only where the approval's hash still matches the key's English is that
+     * English known for certain; the rest stay null and re-translate afresh.
+     */
+    private function recordApprovedSources(): void {
+        $translations = Settings::table('translations');
+        $keys = Settings::table('keys');
+
+        DB::table($translations)
+            ->whereNull('approved_source_value')
+            ->whereNotNull('approved_value')
+            ->whereExists(fn ($query) => $query->select(DB::raw(1))->from($keys)
+                ->whereColumn("$keys.id", "$translations.key_id")
+                ->whereColumn("$keys.source_hash", "$translations.approved_source_hash"))
+            ->update(['approved_source_value' => DB::table($keys)->select('source_value')->whereColumn("$keys.id", "$translations.key_id")]);
     }
 
     /**
