@@ -1,0 +1,81 @@
+<?php
+
+use Illuminate\Auth\GenericUser;
+use LonelyLights\Prosetta\Auth\Authorizer;
+use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Enums\TranslationStatus;
+use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Review\ReviewQueue;
+use LonelyLights\Prosetta\Review\Viewer;
+use LonelyLights\Prosetta\Sync\Syncer;
+
+beforeEach(function () {
+    $this->useFixtureApp();
+    $this->seedLocales();
+    app(Syncer::class)->sync();
+});
+
+function queueDraft(string $ref, string $locale, string $value, string $origin = 'ai', ?array $issues = null): Translation {
+    $key = app(KeyFinder::class)->find($ref);
+
+    return Translation::query()->updateOrCreate(['key_id' => $key->id, 'locale' => $locale], [
+        'value' => $value, 'source_hash' => $key->source_hash, 'status' => TranslationStatus::Draft, 'origin' => $origin, 'issues' => $issues,
+    ]);
+}
+
+function queueViewer(array $translate): Viewer {
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability !== Ability::Manage && in_array($locale, $translate, true));
+
+    return Viewer::for(new GenericUser(['id' => 'u1']));
+}
+
+it('gives each item that needs a person its reason', function () {
+    queueDraft('auth.throttle', 'es', 'Demasiados intentos.');
+    queueDraft('messages.welcome', 'es', '¡Hola, :nombre!', issues: [['code' => 'placeholder_missing', 'severity' => 'error', 'message' => 'Missing :name.']]);
+    queueDraft('messages.apples', 'es', '{0} Ninguna|{1} Una|[2,*] :count manzanas', origin: 'manual');
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php return ['failed' => 'Those details do not match.', 'throttle' => 'Too many login attempts. Please try again in :seconds seconds.'];");
+    app(Syncer::class)->sync();
+
+    $reasons = collect(app(ReviewQueue::class)->all(queueViewer(['es'])))->pluck('reason', 'keyRef')->all();
+
+    expect($reasons)->toMatchArray([
+        'auth.throttle' => 'draft',
+        'messages.welcome' => 'flagged',
+        'messages.apples' => 'pending',
+        'auth.failed' => 'stale',
+    ]);
+});
+
+it('hides languages the viewer can\'t translate', function () {
+    queueDraft('auth.throttle', 'es', 'Demasiados intentos.');
+    queueDraft('auth.throttle', 'ar', 'محاولات كثيرة.');
+
+    $locales = collect(app(ReviewQueue::class)->all(queueViewer(['es'])))->pluck('locale')->unique()->values()->all();
+
+    expect($locales)->toBe(['es']);
+});
+
+it('filters by reason and search, and pages', function () {
+    queueDraft('auth.throttle', 'es', 'Demasiados intentos.');
+    queueDraft('messages.welcome', 'es', 'Hola', issues: [['code' => 'placeholder_missing', 'severity' => 'error', 'message' => 'x']]);
+    $viewer = queueViewer(['es']);
+
+    expect(app(ReviewQueue::class)->count($viewer, ['reason' => 'flagged']))->toBe(1)
+        ->and(app(ReviewQueue::class)->count($viewer, ['search' => 'DEMASIADOS']))->toBe(1)
+        ->and(app(ReviewQueue::class)->for($viewer, [], 1, 1)->total())->toBe(2)
+        ->and(app(ReviewQueue::class)->for($viewer, [], 1, 1)->items())->toHaveCount(1);
+});
+
+it('shows the English an update was made from, with the word diff', function () {
+    $failed = Translation::query()->where('locale', 'es')->whereHas('key', fn ($q) => $q->where('key', 'failed'))->first();
+    $failed->update(['approved_source_value' => 'These credentials do not match our records.']);
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php return ['failed' => 'These details do not match our records.', 'throttle' => 'Too many login attempts. Please try again in :seconds seconds.'];");
+    app(Syncer::class)->sync();
+
+    $item = collect(app(ReviewQueue::class)->all(queueViewer(['es'])))->firstWhere('keyRef', 'auth.failed');
+
+    expect($item->previousSource)->toBe('These credentials do not match our records.')
+        ->and($item->diff)->toContain('credentials')->toContain('details')
+        ->and($item->toArray())->toHaveKeys(['keyRef', 'reason', 'fingerprint']);
+});
