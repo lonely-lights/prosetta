@@ -409,6 +409,15 @@ interface LocaleSource {
 
 - A hosted Prosetta API (user registration, metered API keys) offered as another `TranslationDriver`. Enabled by D11.
 - The post-MVP items in §3.
+- **A publishable Filament panel** (rollout step 10, decided 2026-09-24). It comes *after* Prosetta is first published (step 9), so it ships as a tagged version that apps install normally.
+  - **Packaging:** an optional plugin. Filament is a suggested dependency, and the plugin only loads when Filament is installed, so headless hosts never pull it in. It targets `filament/filament ^4.0|^5.0` if both pass the tests (5.x needs Livewire 4; both support Laravel 11.28 to 13). Hosts register it on a panel, and can publish its resources to customize them.
+  - **First version, all four areas:**
+    - a **review queue** per language: drafts, flagged strings with their issues, stale translations and pending hand edits; approve, edit and approve, reject, or approve all clean ones;
+    - a **keys browser**: keys by namespace and file, the English beside every language, status, review history, and search;
+    - **language settings**: auto-translate, style note, glossary (with accept and banned forms) and word replacements;
+    - a **dashboard and operations**: coverage per language, the last cycle, circuit and budget health, token usage, and sync, cycle and export actions.
+  - **Built on a shared headless core,** not the database directly: review and browse queries (per language, filtered by status, stale, flagged or pending) and counts, plus the existing `ReviewService` actions. Every screen and action goes through the `Authorizer` hook (manage, or translate/review per language), so permissions behave the same in every host UI.
+  - **Undaunted won't use it.** Its review pages are bespoke Bridge (Inertia) pages built in Undaunted (rollout step 7), on the same shared core. The core is designed with step 7, so it's already in place when the panel is built.
 
 ## 16. Estimates
 
