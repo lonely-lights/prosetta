@@ -13,7 +13,7 @@ beforeEach(function () {
 /** Writes a ledger row and runs the gate's post-call check, as ProviderGate does for a real call. */
 function spend(?string $runId, int $tokens, string $locale = 'es'): void {
     app(UsageLedger::class)->record($runId, 'c', $locale, $tokens, 0);
-    app(Budget::class)->record($runId, $tokens);
+    app(Budget::class)->record($runId);
 }
 
 it('never stops a run when no budget is set', function () {

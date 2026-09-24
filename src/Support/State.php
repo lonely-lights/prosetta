@@ -6,6 +6,8 @@ namespace LonelyLights\Prosetta\Support;
 
 use Closure;
 use Illuminate\Support\Facades\DB;
+use JsonException;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use Throwable;
 
 /** Small durable values (the cycle heartbeat, the running cycle's batch) that a cache clear can't lose. */
@@ -19,7 +21,7 @@ final readonly class State {
     public static function put(string $key, mixed $value): void {
         DB::table(Settings::table('state'))->updateOrInsert(
             ['key' => $key],
-            ['value' => json_encode($value, JSON_THROW_ON_ERROR), 'updated_at' => now()],
+            ['value' => self::encode($key, $value), 'updated_at' => now()],
         );
     }
 
@@ -44,9 +46,18 @@ final readonly class State {
             if ($value === null) {
                 DB::table($table)->where('key', $key)->delete();
             } else {
-                DB::table($table)->where('key', $key)->update(['value' => json_encode($value, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+                DB::table($table)->where('key', $key)->update(['value' => self::encode($key, $value), 'updated_at' => now()]);
             }
         });
+    }
+
+    /** Reports a value JSON can't hold (a resource, say, or invalid UTF-8) as a ProsettaException naming its key. */
+    private static function encode(string $key, mixed $value): string {
+        try {
+            return json_encode($value, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new ProsettaException("The state value for [$key] can't be stored as JSON: {$e->getMessage()}", 0, $e);
+        }
     }
 
     public static function forget(string $key): void {

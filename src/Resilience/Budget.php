@@ -28,8 +28,8 @@ final readonly class Budget {
         return null;
     }
 
-    /** $tokens is unused: the ledger row is the record; this only checks whether a period has just crossed its limit. */
-    public function record(?string $runId, int $tokens): void {
+    /** Called after each ledger row is written: raises BudgetReached once for any period that has just crossed its limit. */
+    public function record(?string $runId): void {
         $cache = Settings::cacheStore();
 
         foreach ($this->periods($runId) as $period => $bounds) {

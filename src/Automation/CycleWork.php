@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Automation;
 
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
@@ -66,7 +66,7 @@ final readonly class CycleWork {
                 } elseif (CycleFailures::capped($failures, $locale, $key)) {
                     $held[] = sprintf('%s (skipped: translation failed %d times; the cycle tries again once its English changes)', $ref, CycleFailures::LIMIT);
                 } else {
-                    $work[$locale][(int) $key->file_id][] = (int) $key->getKey();
+                    $work[$locale][$key->file_id][] = (int) $key->getKey();
                 }
             }
         }

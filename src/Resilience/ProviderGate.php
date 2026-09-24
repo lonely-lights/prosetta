@@ -55,7 +55,7 @@ final readonly class ProviderGate {
             }
 
             $this->ledger->record($runId, $circuit, $locale ?? '', $result->inputTokens, $result->outputTokens);
-            $this->budget->record($runId, $result->inputTokens + $result->outputTokens);
+            $this->budget->record($runId);
             $breaker->recordSuccess($decision);
 
             return $result;

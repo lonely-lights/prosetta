@@ -86,7 +86,7 @@ final readonly class Cycle {
         }
 
         # The Batch Id Isn't Known Until Dispatch, so a Queued Cycle Uses It as Its Run Id (Its Jobs Record Usage Under It)
-        $batch = $this->translator->run($work, $scope, queue: true, finally: static function (Batch $batch) use ($startedAt, $confirmed, $held): void {
+        $batch = $this->translator->run($work, $scope, finally: static function (Batch $batch) use ($startedAt, $confirmed, $held): void {
             FinishCycle::dispatch($batch->id, $batch->id, $startedAt, $confirmed, $held);
         });
 

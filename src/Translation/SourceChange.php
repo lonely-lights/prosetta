@@ -98,9 +98,7 @@ final readonly class SourceChange {
         $text = preg_replace('/\s+/u', ' ', trim($text)) ?? '';
 
         // Trim trailing punctuation and whitespace
-        $text = preg_replace('/[\s.!?…:;]+$/u', '', $text) ?? '';
-
-        return $text;
+        return preg_replace('/[\s.!?…:;]+$/u', '', $text) ?? '';
     }
 
     /**
@@ -311,9 +309,9 @@ final readonly class SourceChange {
     private static function formatGroupedDiff(array $words, ?string $type): string {
         $content = implode(' ', $words);
         if ($type === 'removed') {
-            return "[-{$content}-]";
+            return "[-$content-]";
         } elseif ($type === 'added') {
-            return "{+{$content}+}";
+            return "{+$content+}";
         }
         return $content;
     }
