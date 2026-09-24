@@ -24,8 +24,8 @@ final readonly class UsageLedger {
         ]);
     }
 
-    /** Sums input + output tokens, optionally scoped to a run and/or a created_at window (from inclusive, to exclusive). */
-    public function sum(?string $runId = null, ?CarbonInterface $from = null, ?CarbonInterface $to = null): int {
+    /** Sums input + output tokens, optionally scoped to a run, a created_at window (from inclusive, to exclusive), and/or a locale. */
+    public function sum(?string $runId = null, ?CarbonInterface $from = null, ?CarbonInterface $to = null, ?string $locale = null): int {
         $query = DB::table(Settings::table('usage'));
 
         if ($runId !== null) {
@@ -39,6 +39,8 @@ final readonly class UsageLedger {
         if ($to !== null) {
             $query->where('created_at', '<', $to);
         }
+
+        $query->when($locale !== null, fn ($query) => $query->where('locale', $locale));
 
         return (int) $query->sum('input_tokens') + (int) $query->sum('output_tokens');
     }
