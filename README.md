@@ -234,15 +234,22 @@ Prosetta also writes a line to `log_channel` for each: warning for opened, halte
 
 ### Language settings
 
-Three columns on `prosetta_locales`, created by the published locales migration. A host that owns its own locales table adds them itself:
+Four columns on `prosetta_locales`, created by the published locales migration. A host that owns its own locales table adds them itself:
 
 | Column | Type | Meaning |
 |---|---|---|
 | `auto_translate` | boolean, default false | The cycle drafts every key that needs work in this language: missing, a stale candidate, or a rejected candidate, not only edited keys. |
 | `style_note` | text, nullable | Sent with every batch for this language, through `LocaleDescriptor::$styleNote`. |
 | `glossary` | json, nullable | A list of `{"source": "cohort", "target": "دفعة", "accept": ["دفعت", "دفعات"], "banned": ["فوج", "مجموعة"]}` entries. `accept` and `banned` are optional. |
+| `replacements` | json, nullable | A list of `{"from": "color", "to": "colour"}` entries. When set, the locale is **derived**: see below. |
 
 `Locale::autoTranslate()` scopes to it, and `DatabaseLocaleSource::autoTranslateTargets()` returns the codes (excluding the source locale). A regional code (`en_GB` of `en`) with no note or glossary of its own falls back to its base language's, field by field: it gets the base's `style_note` only if it has none of its own, and the base's `glossary` only if its own is empty.
+
+### Derived locales
+
+A variant of the source language that differs only in spelling (`en_GB`, `en_AU` from American `en`) doesn't need a model. Give it `replacements` and every string is made from the English by swapping whole words, keeping capitalization (Color → Colour, COLOR → COLOUR) and leaving placeholders (`:color`), HTML tags and URLs untouched. List each form you need (`color`, `colors`, `colored`), since only whole words match; leave out words whose spelling depends on meaning (program/programme, practice/practise, license/licence) and fix those strings by hand.
+
+Derived strings never reach the driver, the provider gate or the usage ledger, and cost no tokens. They're saved with origin `derived`, pass the placeholder guard, and are auto-approved and exported by the cycle like AI drafts, so an English edit reaches the derived locale on the next cycle. Turn `auto_translate` on for the locale too, so new keys are derived as well as edited ones. To convert an existing locale once: `prosetta:translate --locale=<code> --force --sync`, then `prosetta:review <code> --approve-clean`, then `prosetta:export --locale=<code>` (a manual export also takes over hand-written files, which the cycle leaves alone).
 
 ### Glossary checks
 

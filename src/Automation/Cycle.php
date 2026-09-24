@@ -206,7 +206,7 @@ final readonly class Cycle {
     }
 
     /**
-     * AI drafts written since the cycle started, read before anything is approved.
+     * AI and derived drafts written since the cycle started, read before anything is approved.
      *
      * @return Collection<int, Translation>
      */
@@ -216,7 +216,7 @@ final readonly class Cycle {
 
         return $model::query()->with('key.file')
             ->whereIn('locale', $targets)
-            ->where('origin', TranslationOrigin::Ai->value)
+            ->whereIn('origin', [TranslationOrigin::Ai->value, TranslationOrigin::Derived->value])
             ->where('status', TranslationStatus::Draft->value)
             ->where('updated_at', '>=', now()->setTimestamp($startedAt))
             ->orderBy('id')
@@ -225,7 +225,7 @@ final readonly class Cycle {
 
     /**
      * The lang files holding a current candidate from a person or an import:
-     * not AI, still Draft or NeedsReview, and made from the key's current English.
+     * not AI or derived, still Draft or NeedsReview, and made from the key's current English.
      *
      * @param list<string> $locales
      * @return array<string, list<int>> locale => file ids
@@ -239,7 +239,7 @@ final readonly class Cycle {
         $rows = $model::query()->toBase()
             ->join($keyTable, "$keyTable.id", '=', "$translationTable.key_id")
             ->whereIn("$translationTable.locale", $locales)
-            ->where("$translationTable.origin", '!=', TranslationOrigin::Ai->value)
+            ->whereNotIn("$translationTable.origin", [TranslationOrigin::Ai->value, TranslationOrigin::Derived->value])
             ->whereIn("$translationTable.status", [TranslationStatus::Draft->value, TranslationStatus::NeedsReview->value])
             ->whereNotNull("$translationTable.value")
             ->whereColumn("$translationTable.source_hash", "$keyTable.source_hash")

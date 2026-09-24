@@ -107,7 +107,7 @@ final readonly class CycleWork {
     private function awaitsPerson(?Translation $translation): bool {
         return $translation !== null
             && $translation->value !== null
-            && $translation->origin !== TranslationOrigin::Ai
+            && ! in_array($translation->origin, [TranslationOrigin::Ai, TranslationOrigin::Derived], true)
             && in_array($translation->status, [TranslationStatus::Draft, TranslationStatus::NeedsReview], true);
     }
 

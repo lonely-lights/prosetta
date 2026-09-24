@@ -195,7 +195,7 @@ final readonly class ReviewService {
     /**
      * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
      * With $strict, only candidates with no issues at all: warnings (glossary, rewrite) hold one back too.
-     * With $since (a Unix time), only AI drafts written since then, with no issues: one run's own
+     * With $since (a Unix time), only AI and derived drafts written since then, with no issues: one run's own
      * drafts, never a person's pending edit or an older draft.
      * @throws Throwable when a database transaction fails
      */
@@ -217,7 +217,7 @@ final readonly class ReviewService {
             ->when($group !== null, fn ($query) => $query->where("$f.group", $group))
             ->when($strict || $since !== null, fn ($query) => $query->whereNull("$t.issues"))
             ->when($since !== null, fn ($query) => $query
-                ->where("$t.origin", TranslationOrigin::Ai->value)
+                ->whereIn("$t.origin", [TranslationOrigin::Ai->value, TranslationOrigin::Derived->value])
                 ->where("$t.status", TranslationStatus::Draft->value)
                 ->where("$t.updated_at", '>=', now()->setTimestamp((int) $since)))
             ->orderBy("$t.id")
