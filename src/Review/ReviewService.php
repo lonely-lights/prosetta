@@ -8,6 +8,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\DB;
 use LonelyLights\Prosetta\Auth\Authorizer;
+use LonelyLights\Prosetta\Automation\CycleFailures;
 use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
@@ -38,6 +39,7 @@ final readonly class ReviewService {
         private KeyFinder $finder,
         private LocaleSource $locales,
         private Rejections $rejections,
+        private CycleFailures $failures,
     ) {}
 
     /**
@@ -77,6 +79,7 @@ final readonly class ReviewService {
         });
 
         $this->rejections->clear($translation->locale, (int) $translation->key_id);
+        $this->failures->clear($translation->locale, (int) $translation->key_id);
 
         $this->events->dispatch(new TranslationSubmitted($translation, $this->id($by)));
 
@@ -149,6 +152,7 @@ final readonly class ReviewService {
 
             DB::transaction(fn () => $this->markApproved($translation, $by, $notes));
             $this->rejections->clear($translation->locale, (int) $translation->key_id);
+            $this->failures->clear($translation->locale, (int) $translation->key_id);
 
             $report->approved[] = (int) $translation->getKey();
             $this->events->dispatch(new TranslationApproved($translation, $this->id($by)));

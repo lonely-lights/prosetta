@@ -79,3 +79,36 @@ it('shows the English an update was made from, with the word diff', function () 
         ->and($item->diff)->toContain('credentials')->toContain('details')
         ->and($item->toArray())->toHaveKeys(['keyRef', 'reason', 'fingerprint']);
 });
+
+function capQueueKey(string $ref, string $locale): \LonelyLights\Prosetta\Models\TranslationKey {
+    $key = app(KeyFinder::class)->find($ref);
+
+    foreach (range(1, \LonelyLights\Prosetta\Automation\CycleFailures::LIMIT) as $run) {
+        app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->settle($locale, [$key], [], "run-$run");
+    }
+
+    return $key;
+}
+
+it('stops calling a capped key held once a person writes and approves it', function () {
+    capQueueKey('auth.throttle', 'es');
+    $viewer = queueViewer(['es']);
+    expect(collect(app(ReviewQueue::class)->all($viewer))->pluck('reason', 'keyRef')->get('auth.throttle'))->toBe('held');
+
+    app(\LonelyLights\Prosetta\Review\ReviewService::class)->write('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.', null, approve: true);
+
+    $es = app(\LonelyLights\Prosetta\Queries\Coverage::class)->for($viewer)->languages[0];
+
+    expect(collect(app(ReviewQueue::class)->all($viewer))->pluck('keyRef')->all())->not->toContain('auth.throttle')
+        ->and($es['held'])->toBe(0)
+        ->and(app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->all())->toBe([]);
+});
+
+it('shows a person\'s pending value on a capped key as pending, not held', function () {
+    capQueueKey('auth.throttle', 'es');
+    queueDraft('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.', origin: 'manual');
+
+    $reasons = collect(app(ReviewQueue::class)->all(queueViewer(['es'])))->pluck('reason', 'keyRef')->all();
+
+    expect($reasons['auth.throttle'])->toBe('pending');
+});

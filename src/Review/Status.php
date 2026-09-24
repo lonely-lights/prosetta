@@ -24,10 +24,6 @@ final readonly class Status {
      * @param array<string, array<string, array{hash: string, count: int}>> $rejections from Rejections::all()
      */
     public static function of(TranslationKey $key, ?Translation $translation, string $locale, array $failures, array $rejections): string {
-        if (CycleFailures::capped($failures, $locale, $key) || Rejections::held($rejections, $locale, $key)) {
-            return 'held';
-        }
-
         if (WorkState::hasCurrentCandidate($key, $translation)) {
             /** @var Translation $translation */
             if (! in_array($translation->origin, [TranslationOrigin::Ai, TranslationOrigin::Derived], true)) {
@@ -35,6 +31,12 @@ final readonly class Status {
             }
 
             return empty($translation->issues) ? 'draft' : 'flagged';
+        }
+
+        # A Capped or Held Key Stays Held Only While It Still Needs Work, as in the Cycle
+        if ((CycleFailures::capped($failures, $locale, $key) || Rejections::held($rejections, $locale, $key))
+            && (WorkState::isMissing($key, $translation) || WorkState::isStale($key, $translation))) {
+            return 'held';
         }
 
         if (WorkState::isStale($key, $translation)) {
