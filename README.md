@@ -329,9 +329,9 @@ A headless layer under `Prosetta::reviewQueue()` and friends, for building a ful
 
 | Reason | Meaning |
 |---|---|
-| `pending` | The current candidate is a person's (manual or imported), awaiting review. |
 | `draft` | The current candidate is AI or derived, with no issues. |
 | `flagged` | The current candidate is AI or derived, with issues. |
+| `pending` | The current candidate is a person's (manual or imported), awaiting review. |
 | `stale` | Approved, but the key's English has changed since. |
 | `held` | Capped: repeated automatic failures, or two rejections from the same English (below). |
 
@@ -339,14 +339,14 @@ A headless layer under `Prosetta::reviewQueue()` and friends, for building a ful
 
 **`Coverage::for(Viewer $viewer)`** returns a `CoverageReport`: per visible locale, its name, native name, mode (`ai` or `derived`), key count, a count per status (including `missing`), and tokens spent this month; plus the last cycle's time and report, each circuit's state, budget usage, `Health::problems()`, and whether review is editable — everything an overview dashboard needs in one call.
 
-**`ReviewDesk`** holds the bigger actions, each returning a `BatchReport` (`approved`, `rejected`, `skippedWarnings`, `skippedErrors`, `conflicts`, `skipped` by translation id):
+**`ReviewDesk`** holds the bigger actions. `approveMatching(Viewer $viewer, array $filters, bool $includeWarnings = false)`, `approveMany(Viewer $viewer, array $expected)` and `rejectMany(Viewer $viewer, array $expected, string $note)` each return a `BatchReport` (`approved`, `rejected`, `skippedWarnings`, `skippedErrors`, `conflicts`, `skipped` by translation id). `estimateRedraft(array $refsByLocale)` returns an array of the `Estimator`'s per-locale estimate (`strings`, `chars`, `input`, `output`, `from_history`); `redraft(Viewer $viewer, array $refsByLocale)` and `runCycle(Viewer $viewer)` return nothing:
 
-- `approveMatching(Viewer $viewer, array $filters, bool $includeWarnings = false)` approves every reviewable queue item matching `$filters`, skipping anything with blocking issues and, unless `$includeWarnings`, anything with warnings.
-- `approveMany(Viewer $viewer, array $expected)` and `rejectMany(Viewer $viewer, array $expected, string $note)` act on a chosen set of translation ids. `$expected` maps each id to the fingerprint the page last saw, from `ReviewService::fingerprint()`; one that's changed since is skipped as `conflict` rather than silently overwritten.
-- `estimateRedraft()` and `redraft(Viewer $viewer, array $refsByLocale)` estimate, then queue, a fresh forced AI draft for chosen key refs per locale.
-- `runCycle(Viewer $viewer)` requires `Ability::Manage` and runs `prosetta:cycle` inline.
+- `approveMatching()` approves every reviewable queue item matching `$filters`, skipping anything with blocking issues and, unless `$includeWarnings`, anything with warnings.
+- `approveMany()` and `rejectMany()` act on a chosen set of translation ids. `$expected` maps each id to the fingerprint the page last saw, from `ReviewService::fingerprint()`; one that's changed since is skipped as `conflict` rather than silently overwritten.
+- `estimateRedraft()` prices, and `redraft()` then queues, a fresh forced AI draft for chosen key refs per locale.
+- `runCycle()` requires `Ability::Manage`, then queues one cycle exactly like `prosetta:cycle` run without `--sync` (`Cycle::run()`'s default `$sync = false`).
 
-Every `ReviewDesk` and `ReviewService` write throws `ReviewLocked` when a person (not the system) acts while review is read-only, and `ReviewConflict` when a fingerprint no longer matches — the same two conditions `Viewer::isEditable` and the `$expected` fingerprints above exist to catch before they happen.
+`approveMatching`, `approveMany`, `rejectMany`, `redraft` and `runCycle` all throw `ReviewLocked` when a person (not the system) acts while review is read-only. `ReviewConflict` is narrower: only `ReviewService`'s single-item `edit()`, `reject()` and `confirm()` throw it, when the fingerprint they're given no longer matches. Batch approval doesn't throw it — `ReviewService::approve()` (and `ReviewDesk::approveMatching()`/`approveMany()` through it) skips a changed item and records `'conflict'` in the report instead; `rejectMany()` calls `reject()` per id and catches `ReviewConflict` itself, counting it the same way.
 
 **Rejection notes and the two-rejection hold.** A note left on `reject()` is sent to the driver with that key's next draft ("A reviewer rejected the previous translation ... {note}"), so the AI sees why last time was refused. `Rejections` (`review.rejections` in `prosetta_state`, per locale and key, with the English's hash and a count) tracks repeats; at `Rejections::LIMIT` (2) rejections from the same English, the key stops going back to the AI and `Status::of()` reports it `held` until a person acts. Editing the English resets the count; a person's own value or an approval clears it.
 
