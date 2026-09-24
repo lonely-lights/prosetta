@@ -16,6 +16,9 @@ final class BatchReport {
 
     public int $conflicts = 0;
 
+    /** Ids skipped before any write: in a language the viewer can't review, or no longer there. */
+    public int $forbidden = 0;
+
     /** @var array<int, string> translation id => reason */
     public array $skipped = [];
 

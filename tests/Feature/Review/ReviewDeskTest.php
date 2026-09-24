@@ -100,3 +100,41 @@ it('refuses batches, re-drafts and cycles where review is read-only', function (
     expect(fn () => app(ReviewDesk::class)->approveMatching($viewer, []))->toThrow(ReviewLocked::class)
         ->and(fn () => app(ReviewDesk::class)->runCycle($viewer))->toThrow(ReviewLocked::class);
 });
+
+function deskMixedViewer(): Viewer {
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => match ($ability) {
+        Ability::Review => $locale === 'es',
+        Ability::Translate => $locale === 'ar',
+        Ability::Manage => false,
+    });
+
+    return Viewer::for(new GenericUser(['id' => 'u1']));
+}
+
+it('rejects only the ids the viewer may review in a mixed selection, and counts the rest as forbidden', function () {
+    $es = deskDraft('auth.throttle', 'Uno :seconds');
+    $ar = deskDraft('auth.throttle', 'محاولات كثيرة. انتظر :seconds ثانية.', locale: 'ar');
+    $es2 = deskDraft('messages.welcome', 'Hola, :name');
+    $expected = [$es->id => ReviewService::fingerprint($es), $ar->id => ReviewService::fingerprint($ar), 999999 => 'gone', $es2->id => ReviewService::fingerprint($es2)];
+
+    $report = app(ReviewDesk::class)->rejectMany(deskMixedViewer(), $expected, 'Too formal.');
+
+    expect($report->rejected)->toBe(2)
+        ->and($report->forbidden)->toBe(2)
+        ->and($report->skipped)->toBe([$ar->id => 'forbidden', 999999 => 'missing'])
+        ->and($es->refresh()->status)->toBe(TranslationStatus::Rejected)
+        ->and($es2->refresh()->status)->toBe(TranslationStatus::Rejected)
+        ->and($ar->refresh()->status)->toBe(TranslationStatus::Draft);
+});
+
+it('approves only the ids the viewer may review in a mixed selection', function () {
+    $es = deskDraft('auth.throttle', 'Uno :seconds');
+    $ar = deskDraft('auth.throttle', 'محاولات كثيرة. انتظر :seconds ثانية.', locale: 'ar');
+
+    $report = app(ReviewDesk::class)->approveMany(deskMixedViewer(), [$ar->id => ReviewService::fingerprint($ar), $es->id => ReviewService::fingerprint($es)]);
+
+    expect($report->approved)->toBe(1)
+        ->and($report->forbidden)->toBe(1)
+        ->and($report->skipped)->toBe([$ar->id => 'forbidden'])
+        ->and($ar->refresh()->status)->toBe(TranslationStatus::Draft);
+});

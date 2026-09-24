@@ -10,6 +10,7 @@ use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Exceptions\ReviewConflict;
 use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\ProsettaManager;
+use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Translation\Estimator;
 use Throwable;
 
@@ -83,7 +84,7 @@ final readonly class ReviewDesk {
         $this->unlocked($viewer);
         $report = new BatchReport;
 
-        foreach ($expected as $id => $fingerprint) {
+        foreach ($this->admissible($viewer, $expected, $report) as $id => $fingerprint) {
             try {
                 $this->service->reject((int) $id, $viewer->user, $note, expected: $fingerprint);
                 $report->rejected++;
@@ -136,7 +137,7 @@ final readonly class ReviewDesk {
      * @throws Throwable when a database transaction fails
      */
     private function approveChunks(Viewer $viewer, array $expected, BatchReport $report): BatchReport {
-        foreach (array_chunk($expected, self::CHUNK, preserve_keys: true) as $chunk) {
+        foreach (array_chunk($this->admissible($viewer, $expected, $report), self::CHUNK, preserve_keys: true) as $chunk) {
             $result = $this->service->approve(array_keys($chunk), $viewer->user, expected: $chunk);
             $report->approved += count($result->approved);
 
@@ -150,6 +151,35 @@ final readonly class ReviewDesk {
         }
 
         return $report;
+    }
+
+    /**
+     * The ids the viewer may review, checked before any write so a mixed
+     * selection never half-applies: the rest are skipped as 'forbidden', or
+     * 'missing' when the translation no longer exists.
+     *
+     * @param array<int, string> $expected
+     * @return array<int, string>
+     */
+    private function admissible(Viewer $viewer, array $expected, BatchReport $report): array {
+        $model = Settings::model('translation');
+        $locales = $model::query()->whereIn('id', array_map('intval', array_keys($expected)))->pluck('locale', 'id')->all();
+        $allowed = [];
+
+        foreach ($expected as $id => $fingerprint) {
+            $locale = $locales[(int) $id] ?? null;
+
+            if ($locale === null || ! $viewer->canReview((string) $locale)) {
+                $report->skipped[(int) $id] = $locale === null ? 'missing' : 'forbidden';
+                $report->forbidden++;
+
+                continue;
+            }
+
+            $allowed[(int) $id] = $fingerprint;
+        }
+
+        return $allowed;
     }
 
     private function unlocked(Viewer $viewer): void {
