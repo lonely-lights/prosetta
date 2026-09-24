@@ -45,7 +45,7 @@ it('sends a rejection note to the model with the next draft of that key', functi
 it('holds a key the cycle would draft once it has been rejected twice from the same English', function () {
     $user = new GenericUser(['id' => 'u1']);
     app(ReviewService::class)->reject($this->draft->id, $user, 'No.');
-    $this->draft->update(['status' => TranslationStatus::Draft, 'value' => 'محاولة ثانية.']);
+    $this->draft->refresh()->update(['status' => TranslationStatus::Draft, 'value' => 'محاولة ثانية.']);
     app(ReviewService::class)->reject($this->draft->id, $user, 'Still no.');
 
     $plan = app(CycleWork::class)->plan();
@@ -63,4 +63,29 @@ it('releases the hold once a person writes or approves a value', function () {
     app(ReviewService::class)->edit($this->draft->id, 'حاولت كثيرًا. انتظر :seconds ثانية.', $user, approve: true);
 
     expect(app(Rejections::class)->all())->toBe([]);
+});
+
+it('keeps the rejection note in the feedback when a re-draft is retried for failing the guard', function () {
+    app(ReviewService::class)->reject($this->draft->id, new GenericUser(['id' => 'u1']), 'Sound friendlier.');
+    $driver = (new \LonelyLights\Prosetta\Testing\FakeTranslationDriver)->dropPlaceholders();
+    app()->instance(TranslationDriver::class, $driver);
+
+    app(TranslationRunner::class)->run('ar', [$this->key->id]);
+
+    $feedback = $driver->calls[1]->feedback[(string) $this->key->id];
+
+    expect($driver->calls)->toHaveCount(2)
+        ->and($feedback[0])->toContain('Sound friendlier.')
+        ->and(implode(' ', array_slice($feedback, 1)))->toContain(':seconds');
+});
+
+it('counts a double-submitted rejection once', function () {
+    $user = new GenericUser(['id' => 'u1']);
+    app(ReviewService::class)->reject($this->draft->id, $user, 'No.');
+    app(ReviewService::class)->reject($this->draft->id, $user, 'No.');
+
+    $plan = app(CycleWork::class)->plan();
+
+    expect(app(Rejections::class)->all()['ar'][(string) $this->key->id]['count'])->toBe(1)
+        ->and($plan['held'])->not->toContain('ar auth.throttle (held: rejected twice by a reviewer; waiting for a person)');
 });

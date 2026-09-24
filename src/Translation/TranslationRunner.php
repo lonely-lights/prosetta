@@ -122,7 +122,13 @@ final readonly class TranslationRunner {
                     break;
                 }
 
-                $feedback = array_map(fn (array $outcome) => array_map(fn (Issue $issue) => $issue->message, $outcome['issues']), $failing);
+                # Each Retried Key Keeps Its Rejection Note, Followed by What the Guard Found
+                $feedback = [];
+
+                foreach ($failing as $id => $outcome) {
+                    $feedback[$id] = array_merge($notes[(string) $id] ?? [], array_map(fn (Issue $issue) => $issue->message, $outcome['issues']));
+                }
+
                 $retryItems = array_values(array_filter($items, fn (TranslationItem $item) => array_key_exists($item->id, $failing)));
                 $retried = $this->attempt($driver, $batch->withItems($retryItems)->withFeedback($feedback), $locale, $runId);
 

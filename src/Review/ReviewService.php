@@ -176,13 +176,17 @@ final readonly class ReviewService {
         $translation = $this->load($translationId);
         $this->current($translation, $expected);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
+        $alreadyRejected = $translation->status === TranslationStatus::Rejected;
 
         DB::transaction(function () use ($translation, $by, $notes): void {
             $translation->update(['status' => TranslationStatus::Rejected, 'reviewed_by' => $this->id($by), 'reviewed_at' => now()]);
             $translation->logReview(ReviewAction::Rejected, $this->id($by), $translation->value, notes: $notes);
         });
 
-        $this->rejections->record($translation);
+        # A Double-Submitted Reject Counts Once Toward Holding the Key
+        if (! $alreadyRejected) {
+            $this->rejections->record($translation);
+        }
 
         $this->events->dispatch(new TranslationRejected($translation, $this->id($by)));
 
