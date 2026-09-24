@@ -18,6 +18,7 @@ use LonelyLights\Prosetta\Events\TranslationApproved;
 use LonelyLights\Prosetta\Events\TranslationRejected;
 use LonelyLights\Prosetta\Events\TranslationSubmitted;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
+use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
@@ -42,6 +43,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
         $this->authorizer->authorize($by, $approve ? Ability::Review : Ability::Translate, $translation->locale);
         $key = $translation->key;
@@ -84,6 +86,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
+        $this->unlocked($by);
         $key = $this->finder->find($keyRef);
 
         if ($key === null || $key->obsolete_at !== null) {
@@ -112,6 +115,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null): ApproveReport {
+        $this->unlocked($by);
         $report = new ApproveReport;
         $translations = array_map(fn ($id) => $this->load((int) $id), (array) $translationIds);
 
@@ -147,6 +151,7 @@ final readonly class ReviewService {
 
     /** @throws Throwable when a database transaction fails */
     public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
 
@@ -168,6 +173,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+        $this->unlocked($by);
         $translation = $this->load($translationId);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
         $key = $translation->key;
@@ -200,6 +206,7 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false, ?int $since = null): ApproveReport {
+        $this->unlocked($by);
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -259,6 +266,13 @@ final readonly class ReviewService {
         }
 
         return null;
+    }
+
+    /** People can't change translations where review is read-only; the system (no user) always can. */
+    private function unlocked(?Authenticatable $by): void {
+        if ($by !== null && ! Viewer::editable()) {
+            throw ReviewLocked::make();
+        }
     }
 
     private function load(int $id): Translation {
