@@ -13,6 +13,7 @@ use LonelyLights\Prosetta\Data\TranslationItem;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\CycleCompleted;
+use LonelyLights\Prosetta\Export\Exporter;
 use LonelyLights\Prosetta\Jobs\FinishCycle;
 use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Models\Translation;
@@ -120,6 +121,8 @@ it('confirms a cosmetic edit without calling the driver', function () {
 });
 
 it('approves only drafts with no issues at all', function () {
+    # An Adopted Site: Prosetta Generated Its Files, so the Cycle May Write Them
+    app(Exporter::class)->export();
     cycleAutoTranslate('es');
     $es = Locale::query()->where('locale_initials', 'es')->first();
     $es->update(['glossary' => [['source' => 'login', 'target' => 'sesión']]]);
@@ -265,6 +268,8 @@ it('queues one batch and finishes it through FinishCycle', function () {
 });
 
 it('finishes a queued cycle by counting and approving what its jobs drafted', function () {
+    # An Adopted Site: Prosetta Generated Its Files, so the Cycle May Write Them
+    app(Exporter::class)->export();
     cycleAutoTranslate('es');
     $startedAt = now()->getTimestamp();
     $driver = cycleIssueDriver();
