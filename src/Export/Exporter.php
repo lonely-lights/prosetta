@@ -143,6 +143,12 @@ final readonly class Exporter {
             }
         }
 
+        # A Derived Locale Writes Only What It Changes: Laravel Falls Back to the Source for the Rest
+        if (($this->locales->find($locale)?->replacements ?? []) !== []) {
+            $values = $this->onlyChanged($values, $keys);
+            $written = array_intersect_key($written, $values);
+        }
+
         if ($file->format === FileFormat::Php) {
             $values = $this->withoutIncompleteLists($order, $values);
             $written = array_intersect_key($written, $values);
@@ -282,6 +288,35 @@ final readonly class Exporter {
         }
 
         return $values;
+    }
+
+    /**
+     * The values that differ from the source, plus every item of any list with
+     * a changed item, since a list is written whole or not at all.
+     *
+     * @param array<array-key, string> $values
+     * @param Collection<string, TranslationKey> $keys
+     * @return array<array-key, string>
+     */
+    private function onlyChanged(array $values, Collection $keys): array {
+        $changed = [];
+        $lists = [];
+
+        foreach ($values as $key => $value) {
+            if ($value !== $keys->get((string) $key)?->source_value) {
+                $changed[$key] = true;
+
+                if (preg_match('/^(.+)\.\d+$/', (string) $key, $match) === 1) {
+                    $lists[$match[1]] = true;
+                }
+            }
+        }
+
+        return array_filter(
+            $values,
+            fn ($key) => isset($changed[$key]) || (preg_match('/^(.+)\.\d+$/', (string) $key, $match) === 1 && isset($lists[$match[1]])),
+            ARRAY_FILTER_USE_KEY,
+        );
     }
 
     private function pick(Translation $translation, bool $includeDrafts): ?string {
