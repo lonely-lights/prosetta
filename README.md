@@ -120,7 +120,7 @@ Prosetta::authorizeUsing(fn ($user, Ability $ability, ?string $locale): bool => 
 });
 ```
 
-`Review` implies `Translate` for the same locale. With no callback, only the `local` environment is allowed. Prosetta also registers the gates `prosetta.translate`, `prosetta.review` and `prosetta.manage`, so `$user->can('prosetta.review', 'ar')` works in policies.
+`Review` implies `Translate` for the same locale, and `Manage` implies `Translate` and `Review` for every locale. With no callback, only the `local` environment is allowed. Prosetta also registers the gates `prosetta.translate`, `prosetta.review` and `prosetta.manage`, so `$user->can('prosetta.review', 'ar')` works in policies.
 
 ## Commands
 
@@ -323,7 +323,7 @@ Prosetta raises the event; it doesn't send mail itself (Undaunted's job, a later
 
 A headless layer under `Prosetta::reviewQueue()` and friends, for building a fuller review UI (a queue, a keys matrix, a coverage dashboard) than the one-locale-at-a-time surface above. Every query takes a `Viewer` and every result is a plain data object with `toArray()`, ready for Inertia props or JSON.
 
-**`Viewer::for($user)`** resolves once what a person may do: `translates` and `reviews` (the target locale codes they may translate and review; `Review` implies `Translate`), `manages`, and `isEditable`. `Viewer::editable()` reads `prosetta.review.editable` (env `PROSETTA_REVIEW_EDITABLE`); left `null`, it's editable only in the `local` and `staging` environments. It gates people only — a `null` `$by` (the cycle, a command) can always write, in any environment.
+**`Viewer::for($user)`** resolves once what a person may do: `translates` and `reviews` (the target locale codes they may translate and review; `Review` implies `Translate`, and a manager gets every target locale), `manages`, and `isEditable`. `Viewer::editable()` reads `prosetta.review.editable` (env `PROSETTA_REVIEW_EDITABLE`); left `null`, it's editable only in the `local` and `staging` environments. It gates people only — a `null` `$by` (the cycle, a command) can always write, in any environment.
 
 **`ReviewQueue::for(Viewer $viewer, array $filters = [], int $page = 1, int $perPage = 50)`** returns a paginator of `QueueItem`, across every locale the viewer can see: everything whose status needs a person. `count()` takes the same arguments without paging; `all()` returns the full unpaginated list. Filters: `locale`, `reason`, `namespace`, `group`, `search`. The reason (from `Status::of()`) is one of:
 

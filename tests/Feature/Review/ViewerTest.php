@@ -36,3 +36,15 @@ it('reads the editable flag, defaulting to local and staging only', function () 
     config(['prosetta.review.editable' => 'false']);
     expect(Viewer::editable())->toBeFalse();
 });
+
+it('gives a manager every target language to translate and review', function () {
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Manage);
+    $targets = array_map(fn ($locale) => $locale->code, app(\LonelyLights\Prosetta\Contracts\LocaleSource::class)->targets());
+
+    $viewer = Viewer::for(new GenericUser(['id' => 'u1']));
+
+    expect($targets)->not->toBeEmpty()
+        ->and($viewer->manages)->toBeTrue()
+        ->and($viewer->translates)->toBe($targets)
+        ->and($viewer->reviews)->toBe($targets);
+});

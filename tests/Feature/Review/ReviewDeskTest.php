@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->seedLocales();
     config(['prosetta.resilience.cache_store' => 'array', 'prosetta.resilience.jitter' => 0]);
     app(Syncer::class)->sync();
-    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Manage || $locale === 'es');
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $locale === 'es');
     $this->viewer = Viewer::for(new GenericUser(['id' => 'u1']));
 });
 
@@ -85,6 +85,7 @@ it('estimates and queues a re-draft of chosen keys, and queues a cycle', functio
 
     $estimate = app(ReviewDesk::class)->estimateRedraft(['es' => ['auth.failed']]);
     app(ReviewDesk::class)->redraft($this->viewer, ['es' => ['auth.failed']]);
+    app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Manage);
     app(ReviewDesk::class)->runCycle($this->viewer);
 
     expect($estimate['es']['strings'])->toBe(1);
