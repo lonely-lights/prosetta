@@ -26,10 +26,13 @@ final class ExportReport {
     /** @var list<array{locale: string, path: string}> target files the caller asked to hold; left untouched */
     public array $held = [];
 
+    /** @var list<array{locale: string, path: string}> PHP target files Prosetta didn't generate (no header), kept when the caller asked; left untouched */
+    public array $handWritten = [];
+
     public function __construct(public readonly bool $dryRun = false) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held];
+        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held, 'hand_written' => $this->handWritten];
     }
 }
