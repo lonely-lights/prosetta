@@ -59,6 +59,7 @@ final readonly class DatabaseLocaleSource implements LocaleSource {
             $descriptor->code, $descriptor->englishName, $descriptor->nativeName, $descriptor->script, $descriptor->rtl,
             $descriptor->styleNote ?? $base->style_note,
             $descriptor->glossary !== [] ? $descriptor->glossary : (array) ($base->glossary ?? []),
+            $descriptor->replacements,
         );
     }
 }

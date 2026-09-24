@@ -30,6 +30,7 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property bool $auto_translate
  * @property string|null $style_note
  * @property list<array{source: string, target: string, accept?: list<string>, banned: list<string>}> $glossary
+ * @property list<array{from: string, to: string}>|null $replacements
  * @property-read string $code
  *
  * @method static Builder<static> active()
@@ -42,7 +43,7 @@ class Locale extends Model {
     protected $fillable = [
         'locale_initials', 'english_name', 'native_name', 'script', 'rtl',
         'active', 'translated', 'is_default', 'sort_order',
-        'auto_translate', 'style_note', 'glossary',
+        'auto_translate', 'style_note', 'glossary', 'replacements',
     ];
 
     protected $casts = [
@@ -54,6 +55,7 @@ class Locale extends Model {
         'auto_translate' => 'boolean',
         'style_note' => 'string',
         'glossary' => 'array',
+        'replacements' => 'array',
     ];
 
     public function getTable(): string {
@@ -146,7 +148,7 @@ class Locale extends Model {
     public function toDescriptor(): LocaleDescriptor {
         return new LocaleDescriptor(
             $this->locale_initials, $this->english_name, $this->native_name, $this->script, $this->rtl,
-            $this->style_note, $this->glossary ?? [],
+            $this->style_note, $this->glossary ?? [], $this->replacements ?? [],
         );
     }
 }

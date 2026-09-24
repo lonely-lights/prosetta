@@ -8,4 +8,6 @@ enum TranslationOrigin: string {
     case Manual = 'manual';
     case Ai = 'ai';
     case Imported = 'imported';
+    # Made From the English by a Locale's Word Replacements, With No AI
+    case Derived = 'derived';
 }

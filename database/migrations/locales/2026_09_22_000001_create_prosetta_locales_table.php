@@ -11,6 +11,8 @@ use LonelyLights\Prosetta\Support\Settings;
  * Codes match lang folder names exactly and never change once created.
  * auto_translate, style_note and glossary drive background mode: which
  * languages the cycle drafts, and what every batch for them is told.
+ * replacements makes a variant of the source language derived: its strings
+ * come from the English by word replacement, with no AI.
  */
 return new class extends Migration {
     public function up(): void {
@@ -28,6 +30,7 @@ return new class extends Migration {
             $table->boolean('auto_translate')->default(false);
             $table->text('style_note')->nullable();
             $table->json('glossary')->nullable();
+            $table->json('replacements')->nullable();
             $table->timestamps();
 
             $table->index('active');

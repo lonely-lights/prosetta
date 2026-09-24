@@ -72,7 +72,6 @@ final readonly class TranslationRunner {
             return $report;
         }
 
-        $driver = $this->driver();
         $items = $keys->map(function (TranslationKey $key) use ($existing) {
             $current = $existing->get($key->getKey());
             $previousSource = $current?->approved_value !== null && $current->approved_source_value !== null && $current->approved_source_value !== $key->source_value
@@ -85,8 +84,11 @@ final readonly class TranslationRunner {
         $source = $this->locales->source();
         $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
 
+        # A Derived Locale Comes From the English by Word Replacement: No Driver, No Provider, No Tokens
+        $driver = $target->replacements !== [] ? null : $this->driver();
+
         try {
-            $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+            $outcomes = $driver === null ? $this->derive($batch, $locale) : $this->attempt($driver, $batch, $locale, $runId);
         } catch (ProviderBatchRejected $rejected) {
             # The Provider Refused the Whole Batch: Every Key in It Failed
             $this->failures->settle($locale, $cycle ? $keys->values()->all() : [], [], $runId);
@@ -97,7 +99,8 @@ final readonly class TranslationRunner {
         $stopped = null;
 
         try {
-            for ($retries = (int) config('prosetta.ai.retries_on_issues', 1); $retries > 0; $retries--) {
+            # Word Replacement Gives the Same Result Every Time, so Only a Driver's Result Is Worth Retrying
+            for ($retries = (int) config('prosetta.ai.retries_on_issues', 1); $driver !== null && $retries > 0; $retries--) {
                 $failing = array_filter($outcomes, fn (array $outcome) => $this->blocking($outcome['issues']) && ! $this->refused($outcome['issues']));
 
                 if ($failing === []) {
@@ -169,7 +172,7 @@ final readonly class TranslationRunner {
         return $shares;
     }
 
-    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool}> */
+    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string|null, model: string|null, invocation: string|null, input: int, output: int, isUpdate: bool, origin: TranslationOrigin}> */
     private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale, ?string $runId): array {
         $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch), $locale);
         $weights = [];
@@ -210,6 +213,30 @@ final readonly class TranslationRunner {
                 'input' => $input[$item->id],
                 'output' => $output[$item->id],
                 'isUpdate' => $item->previousSource !== null,
+                'origin' => TranslationOrigin::Ai,
+            ];
+        }
+
+        return $outcomes;
+    }
+
+    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string|null, model: string|null, invocation: string|null, input: int, output: int, isUpdate: bool, origin: TranslationOrigin}> */
+    private function derive(TranslationBatch $batch, string $locale): array {
+        $outcomes = [];
+
+        foreach ($batch->items as $item) {
+            $value = WordReplacer::apply($item->source, $batch->target->replacements);
+
+            $outcomes[$item->id] = [
+                'value' => $value,
+                'issues' => $this->guard->check($item->source, $value, $locale),
+                'provider' => null,
+                'model' => null,
+                'invocation' => null,
+                'input' => 0,
+                'output' => 0,
+                'isUpdate' => $item->previousSource !== null,
+                'origin' => TranslationOrigin::Derived,
             ];
         }
 
@@ -217,7 +244,7 @@ final readonly class TranslationRunner {
     }
 
     /**
-     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool} $outcome
+     * @param array{value: string|null, issues: list<Issue>, provider: string|null, model: string|null, invocation: string|null, input: int, output: int, isUpdate: bool, origin: TranslationOrigin} $outcome
      * @throws Throwable when a database transaction fails
      */
     private function persist(TranslationKey $key, ?Translation $existing, string $locale, array $outcome, TranslateReport $report): void {
@@ -242,14 +269,15 @@ final readonly class TranslationRunner {
         DB::transaction(function () use ($translation, $key, $outcome): void {
             $translation->fill([
                 'value' => $outcome['value'], 'source_hash' => $key->source_hash,
-                'status' => TranslationStatus::Draft, 'origin' => TranslationOrigin::Ai,
+                'status' => TranslationStatus::Draft, 'origin' => $outcome['origin'],
                 'issues' => Issue::store($outcome['issues']),
                 'ai_provider' => $outcome['provider'], 'ai_model' => $outcome['model'],
                 'input_tokens' => $outcome['input'], 'output_tokens' => $outcome['output'],
                 'ai_invocation_id' => $outcome['invocation'],
             ])->save();
 
-            $translation->logReview(ReviewAction::Submitted, null, newValue: $outcome['value'], notes: 'Machine translation by '.$outcome['model'].'.');
+            $notes = $outcome['origin'] === TranslationOrigin::Derived ? 'Derived from the English by word replacement.' : 'Machine translation by '.$outcome['model'].'.';
+            $translation->logReview(ReviewAction::Submitted, null, newValue: $outcome['value'], notes: $notes);
         });
 
         $report->drafted[] = $ref;
