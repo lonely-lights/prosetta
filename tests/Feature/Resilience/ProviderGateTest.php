@@ -44,6 +44,18 @@ it('passes a successful call through and counts its tokens against the budget', 
         ->and(fn () => callThrough(new ScriptedDriver, 'run-1'))->toThrow(BudgetExhausted::class);
 });
 
+it('records a usage row for a successful call', function () {
+    callThrough(new ScriptedDriver, 'run-1');
+
+    $row = \Illuminate\Support\Facades\DB::table(Settings::table('usage'))->first();
+
+    expect($row)->not->toBeNull()
+        ->and($row->run_id)->toBe('run-1')
+        ->and($row->circuit)->toBe('scripted:m')
+        ->and((int) $row->input_tokens)->toBe(5)
+        ->and((int) $row->output_tokens)->toBe(5);
+});
+
 it('names the circuit on the exception and opens the circuit after repeated outages', function () {
     $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
 

@@ -9,6 +9,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LonelyLights\Prosetta\Automation\CycleFailures;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\TranslationBatch;
@@ -18,7 +19,10 @@ use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\TranslationDrafted;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
+use LonelyLights\Prosetta\Guard\GlossaryGuard;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
@@ -41,15 +45,18 @@ final readonly class TranslationRunner {
         private Container $container,
         private LocaleSource $locales,
         private PlaceholderGuard $guard,
+        private GlossaryGuard $glossary,
         private Dispatcher $events,
         private ProviderGate $gate,
+        private CycleFailures $failures,
     ) {}
 
     /**
      * @param list<int> $keyIds
+     * @param bool $cycle a prosetta:cycle run: keys the provider fails to translate are counted, so the cycle can stop resending them
      * @throws Throwable when a database transaction fails, or a ProviderException, CallDeferred or BudgetExhausted when the provider can't be called
      */
-    public function run(string $locale, array $keyIds, bool $force = false, ?string $runId = null): TranslateReport {
+    public function run(string $locale, array $keyIds, bool $force = false, ?string $runId = null, bool $cycle = false): TranslateReport {
         $report = new TranslateReport;
         $target = $this->locales->find($locale) ?? throw new ProsettaException("Unknown locale [$locale].");
         $keyModel = Settings::model('key');
@@ -66,19 +73,27 @@ final readonly class TranslationRunner {
         }
 
         $driver = $this->driver();
-        $items = $keys->map(fn (TranslationKey $key) => new TranslationItem(
-            (string) $key->getKey(),
-            $key->ref()->toString(),
-            $key->source_value,
-            $key->context,
-            $key->max_length,
-            $key->placeholders ?? [],
-            $existing->get($key->getKey())?->approved_value,
-        ))->values()->all();
+        $items = $keys->map(function (TranslationKey $key) use ($existing) {
+            $current = $existing->get($key->getKey());
+            $previousSource = $current?->approved_value !== null && $current->approved_source_value !== null && $current->approved_source_value !== $key->source_value
+                ? $current->approved_source_value
+                : null;
+
+            return new TranslationItem((string) $key->getKey(), $key->ref()->toString(), $key->source_value, $key->context, $key->max_length, $key->placeholders ?? [], $current?->approved_value, $previousSource);
+        })->values()->all();
 
         $source = $this->locales->source();
         $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
-        $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+
+        try {
+            $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+        } catch (ProviderBatchRejected $rejected) {
+            # The Provider Refused the Whole Batch: Every Key in It Failed
+            $this->failures->settle($locale, $cycle ? $keys->values()->all() : [], [], $runId);
+
+            throw $rejected;
+        }
+
         $stopped = null;
 
         try {
@@ -104,11 +119,27 @@ final readonly class TranslationRunner {
             $stopped = $e;
         }
 
+        $failed = [];
+        $drafted = [];
+
         foreach ($outcomes as $id => $outcome) {
-            $this->persist($keys->get((int) $id), $existing->get((int) $id), $locale, $outcome, $report);
+            $key = $keys->get((int) $id);
+            $this->persist($key, $existing->get((int) $id), $locale, $outcome, $report);
+
+            if ($outcome['value'] === null) {
+                $failed[] = $key;
+            } else {
+                $drafted[] = (int) $id;
+            }
         }
 
+        $this->failures->settle($locale, $cycle ? $failed : [], $drafted, $runId);
+
         if ($stopped !== null) {
+            if ($stopped instanceof ProviderException) {
+                $stopped->partial = $report;
+            }
+
             throw $stopped;
         }
 
@@ -138,9 +169,9 @@ final readonly class TranslationRunner {
         return $shares;
     }
 
-    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int}> */
+    /** @return array<array-key, array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool}> */
     private function attempt(TranslationDriver $driver, TranslationBatch $batch, string $locale, ?string $runId): array {
-        $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch));
+        $result = $this->gate->call($driver, Circuits::nameFor($driver, $batch->model), $runId, fn () => $driver->translate($batch), $locale);
         $weights = [];
 
         foreach ($batch->items as $item) {
@@ -154,19 +185,31 @@ final readonly class TranslationRunner {
         foreach ($batch->items as $item) {
             $value = $result->values[$item->id] ?? null;
             $refusal = $result->refused[$item->id] ?? null;
+            $translated = $refusal === null && is_string($value) ? $value : null;
+
+            $issues = match (true) {
+                $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
+                is_string($value) => [...$this->guard->check($item->source, $value, $locale), ...$this->glossary->check($item->source, $value, $batch->target->glossary)],
+                default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
+            };
+
+            if ($translated !== null && $item->previousSource !== null && $item->previous !== null) {
+                $ratio = SourceChange::ratio($item->previousSource, $item->source, $item->previous, $translated);
+
+                if ($ratio > (float) config('prosetta.automation.rewrite_ratio', 3.0) && SourceChange::changedWords($item->previous, $translated) > 2) {
+                    $issues[] = Issue::warning('large_rewrite', 'The update changed much more of the translation than the English changed.');
+                }
+            }
 
             $outcomes[$item->id] = [
-                'value' => $refusal === null && is_string($value) ? $value : null,
-                'issues' => match (true) {
-                    $refusal !== null => [Issue::error('refused', "The provider refused to translate this: $refusal")],
-                    is_string($value) => $this->guard->check($item->source, $value, $locale),
-                    default => [Issue::error('missing_value', 'The driver returned no value for this key.')],
-                },
+                'value' => $translated,
+                'issues' => $issues,
                 'provider' => $result->provider,
                 'model' => $result->model,
                 'invocation' => $result->invocationId,
                 'input' => $input[$item->id],
                 'output' => $output[$item->id],
+                'isUpdate' => $item->previousSource !== null,
             ];
         }
 
@@ -174,7 +217,7 @@ final readonly class TranslationRunner {
     }
 
     /**
-     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int} $outcome
+     * @param array{value: string|null, issues: list<Issue>, provider: string, model: string, invocation: string|null, input: int, output: int, isUpdate: bool} $outcome
      * @throws Throwable when a database transaction fails
      */
     private function persist(TranslationKey $key, ?Translation $existing, string $locale, array $outcome, TranslateReport $report): void {
@@ -210,6 +253,10 @@ final readonly class TranslationRunner {
         });
 
         $report->drafted[] = $ref;
+
+        if ($outcome['isUpdate']) {
+            $report->updated[] = $ref;
+        }
 
         if ($this->blocking($outcome['issues'])) {
             $report->withIssues[] = $ref;

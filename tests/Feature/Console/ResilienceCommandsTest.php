@@ -17,6 +17,7 @@ use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
+use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\HealthCheckedScriptedDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
@@ -86,7 +87,7 @@ it('tests with the health check after the cooldown and resumes only when it pass
 it('waits for the next day when the daily budget is spent', function () {
     Bus::fake();
     config(['prosetta.budgets.daily' => 10]);
-    app(\LonelyLights\Prosetta\Resilience\Budget::class)->record(null, 10);
+    app(UsageLedger::class)->record(null, 'c', '', 10, 0);
     app()->instance(TranslationDriver::class, new ScriptedDriver);
     suspendSpanish('budget');
 
@@ -174,8 +175,10 @@ it('merges repeated suspensions of the same run whatever their start time', func
     app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 100), 'outage');
     app(Suspensions::class)->suspend('x:m', new RunScope(['es'], [], [], true, 200), 'outage');
 
-    expect(app(Suspensions::class)->all())->toHaveCount(1)
-        ->and(RunScope::fromArray((new RunScope(['es'], [], [], true, 100))->toArray())->startedAt)->toBe(100);
+    $suspended = array_values(app(Suspensions::class)->all());
+
+    expect($suspended)->toHaveCount(1)
+        ->and($suspended[0]['scope']->startedAt)->toBe(200);
 });
 
 it('keeps a suspension when requeueing it throws', function () {
@@ -209,6 +212,10 @@ it('keeps a suspension that a job records again while resume is requeueing it', 
 
         public function find(string $code): ?LocaleDescriptor {
             return $this->inner->find($code);
+        }
+
+        public function autoTranslateTargets(): array {
+            return $this->inner->autoTranslateTargets();
         }
     });
     app()->forgetInstance(Translator::class);

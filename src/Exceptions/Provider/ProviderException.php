@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Exceptions\Provider;
 
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
+use LonelyLights\Prosetta\Translation\TranslateReport;
 
 /**
  * What a TranslationDriver throws when its provider fails, so Prosetta can
@@ -13,4 +14,7 @@ use LonelyLights\Prosetta\Exceptions\ProsettaException;
  */
 abstract class ProviderException extends ProsettaException {
     public ?string $circuit = null;
+
+    /** What TranslationRunner::run() had already drafted or failed before it rethrew, when it got that far. */
+    public ?TranslateReport $partial = null;
 }

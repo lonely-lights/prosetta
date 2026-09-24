@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
+use LonelyLights\Prosetta\Enums\SuspensionReason;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
@@ -90,10 +91,10 @@ final class TranslateBatch implements ShouldQueue {
         }
 
         try {
-            $runner->run($this->locale, $this->keyIds, $this->force, $this->batchId);
+            $runner->run($this->locale, $this->keyIds, $this->force, $this->batchId, (bool) ($this->scope['cycle'] ?? false));
         } catch (CallDeferred $deferred) {
             if ($deferred->reason === 'held' || $deferred->outage) {
-                $this->stop($suspensions, $deferred->circuit, $deferred->reason === 'held' ? 'halted' : 'outage');
+                $this->stop($suspensions, $deferred->circuit, ($deferred->reason === 'held' ? SuspensionReason::Halted : SuspensionReason::Outage)->value);
 
                 return;
             }
@@ -103,10 +104,10 @@ final class TranslateBatch implements ShouldQueue {
             # This Batch's Own Problem, Not the Provider's: a Genuine Failure, and the Batch Carries On
             $this->fail($rejected);
         } catch (ProviderRejected|ProviderQuotaExhausted $halt) {
-            $this->stop($suspensions, (string) $halt->circuit, $halt instanceof ProviderQuotaExhausted ? 'quota' : 'rejected');
+            $this->stop($suspensions, (string) $halt->circuit, SuspensionReason::forHalt($halt)->value);
         } catch (ProviderException $transient) {
             if ($transient->circuit !== null && $circuits->for($transient->circuit)->outageExceeded()) {
-                $this->stop($suspensions, $transient->circuit, 'outage');
+                $this->stop($suspensions, $transient->circuit, SuspensionReason::Outage->value);
 
                 return;
             }

@@ -24,13 +24,13 @@ use Throwable;
  * the circuit opened or tripped; successes close the circuit and count tokens.
  */
 final readonly class ProviderGate {
-    public function __construct(private Circuits $circuits, private Budget $budget, private Dispatcher $events) {}
+    public function __construct(private Circuits $circuits, private Budget $budget, private Dispatcher $events, private UsageLedger $ledger) {}
 
     /**
      * @param Closure(): TranslationBatchResult $call
      * @throws ProviderException|CallDeferred|BudgetExhausted
      */
-    public function call(TranslationDriver $driver, string $circuit, ?string $runId, Closure $call): TranslationBatchResult {
+    public function call(TranslationDriver $driver, string $circuit, ?string $runId, Closure $call, ?string $locale = null): TranslationBatchResult {
         if (($period = $this->budget->exhausted($runId)) !== null) {
             throw new BudgetExhausted($period);
         }
@@ -54,7 +54,8 @@ final readonly class ProviderGate {
                 throw $this->fail($breaker, $e, $decision);
             }
 
-            $this->budget->record($runId, $result->inputTokens + $result->outputTokens);
+            $this->ledger->record($runId, $circuit, $locale ?? '', $result->inputTokens, $result->outputTokens);
+            $this->budget->record($runId);
             $breaker->recordSuccess($decision);
 
             return $result;

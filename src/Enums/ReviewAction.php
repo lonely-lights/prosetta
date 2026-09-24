@@ -10,4 +10,5 @@ enum ReviewAction: string {
     case Rejected = 'rejected';
     case Edited = 'edited';
     case Imported = 'imported';
+    case Confirmed = 'confirmed';
 }

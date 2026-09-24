@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Translation;
 
+use Closure;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
@@ -11,14 +12,18 @@ use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
+use LonelyLights\Prosetta\Enums\SuspensionReason;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderQuotaExhausted;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderRejected;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Resilience\BudgetExhausted;
 use LonelyLights\Prosetta\Resilience\CallDeferred;
+use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Support\Settings;
@@ -31,6 +36,7 @@ final readonly class Translator {
         private KeyFinder $finder,
         private TranslationRunner $runner,
         private Suspensions $suspensions,
+        private Circuits $circuits,
     ) {}
 
     /**
@@ -95,21 +101,46 @@ final readonly class Translator {
      */
     public function translate(array $locales = [], array $namespaces = [], array $keys = [], bool $force = false, bool $queue = true, ?int $forcedBefore = null): Batch|TranslateReport {
         $work = $this->workList($locales, $namespaces, $keys, $force, $forcedBefore);
-        $size = max(1, (int) config('prosetta.ai.batch', 25));
         $scope = new RunScope(array_values($locales), array_values($namespaces), array_values($keys), $force, $forcedBefore ?? now()->getTimestamp());
+
+        return $this->run($work, $scope, $queue);
+    }
+
+    /**
+     * Translates a prepared work list, inline or as one queued batch.
+     *
+     * @param array<string, array<int, list<int>>> $work locale => file id => key ids
+     * @param RunScope $scope what a suspension keeps for prosetta:resume; its force flag applies to every chunk
+     * @param Closure|null $finally with a queue: the batch's finally callback (it must be serializable)
+     * @param string|null $runId without a queue: the run id usage is recorded under (default a new uuid); queued jobs use their batch id
+     * @throws Throwable when the queued batch cannot be dispatched
+     */
+    public function run(array $work, RunScope $scope, bool $queue = true, ?Closure $finally = null, ?string $runId = null): Batch|TranslateReport {
+        $size = max(1, (int) config('prosetta.ai.batch', 25));
+        $force = $scope->force;
 
         if (! $queue) {
             $report = new TranslateReport;
-            $runId = (string) Str::uuid();
+            $runId ??= (string) Str::uuid();
 
             foreach ($work as $locale => $files) {
                 foreach ($files as $ids) {
                     foreach (array_chunk($ids, $size) as $chunk) {
                         try {
-                            $report->merge($this->runner->run($locale, $chunk, $force, $runId));
-                        } catch (ProviderBatchRejected) {
-                            # Only This Chunk Was Refused: Record It as Failed and Go On
-                            $report->failed = [...$report->failed, ...$this->refs($locale, $chunk)];
+                            $report->merge($this->runner->run($locale, $chunk, $force, $runId, $scope->cycle));
+                        } catch (ProviderBatchRejected $rejected) {
+                            # Only This Chunk Was Refused: Keep What the Retry Interrupted, and Record the Rest as Failed
+                            $drafted = [];
+
+                            if ($rejected->partial !== null) {
+                                $report->merge($rejected->partial);
+                                $drafted = $rejected->partial->drafted;
+                            }
+
+                            $report->failed = array_values(array_unique([
+                                ...$report->failed,
+                                ...array_diff($this->refs($locale, $chunk), $drafted),
+                            ]));
                         } catch (CallDeferred|ProviderException|BudgetExhausted $e) {
                             $report->stopped = $e->getMessage();
                             $this->suspendSync($e, $scope);
@@ -145,6 +176,10 @@ final readonly class Translator {
         $pending = Bus::batch($jobs)->name('prosetta:translate')->allowFailures();
         $connection = config('prosetta.queue.connection');
 
+        if ($finally !== null) {
+            $pending->finally($finally);
+        }
+
         if (is_string($connection) && $connection !== '') {
             $pending->onConnection($connection);
         }
@@ -157,16 +192,28 @@ final readonly class Translator {
      * @return list<string> "{locale} {ref}", as the report lists them
      */
     private function refs(string $locale, array $keyIds): array {
-        return Settings::model('key')::query()->whereKey($keyIds)->orderBy('id')->get()
+        $keyModel = Settings::model('key');
+
+        return $keyModel::query()->whereKey($keyIds)->orderBy((new $keyModel)->getKeyName())->get()
             ->map(fn (TranslationKey $key) => $locale.' '.$key->ref()->toString())->values()->all();
     }
 
-    /** A synchronous run suspends like a queued one, except when only its own per-run budget ran out. */
+    /**
+     * A synchronous run suspends like a queued one, except when only its own
+     * per-run budget ran out. It can't wait out a transient error the way a
+     * job does, so it stops at once; that is an outage only when the circuit
+     * has been open past outage_timeout, and "unknown" otherwise.
+     */
     private function suspendSync(CallDeferred|ProviderException|BudgetExhausted $e, RunScope $scope): void {
         [$circuit, $reason] = match (true) {
             $e instanceof BudgetExhausted => ['budget', $e->period],
-            $e instanceof CallDeferred => [$e->circuit, $e->reason === 'held' ? 'halted' : 'outage'],
-            default => [(string) $e->circuit, class_basename($e)],
+            $e instanceof CallDeferred => [$e->circuit, (match (true) {
+                $e->reason === 'held' => SuspensionReason::Halted,
+                $e->outage => SuspensionReason::Outage,
+                default => SuspensionReason::Unknown,
+            })->value],
+            $e instanceof ProviderRejected, $e instanceof ProviderQuotaExhausted => [(string) $e->circuit, SuspensionReason::forHalt($e)->value],
+            default => [(string) $e->circuit, ($e->circuit !== null && $this->circuits->for($e->circuit)->outageExceeded() ? SuspensionReason::Outage : SuspensionReason::Unknown)->value],
         };
 
         if ($reason !== 'per_run') {

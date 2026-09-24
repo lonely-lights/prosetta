@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
+use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
+use LonelyLights\Prosetta\Console\HealthCommand;
 use LonelyLights\Prosetta\Console\InstallCommand;
 use LonelyLights\Prosetta\Console\RenameCommand;
 use LonelyLights\Prosetta\Console\ResumeCommand;
@@ -49,20 +51,22 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
             // publishesMigrations() on a directory publishes it recursively (see
             // VendorPublishCommand::moveManagedFiles(), listContents(..., deep: true)),
-            // so the workflow tag lists its four files individually. That way the
+            // so the workflow tag lists its files individually. That way the
             // locales migration below (its own subdirectory) is never pulled in.
             $this->publishesMigrations([
-                __DIR__.'/../database/migrations/2026_09_22_000200_create_prosetta_files_table.php' => database_path('migrations/2026_09_22_000200_create_prosetta_files_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000300_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000300_create_prosetta_keys_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000400_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000400_create_prosetta_translations_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000500_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000500_create_prosetta_reviews_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000002_create_prosetta_files_table.php' => database_path('migrations/2026_09_22_000002_create_prosetta_files_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000003_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000003_create_prosetta_keys_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000004_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000004_create_prosetta_translations_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000005_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000005_create_prosetta_reviews_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000006_create_prosetta_usage_table.php' => database_path('migrations/2026_09_22_000006_create_prosetta_usage_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000007_create_prosetta_state_table.php' => database_path('migrations/2026_09_22_000007_create_prosetta_state_table.php'),
             ], 'prosetta-migrations');
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
             $this->commands([
                 InstallCommand::class, SyncCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
-                ResumeCommand::class, CircuitCommand::class,
+                ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class,
             ]);
         }
 
@@ -79,6 +83,17 @@ final class ProsettaServiceProvider extends ServiceProvider {
         if ($every !== null && (int) $every > 0) {
             $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($every): void {
                 $schedule->command('prosetta:resume')->cron('*/'.max(1, min(59, (int) $every)).' * * * *')->withoutOverlapping();
+            });
+        }
+
+        $cycleEvery = config('prosetta.automation.every');
+
+        if ($cycleEvery !== null && (int) $cycleEvery > 0) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($cycleEvery): void {
+                $minutes = max(1, min(59, (int) $cycleEvery));
+
+                # A Cycle Killed Mid-Run Leaves Its Overlap Lock Behind: Let It Expire After Two Intervals, Not the Default Day
+                $schedule->command('prosetta:cycle')->cron("*/$minutes * * * *")->withoutOverlapping(max(2 * $minutes, 10));
             });
         }
     }

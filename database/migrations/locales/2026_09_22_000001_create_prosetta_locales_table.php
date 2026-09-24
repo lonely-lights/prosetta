@@ -9,6 +9,8 @@ use LonelyLights\Prosetta\Support\Settings;
  * Locales Prosetta knows. "active" means offered to members; "translated"
  * means Prosetta maintains the locale even when members cannot pick it.
  * Codes match lang folder names exactly and never change once created.
+ * auto_translate, style_note and glossary drive background mode: which
+ * languages the cycle drafts, and what every batch for them is told.
  */
 return new class extends Migration {
     public function up(): void {
@@ -23,6 +25,9 @@ return new class extends Migration {
             $table->boolean('translated')->default(false);
             $table->boolean('is_default')->default(false);
             $table->integer('sort_order')->default(0);
+            $table->boolean('auto_translate')->default(false);
+            $table->text('style_note')->nullable();
+            $table->json('glossary')->nullable();
             $table->timestamps();
 
             $table->index('active');

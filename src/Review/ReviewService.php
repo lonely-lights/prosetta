@@ -139,6 +139,7 @@ final readonly class ReviewService {
     private function markApproved(Translation $translation, ?Authenticatable $by, ?string $notes): void {
         $translation->update([
             'approved_value' => $translation->value, 'approved_source_hash' => $translation->source_hash,
+            'approved_source_value' => $translation->source_hash === $translation->key->source_hash ? $translation->key->source_value : null,
             'status' => TranslationStatus::Approved, 'reviewed_by' => $this->id($by), 'reviewed_at' => now(),
         ]);
         $translation->logReview(ReviewAction::Approved, $this->id($by), newValue: $translation->value, notes: $notes);
@@ -160,10 +161,45 @@ final readonly class ReviewService {
     }
 
     /**
-     * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
+     * Re-approves a stale translation against the key's current English without
+     * changing its value: the human already reviewed this wording, it's just
+     * the source that moved. Refuses a translation that isn't approved, or
+     * whose approval already matches the key's current English.
      * @throws Throwable when a database transaction fails
      */
-    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null): ApproveReport {
+    public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null): Translation {
+        $translation = $this->load($translationId);
+        $this->authorizer->authorize($by, Ability::Review, $translation->locale);
+        $key = $translation->key;
+
+        if ($translation->approved_value === null || $translation->approved_source_hash === $key->source_hash) {
+            throw new ProsettaException('Only a stale approved translation can be confirmed.');
+        }
+
+        DB::transaction(function () use ($translation, $key, $by, $notes): void {
+            $translation->update([
+                'value' => $translation->approved_value, 'approved_value' => $translation->approved_value,
+                'source_hash' => $key->source_hash, 'approved_source_hash' => $key->source_hash,
+                'approved_source_value' => $key->source_value,
+                'status' => TranslationStatus::Approved, 'reviewed_by' => $this->id($by), 'reviewed_at' => now(),
+                'issues' => null,
+            ]);
+            $translation->logReview(ReviewAction::Confirmed, $this->id($by), newValue: $translation->approved_value, notes: $notes);
+        });
+
+        $this->events->dispatch(new TranslationApproved($translation, $this->id($by)));
+
+        return $translation->refresh();
+    }
+
+    /**
+     * Approves every current draft or needs-review candidate for a locale (optionally one namespace or group).
+     * With $strict, only candidates with no issues at all: warnings (glossary, rewrite) hold one back too.
+     * With $since (a Unix time), only AI drafts written since then, with no issues: one run's own
+     * drafts, never a person's pending edit or an older draft.
+     * @throws Throwable when a database transaction fails
+     */
+    public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false, ?int $since = null): ApproveReport {
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -179,6 +215,11 @@ final readonly class ReviewService {
             ->whereColumn("$t.source_hash", "$k.source_hash")
             ->when($namespace !== null, fn ($query) => $query->where("$f.namespace", $namespace))
             ->when($group !== null, fn ($query) => $query->where("$f.group", $group))
+            ->when($strict || $since !== null, fn ($query) => $query->whereNull("$t.issues"))
+            ->when($since !== null, fn ($query) => $query
+                ->where("$t.origin", TranslationOrigin::Ai->value)
+                ->where("$t.status", TranslationStatus::Draft->value)
+                ->where("$t.updated_at", '>=', now()->setTimestamp((int) $since)))
             ->orderBy("$t.id")
             ->pluck("$t.id")
             ->map(fn ($id) => (int) $id)

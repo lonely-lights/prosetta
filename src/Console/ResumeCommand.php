@@ -29,7 +29,17 @@ final class ResumeCommand extends Command {
         $resumed = [];
         $tested = [];
 
+        $cycles = 0;
+
         foreach ($suspensions->all() as $id => $suspended) {
+            # A Cycle's Work Is Rebuilt by the Next Cycle: Re-Translating Its Scope Here Could Only Widen It
+            if ($suspended['scope']->cycle) {
+                $suspensions->clear($id);
+                $cycles++;
+
+                continue;
+            }
+
             if (($period = $budget->exhausted(null)) !== null) {
                 $this->line("Waiting: the $period budget is used up.");
 
@@ -57,6 +67,10 @@ final class ResumeCommand extends Command {
             }
 
             $resumed[$name] = ($resumed[$name] ?? 0) + 1;
+        }
+
+        if ($cycles > 0) {
+            $this->components->info("Cleared $cycles suspended cycle run(s); the next prosetta:cycle rebuilds and queues their work.");
         }
 
         foreach ($resumed as $name => $count) {

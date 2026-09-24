@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Event;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Data\TranslationBatch;
+use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Events\TranslationSuspended;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderRateLimited;
@@ -155,4 +157,119 @@ it('records a rejected chunk as failed in a synchronous run and carries on', fun
         ->and($report->drafted)->toHaveCount(1)
         ->and($report->failed[0])->toStartWith('es identity::')
         ->and(app(Suspensions::class)->all())->toBe([]);
+});
+
+it('keeps the first attempt\'s drafts when a synchronous retry gets a batch rejection', function () {
+    $driver = new class extends ScriptedDriver {
+        public function translate(TranslationBatch $batch): TranslationBatchResult {
+            if ($batch->feedback !== []) {
+                throw new ProviderBatchRejected('rejected on retry');
+            }
+
+            $result = parent::translate($batch);
+            $values = array_map(fn (string $value) => (string) preg_replace('/:[A-Za-z_]\w*/', '', $value), $result->values);
+
+            return new TranslationBatchResult($values, $result->provider, $result->model, $result->inputTokens, $result->outputTokens);
+        }
+    };
+    app()->instance(TranslationDriver::class, $driver);
+
+    $report = app(Translator::class)->translate(['es'], [], ['messages.welcome'], queue: false);
+
+    expect($report->drafted)->toBe(['es messages.welcome'])
+        ->and($report->failed)->toBe([])
+        ->and($report->stopped)->toBeNull();
+});
+
+it('stores the reason "rejected" for a queued halt from ProviderRejected', function () {
+    $job = resilientJob((new ScriptedDriver)->fail(new ProviderRejected('bad key')));
+    handle($job);
+
+    expect(collect(app(Suspensions::class)->all())->first()['reason'])->toBe('rejected');
+});
+
+it('stores the same reason "rejected" for a synchronous halt from ProviderRejected', function () {
+    app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new ProviderRejected('bad key')));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->first()['reason'])->toBe('rejected');
+});
+
+it('stores the reason "unknown" for a queued halt from an unrecognized error under unknown_errors=halt', function () {
+    config(['prosetta.resilience.unknown_errors' => 'halt']);
+    $job = resilientJob((new ScriptedDriver)->fail(new RuntimeException('boom')));
+    handle($job);
+
+    expect(collect(app(Suspensions::class)->all())->first()['reason'])->toBe('unknown');
+});
+
+it('stores the same reason "unknown" for a synchronous halt from an unrecognized error under unknown_errors=halt', function () {
+    config(['prosetta.resilience.unknown_errors' => 'halt']);
+    app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new RuntimeException('boom')));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->first()['reason'])->toBe('unknown');
+});
+
+it('suspends a synchronous run after a single transient error as "unknown", not as an outage', function () {
+    app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new ProviderUnavailable('503')));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['unknown']);
+    Event::assertNotDispatched(TranslationSuspended::class, fn (TranslationSuspended $event) => $event->reason === 'outage');
+});
+
+it('suspends a synchronous run that finds the circuit open, but not for long, as "unknown"', function () {
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['unknown'])
+        ->and($driver->calls)->toHaveCount(2);
+});
+
+it('suspends a synchronous run as an outage once the circuit has been open past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 100]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+    $this->travel(200)->seconds();
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage']);
+});
+
+it('suspends a synchronous run as an outage when its own failed call finds the outage past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 600]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'), new ProviderUnavailable('still down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+    $this->travel(700)->seconds();
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage'])
+        ->and($driver->calls)->toHaveCount(3);
+});
+
+it('never suspends a queued job after a single transient error, and suspends it as an outage only past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 600]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'), new ProviderUnavailable('still down'));
+    $first = resilientJob($driver);
+    handle($first);
+
+    $first->assertReleased(30);
+    expect(app(Suspensions::class)->all())->toBe([]);
+
+    handle(resilientJob($driver));
+    $this->travel(700)->seconds();
+    handle(resilientJob($driver));
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage']);
 });

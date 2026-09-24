@@ -22,7 +22,7 @@ A new Prosetta migration adds to the locales table (`prosetta_locales`):
 |---|---|---|
 | `auto_translate` | boolean, default false | The cycle drafts missing keys for this language. |
 | `style_note` | text, nullable | Sent with every batch for this language (register, regional neutrality, tone). |
-| `glossary` | json, nullable | A list of `{source, target, banned}` entries, e.g. `{"source": "cohort", "target": "دفعة", "banned": ["فوج", "مجموعة"]}`. `source` is matched case-insensitively on word boundaries; `banned` is optional. |
+| `glossary` | json, nullable | A list of `{source, target, accept, banned}` entries, e.g. `{"source": "cohort", "target": "دفعة", "accept": ["دفعت", "دفعات"], "banned": ["فوج", "مجموعة"]}`. `source` is matched case-insensitively on word boundaries; `accept` and `banned` are optional. |
 
 - **The migration ships in two forms**, like the existing ones: in the package's `database/migrations` (and its publish tag) for new hosts, and as an `add_…_columns` migration for hosts that already have the locales table.
 - **`Locale`** gains the casts, `fillable` entries and an `autoTranslate()` scope. `LocaleDescriptor` gains `?string $styleNote` and `array $glossary`. Both the database and config locale sources fill them. A regional code with no note of its own falls back to its language's note (as Undaunted's driver does today).
@@ -32,7 +32,7 @@ A new Prosetta migration adds to the locales table (`prosetta_locales`):
 ## 3. Glossary check
 
 A new `GlossaryGuard` runs after `PlaceholderGuard` in the runner:
-- for each entry whose `source` appears in the English, the translation must contain `target`. If it's missing, that's a **warning**: `glossary_missing`;
+- for each entry whose `source` appears in the English, the translation must contain `target` or one of the entry's `accept` forms (other inflections, matched the same way as the target: a case-insensitive substring). If all are missing, that's a **warning**: `glossary_missing`, whose message names the `target`;
 - if the translation contains any `banned` term, that's an **error**: `glossary_banned`. It gets the normal single retry with feedback ("use دفعة, not فوج"), then stays a flagged draft.
 
 Warnings block auto-approval (§6) but not export under `include_drafts`.
@@ -61,20 +61,21 @@ Warnings block auto-approval (§6) but not export under `include_drafts`.
 
 ## 6. The cycle
 
-`prosetta:cycle` runs on its own schedule. It is registered by the service provider when `automation.every` is set, with `withoutOverlapping()`. It can also run by hand, and `--sync` runs it inline for CI.
+`prosetta:cycle` runs on its own schedule. It is registered by the service provider when `automation.every` is set, with `withoutOverlapping(max(2 × every, 10))` minutes, so a cycle killed mid-run blocks the next ones for two intervals at most, not Laravel's default 24 hours. It can also run by hand, and `--sync` runs it inline for CI.
 
 1. **Guard.** If the previous cycle's batch hasn't finished (its id is kept in `prosetta_state` under `cycle.batch`, so a cache clear can't lose it), log and exit. A cycle never overlaps another.
 2. **Sync** all namespaces.
 3. **Cosmetic edits:** confirm them (§4); no AI.
 4. **Build the work:**
    - stale keys with an approved translation in **any** target language (update mode);
-   - keys missing in **auto-translate** languages (draft mode).
+   - keys missing in **auto-translate** languages (draft mode);
+   - but never a key whose row is a non-AI `draft` or `needs_review` candidate, whatever English it was made from (flagged "awaiting human review"), nor one that failed 3 times from its current English (flagged as skipped). Failures are counted per (locale, key) in `prosetta_state` under `cycle.failures`, with the source hash; an English edit starts the count again and a successful draft clears it.
 5. **Queue** it as one run through `Translator` (so budgets, circuits and suspensions all apply). The batch's `finally` callback dispatches a `FinishCycle` job.
 6. **`FinishCycle`:**
    - approve clean drafts from this run according to `automation.approve`: `'all'`, `'none'` (stop at drafts) or a list of language codes. Clean means no issues at all: no errors, no glossary or rewrite warnings;
-   - export the languages that got approvals, when `automation.export` is true;
+   - export the languages that got approvals, when `automation.export` is true, leaving out any lang file that holds a current non-AI candidate (so a hand edit awaiting review isn't reverted); each such file is flagged. `prosetta:export` is unchanged;
    - record the heartbeat;
-   - raise `CycleCompleted` with a report: counts of drafted, updated, confirmed, approved and flagged strings, the flagged refs, the files written, and the tokens used.
+   - raise `CycleCompleted` with a report: counts of drafted, updated, confirmed, approved and flagged strings, the flagged refs (with a reason in brackets for a failed, held-back or skipped key and a held file), the files written, and the tokens used.
 7. **An empty cycle** (nothing to do) still records the heartbeat and raises `CycleCompleted` with zero counts.
 
 **`--sync` for CI:** runs steps 2–6 inline and exits 1 when anything is flagged, stale or suspended, so a pipeline can gate on it. It exits 0 otherwise.
@@ -87,7 +88,7 @@ Warnings block auto-approval (§6) but not export under `include_drafts`.
   - any circuit is halted;
   - a daily or monthly budget is spent.
 
-  It exits 0 otherwise.
+  It exits 0 otherwise. Each problem line starts with a stable code in brackets, `[cycle_stale]`, `[circuit_halted:{name}]` or `[budget:{period}]`, then the human text, so a host can remove duplicate alerts by the codes.
 - **`prosetta:circuit status`** gains the last cycle time.
 
 ## 8. Notifications (Undaunted)
@@ -101,7 +102,7 @@ Undaunted listens to Prosetta's events and sends one mail per incident to `PROSE
 | `TranslationSuspended` with reason `outage` | "Translation provider down for over 6 hours" |
 | `CycleCompleted` with flagged > 0 | A digest: counts plus the flagged refs, one mail per cycle |
 
-An hourly scheduled `prosetta:health` mails when it fails, at most once a day for the same reason (a cache key).
+An hourly scheduled `prosetta:health` mails when it fails, at most once a day for the same reason (a cache key built from the sorted problem codes, or the whole output when it has none).
 
 ## 9. Housekeeping and follow-ups
 
@@ -134,9 +135,9 @@ Undaunted: `every` 30, `approve` 'all', `export` true.
 The Locales edit form gains:
 - an **Auto-translate** toggle, next to Active;
 - a **Style note** text area;
-- a **Glossary** editor: one row per entry with fields for the English term, the translation and the banned alternatives (comma-separated), plus add and remove.
+- a **Glossary** editor: one row per entry with fields for the English term, the translation, the other accepted forms and the banned alternatives (both comma-separated), plus add and remove.
 
-All of them are audited like the existing fields, and validated server-side: note ≤ 1,000 characters, ≤ 100 glossary entries, each term ≤ 100 characters. The source locale shows neither the toggle nor the note.
+All of them are audited like the existing fields, and validated server-side: note ≤ 1,000 characters, ≤ 100 glossary entries, each term ≤ 100 characters, ≤ 10 accepted forms per entry. The source locale shows neither the toggle nor the note.
 
 ## 12. Testing
 
