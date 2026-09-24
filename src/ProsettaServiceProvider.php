@@ -89,7 +89,10 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
         if ($cycleEvery !== null && (int) $cycleEvery > 0) {
             $this->callAfterResolving(Schedule::class, function (Schedule $schedule) use ($cycleEvery): void {
-                $schedule->command('prosetta:cycle')->cron('*/'.max(1, min(59, (int) $cycleEvery)).' * * * *')->withoutOverlapping();
+                $minutes = max(1, min(59, (int) $cycleEvery));
+
+                # A Cycle Killed Mid-Run Leaves Its Overlap Lock Behind: Let It Expire After Two Intervals, Not the Default Day
+                $schedule->command('prosetta:cycle')->cron("*/$minutes * * * *")->withoutOverlapping(max(2 * $minutes, 10));
             });
         }
     }

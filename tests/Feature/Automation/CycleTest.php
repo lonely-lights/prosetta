@@ -327,6 +327,16 @@ it('schedules the cycle when automation.every is set', function () {
         ->and($events->first()->withoutOverlapping)->toBeTrue();
 });
 
+it('lets the cycle\'s overlap lock expire after twice the interval, at least 10 minutes, so a killed cycle blocks only briefly', function (int $every, int $expires) {
+    config(['prosetta.automation.every' => $every]);
+    (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
+
+    $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains((string) $event->command, 'prosetta:cycle'));
+
+    expect($event->withoutOverlapping)->toBeTrue()
+        ->and($event->expiresAt)->toBe($expires);
+})->with([[15, 30], [3, 10], [30, 60]]);
+
 it('does not schedule the cycle by default', function () {
     (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
 
