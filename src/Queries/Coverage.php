@@ -64,7 +64,7 @@ final readonly class Coverage {
         return new CoverageReport(
             $languages,
             $lastRun === null ? null : (int) $lastRun,
-            is_array($lastReport) ? $lastReport : null,
+            is_array($lastReport) ? $this->visible($lastReport, $viewer->locales()) : null,
             array_map(function (string $name) {
                 $state = $this->circuits->for($name)->state();
 
@@ -74,5 +74,41 @@ final readonly class Coverage {
             $this->health->problems(),
             $viewer->isEditable,
         );
+    }
+
+    /**
+     * The last cycle report with its flagged lines and files cut to the viewer's languages; the counters are totals and stay.
+     *
+     * @param array<string, mixed> $report
+     * @param list<string> $locales
+     * @return array<string, mixed>
+     */
+    private function visible(array $report, array $locales): array {
+        $flagged = [];
+        $files = [];
+
+        foreach ((array) ($report['flagged'] ?? []) as $line) {
+            foreach ($locales as $code) {
+                if (is_string($line) && str_starts_with($line, "$code ")) {
+                    $flagged[] = $line;
+
+                    break;
+                }
+            }
+        }
+
+        foreach ((array) ($report['files'] ?? []) as $path) {
+            $normalized = is_string($path) ? str_replace('\\', '/', $path) : '';
+
+            foreach ($locales as $code) {
+                if (str_contains($normalized, "/$code/") || str_ends_with($normalized, "/$code.json")) {
+                    $files[] = $path;
+
+                    break;
+                }
+            }
+        }
+
+        return [...$report, 'flagged' => $flagged, 'files' => $files];
     }
 }

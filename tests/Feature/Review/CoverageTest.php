@@ -59,3 +59,17 @@ it('shares its health problems with prosetta:health', function () {
     expect($problems)->toBe(['[cycle_stale] automation is on but no cycle has run yet']);
     $this->artisan('prosetta:health')->expectsOutput('[cycle_stale] automation is on but no cycle has run yet')->assertFailed();
 });
+
+it('shows only the viewer\'s languages in the last cycle report', function () {
+    State::put('cycle.last_report', [
+        'drafted' => 4, 'flagged' => ['ar auth.throttle (placeholder)', 'es messages.welcome (glossary)'],
+        'files' => ['C:\app\lang\ar\auth.php', '/app/lang/ar.json', '/app/lang/es/auth.php', '/app/lang/es.json'],
+        'at' => now()->getTimestamp(),
+    ]);
+
+    $report = app(Coverage::class)->for(coverageViewer(['es']))->lastReport;
+
+    expect($report['flagged'])->toBe(['es messages.welcome (glossary)'])
+        ->and($report['files'])->toBe(['/app/lang/es/auth.php', '/app/lang/es.json'])
+        ->and($report['drafted'])->toBe(4);
+});
