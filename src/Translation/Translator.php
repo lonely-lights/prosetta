@@ -23,6 +23,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Resilience\BudgetExhausted;
 use LonelyLights\Prosetta\Resilience\CallDeferred;
+use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Support\Settings;
@@ -35,6 +36,7 @@ final readonly class Translator {
         private KeyFinder $finder,
         private TranslationRunner $runner,
         private Suspensions $suspensions,
+        private Circuits $circuits,
     ) {}
 
     /**
@@ -196,13 +198,22 @@ final readonly class Translator {
             ->map(fn (TranslationKey $key) => $locale.' '.$key->ref()->toString())->values()->all();
     }
 
-    /** A synchronous run suspends like a queued one, except when only its own per-run budget ran out. */
+    /**
+     * A synchronous run suspends like a queued one, except when only its own
+     * per-run budget ran out. It can't wait out a transient error the way a
+     * job does, so it stops at once; that is an outage only when the circuit
+     * has been open past outage_timeout, and "unknown" otherwise.
+     */
     private function suspendSync(CallDeferred|ProviderException|BudgetExhausted $e, RunScope $scope): void {
         [$circuit, $reason] = match (true) {
             $e instanceof BudgetExhausted => ['budget', $e->period],
-            $e instanceof CallDeferred => [$e->circuit, ($e->reason === 'held' ? SuspensionReason::Halted : SuspensionReason::Outage)->value],
+            $e instanceof CallDeferred => [$e->circuit, (match (true) {
+                $e->reason === 'held' => SuspensionReason::Halted,
+                $e->outage => SuspensionReason::Outage,
+                default => SuspensionReason::Unknown,
+            })->value],
             $e instanceof ProviderRejected, $e instanceof ProviderQuotaExhausted => [(string) $e->circuit, SuspensionReason::forHalt($e)->value],
-            default => [(string) $e->circuit, SuspensionReason::Outage->value],
+            default => [(string) $e->circuit, ($e->circuit !== null && $this->circuits->for($e->circuit)->outageExceeded() ? SuspensionReason::Outage : SuspensionReason::Unknown)->value],
         };
 
         if ($reason !== 'per_run') {

@@ -212,3 +212,64 @@ it('stores the same reason "unknown" for a synchronous halt from an unrecognized
 
     expect(collect(app(Suspensions::class)->all())->first()['reason'])->toBe('unknown');
 });
+
+it('suspends a synchronous run after a single transient error as "unknown", not as an outage', function () {
+    app()->instance(TranslationDriver::class, (new ScriptedDriver)->fail(new ProviderUnavailable('503')));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['unknown']);
+    Event::assertNotDispatched(TranslationSuspended::class, fn (TranslationSuspended $event) => $event->reason === 'outage');
+});
+
+it('suspends a synchronous run that finds the circuit open, but not for long, as "unknown"', function () {
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['unknown'])
+        ->and($driver->calls)->toHaveCount(2);
+});
+
+it('suspends a synchronous run as an outage once the circuit has been open past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 100]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+    $this->travel(200)->seconds();
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage']);
+});
+
+it('suspends a synchronous run as an outage when its own failed call finds the outage past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 600]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'), new ProviderUnavailable('still down'));
+    handle(resilientJob($driver));
+    handle(resilientJob($driver));
+    $this->travel(700)->seconds();
+
+    app(Translator::class)->translate(['es'], ['*'], queue: false);
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage'])
+        ->and($driver->calls)->toHaveCount(3);
+});
+
+it('never suspends a queued job after a single transient error, and suspends it as an outage only past outage_timeout', function () {
+    config(['prosetta.resilience.outage_timeout' => 600]);
+    $driver = (new ScriptedDriver)->fail(new ProviderUnavailable('down'), new ProviderUnavailable('down'), new ProviderUnavailable('still down'));
+    $first = resilientJob($driver);
+    handle($first);
+
+    $first->assertReleased(30);
+    expect(app(Suspensions::class)->all())->toBe([]);
+
+    handle(resilientJob($driver));
+    $this->travel(700)->seconds();
+    handle(resilientJob($driver));
+
+    expect(collect(app(Suspensions::class)->all())->pluck('reason')->all())->toBe(['outage']);
+});
