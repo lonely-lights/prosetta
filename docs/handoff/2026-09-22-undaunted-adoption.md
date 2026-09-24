@@ -326,7 +326,7 @@ This follows the `NameReviewer` pattern (`Promptable`, structured output). Add t
 
 | Command | What it does | Example |
 |---|---|---|
-| `prosetta:install` | Publishes the config, plus the four workflow migrations. Publishes the locales migration only if the table is missing. | Not needed: Undaunted hand-writes its migrations (§8, step 1). |
+| `prosetta:install` | Publishes the config, plus the six workflow migrations. Publishes the locales migration only if the table is missing. | Not needed: Undaunted hand-writes its migrations (§8, step 1). |
 | `prosetta:sync [--namespace=*] [--check]` | Reads the `en` files into keys, marks stale and obsolete keys, and imports target files. `--check` changes nothing and exits 1 if anything is missing, stale, unreviewed or broken. | `php artisan prosetta:sync`, then `php artisan prosetta:sync --namespace=identity --check` |
 | `prosetta:translate [--locale=*] [--namespace=*] [--key=*] [--force] [--sync]` | Drafts missing and stale keys through your driver. Queued unless `--sync`. | `php artisan prosetta:translate --locale=es --namespace=identity --sync` |
 | `prosetta:review {locale} [--approve-clean] [--namespace=] [--limit=20]` | Lists the review queue, or approves every current candidate with no blocking issues. | `php artisan prosetta:review es --namespace=identity`, then `php artisan prosetta:review es --approve-clean --namespace=identity` |

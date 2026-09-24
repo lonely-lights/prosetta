@@ -18,7 +18,7 @@ php artisan prosetta:install   # publishes config/prosetta.php and the migration
 php artisan migrate
 ```
 
-`prosetta:install` publishes the four workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`). It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`) and widen `locale_initials` to 35 characters. Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
+`prosetta:install` publishes the six workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`, `prosetta_usage`, `prosetta_state`), re-dated to the moment you publish so they run after your own migrations. It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`), widen `locale_initials` to 35 characters, and add the background-mode columns (`auto_translate`, `style_note`, `glossary`; see [Language settings](#language-settings)). Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
 
 Target locales are rows in `prosetta_locales` where `active` (offered to members) or `translated` (maintained, even if not offered) is true. Codes must match your lang folder names exactly (`zh-CN`, `en_GB`) and can't change once created.
 

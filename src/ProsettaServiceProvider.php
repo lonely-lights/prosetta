@@ -51,15 +51,15 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
             // publishesMigrations() on a directory publishes it recursively (see
             // VendorPublishCommand::moveManagedFiles(), listContents(..., deep: true)),
-            // so the workflow tag lists its four files individually. That way the
+            // so the workflow tag lists its files individually. That way the
             // locales migration below (its own subdirectory) is never pulled in.
             $this->publishesMigrations([
-                __DIR__.'/../database/migrations/2026_09_22_000200_create_prosetta_files_table.php' => database_path('migrations/2026_09_22_000200_create_prosetta_files_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000300_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000300_create_prosetta_keys_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000400_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000400_create_prosetta_translations_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000500_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000500_create_prosetta_reviews_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000600_create_prosetta_usage_table.php' => database_path('migrations/2026_09_22_000600_create_prosetta_usage_table.php'),
-                __DIR__.'/../database/migrations/2026_09_22_000700_create_prosetta_state_table.php' => database_path('migrations/2026_09_22_000700_create_prosetta_state_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000002_create_prosetta_files_table.php' => database_path('migrations/2026_09_22_000002_create_prosetta_files_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000003_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000003_create_prosetta_keys_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000004_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000004_create_prosetta_translations_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000005_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000005_create_prosetta_reviews_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000006_create_prosetta_usage_table.php' => database_path('migrations/2026_09_22_000006_create_prosetta_usage_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000007_create_prosetta_state_table.php' => database_path('migrations/2026_09_22_000007_create_prosetta_state_table.php'),
             ], 'prosetta-migrations');
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
