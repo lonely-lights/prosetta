@@ -58,7 +58,8 @@ final class ProsettaServiceProvider extends ServiceProvider {
                 __DIR__.'/../database/migrations/2026_09_22_000300_create_prosetta_keys_table.php' => database_path('migrations/2026_09_22_000300_create_prosetta_keys_table.php'),
                 __DIR__.'/../database/migrations/2026_09_22_000400_create_prosetta_translations_table.php' => database_path('migrations/2026_09_22_000400_create_prosetta_translations_table.php'),
                 __DIR__.'/../database/migrations/2026_09_22_000500_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000500_create_prosetta_reviews_table.php'),
-                __DIR__.'/../database/migrations/2026_09_23_000100_add_automation_columns.php' => database_path('migrations/2026_09_23_000100_add_automation_columns.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000600_create_prosetta_usage_table.php' => database_path('migrations/2026_09_22_000600_create_prosetta_usage_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000700_create_prosetta_state_table.php' => database_path('migrations/2026_09_22_000700_create_prosetta_state_table.php'),
             ], 'prosetta-migrations');
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');

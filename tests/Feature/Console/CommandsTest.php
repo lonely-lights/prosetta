@@ -56,15 +56,14 @@ it('publishes config and workflow migrations on install, leaving an existing loc
         $published = glob(database_path('migrations/*prosetta*.php'));
 
         expect(is_file(config_path('prosetta.php')))->toBeTrue()
-            ->and($published)->toHaveCount(4)
+            ->and($published)->toHaveCount(6)
             ->and(array_filter($published, fn (string $path) => str_contains($path, 'create_prosetta_locales_table')))->toBe([]);
     } finally {
         if (is_file(config_path('prosetta.php'))) {
             unlink(config_path('prosetta.php'));
         }
 
-        # The Background-Mode Migration's Name Doesn't Contain "prosetta", so Match It Too or It Leaks Into the Testbench App
-        foreach ([...glob(database_path('migrations/*prosetta*.php')) ?: [], ...glob(database_path('migrations/*add_automation_columns*.php')) ?: []] as $migration) {
+        foreach (glob(database_path('migrations/*prosetta*.php')) ?: [] as $migration) {
             unlink($migration);
         }
     }

@@ -234,7 +234,7 @@ Prosetta also writes a line to `log_channel` for each: warning for opened, halte
 
 ### Language settings
 
-Three columns on `prosetta_locales` (added by `add_automation_columns`, a Prosetta migration in two forms like the others: for new hosts and as an upgrade path for hosts that already have the table):
+Three columns on `prosetta_locales`, created by the published locales migration. A host that owns its own locales table adds them itself:
 
 | Column | Type | Meaning |
 |---|---|---|
