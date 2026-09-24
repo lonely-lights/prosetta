@@ -46,6 +46,7 @@ final readonly class Cycle {
         private UsageLedger $usage,
         private LocaleSource $locales,
         private Dispatcher $events,
+        private CycleFailures $failures,
     ) {}
 
     /** @throws Throwable when syncing, confirming or dispatching fails */
@@ -66,12 +67,12 @@ final readonly class Cycle {
 
         $this->syncer->sync();
         $confirmed = $this->confirmer->confirmAll();
-        $work = $this->work->build();
+        ['work' => $work, 'held' => $held] = $this->work->plan();
         $startedAt = now()->getTimestamp();
         $runId = (string) Str::uuid();
 
         if ($work === []) {
-            return $this->finish($runId, $startedAt, $confirmed);
+            return $this->finish($runId, $startedAt, $confirmed, held: $held);
         }
 
         # Marked as a Cycle, so prosetta:resume Clears a Suspension of It Instead of Re-Translating a Wider Scope
@@ -81,16 +82,16 @@ final readonly class Cycle {
             /** @var TranslateReport $report */
             $report = $this->translator->run($work, $scope, queue: false, runId: $runId);
 
-            return $this->finish($runId, $startedAt, $confirmed, $report);
+            return $this->finish($runId, $startedAt, $confirmed, $report, held: $held);
         }
 
         # The Batch Id Isn't Known Until Dispatch, so a Queued Cycle Uses It as Its Run Id (Its Jobs Record Usage Under It)
-        $batch = $this->translator->run($work, $scope, queue: true, finally: static function (Batch $batch) use ($startedAt, $confirmed): void {
-            FinishCycle::dispatch($batch->id, $batch->id, $startedAt, $confirmed);
+        $batch = $this->translator->run($work, $scope, queue: true, finally: static function (Batch $batch) use ($startedAt, $confirmed, $held): void {
+            FinishCycle::dispatch($batch->id, $batch->id, $startedAt, $confirmed, $held);
         });
 
         if ($batch instanceof TranslateReport) {
-            return $this->finish($runId, $startedAt, $confirmed, $batch);
+            return $this->finish($runId, $startedAt, $confirmed, $batch, held: $held);
         }
 
         # On a Sync Queue (or a Fast Worker) the Batch and Its FinishCycle Can Complete Inside dispatch(): Then There's Nothing to Guard
@@ -103,12 +104,15 @@ final readonly class Cycle {
 
     /**
      * Approves this cycle's clean drafts per automation.approve, exports the
-     * languages that got approvals, records the heartbeat and reports.
+     * languages that got approvals, records the heartbeat and reports. The
+     * export leaves out any lang file a person's candidate is waiting in, so
+     * the file keeps their hand edit until it is reviewed.
      *
      * @param TranslateReport|null $inline a synchronous run's report; queued cycles count from the database
+     * @param list<string> $held keys CycleWork held back from this cycle's work, with their reasons
      * @throws Throwable when a database transaction fails
      */
-    public function finish(string $runId, int $startedAt, int $confirmed, ?TranslateReport $inline = null, ?string $batchId = null): CycleReport {
+    public function finish(string $runId, int $startedAt, int $confirmed, ?TranslateReport $inline = null, ?string $batchId = null, array $held = []): CycleReport {
         $drafts = $this->drafts($startedAt);
         $touched = $drafts->pluck('locale')->unique()->values()->all();
         $approvedPerLocale = [];
@@ -121,18 +125,31 @@ final readonly class Cycle {
             }
         }
 
-        $files = config('prosetta.automation.export', true) && $approvedPerLocale !== []
-            ? $this->exporter->export(array_keys($approvedPerLocale))->written
-            : [];
+        $files = [];
+        $heldFiles = [];
+
+        if (config('prosetta.automation.export', true) && $approvedPerLocale !== []) {
+            $exported = $this->exporter->export(array_keys($approvedPerLocale), hold: $this->filesAwaitingReview(array_keys($approvedPerLocale)));
+            $files = $exported->written;
+            $heldFiles = array_map(
+                fn (array $file) => $file['locale'].' '.$this->relative($file['path']).' (export held: a person\'s edit in this file awaits review)',
+                $exported->held,
+            );
+        }
 
         $report = new CycleReport(
             drafted: $inline !== null ? count($inline->drafted) : $drafts->count(),
             updated: $inline !== null ? count($inline->updated) : $drafts->whereNotNull('approved_value')->count(),
             confirmed: $confirmed,
             approved: array_sum($approvedPerLocale),
-            flagged: $drafts->filter(fn (Translation $translation) => ! empty($translation->issues))
-                ->map(fn (Translation $translation) => $translation->locale.' '.$translation->key->ref()->toString())
-                ->values()->all(),
+            flagged: [
+                ...$drafts->filter(fn (Translation $translation) => ! empty($translation->issues))
+                    ->map(fn (Translation $translation) => $translation->locale.' '.$translation->key->ref()->toString())
+                    ->values()->all(),
+                ...$this->failures->failedIn($runId),
+                ...$held,
+                ...$heldFiles,
+            ],
             files: array_values($files),
             tokens: $this->usage->sum($runId),
             batchId: $batchId,
@@ -200,6 +217,45 @@ final readonly class Cycle {
             ->where('updated_at', '>=', now()->setTimestamp($startedAt))
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * The lang files holding a current candidate from a person or an import:
+     * not AI, still Draft or NeedsReview, and made from the key's current English.
+     *
+     * @param list<string> $locales
+     * @return array<string, list<int>> locale => file ids
+     */
+    private function filesAwaitingReview(array $locales): array {
+        $translationTable = Settings::table('translations');
+        $keyTable = Settings::table('keys');
+        $model = Settings::model('translation');
+        $held = [];
+
+        $rows = $model::query()->toBase()
+            ->join($keyTable, "$keyTable.id", '=', "$translationTable.key_id")
+            ->whereIn("$translationTable.locale", $locales)
+            ->where("$translationTable.origin", '!=', TranslationOrigin::Ai->value)
+            ->whereIn("$translationTable.status", [TranslationStatus::Draft->value, TranslationStatus::NeedsReview->value])
+            ->whereNotNull("$translationTable.value")
+            ->whereColumn("$translationTable.source_hash", "$keyTable.source_hash")
+            ->whereNull("$keyTable.obsolete_at")
+            ->distinct()
+            ->get(["$translationTable.locale", "$keyTable.file_id"]);
+
+        foreach ($rows as $row) {
+            $held[(string) $row->locale][] = (int) $row->file_id;
+        }
+
+        return $held;
+    }
+
+    /** The path relative to the app when it is inside it, as a person would look for the file. */
+    private function relative(string $path): string {
+        $path = str_replace('\\', '/', $path);
+        $base = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+
+        return str_starts_with($path, $base) ? substr($path, strlen($base)) : $path;
     }
 
     /**

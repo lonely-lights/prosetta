@@ -127,7 +127,7 @@ final readonly class Translator {
                 foreach ($files as $ids) {
                     foreach (array_chunk($ids, $size) as $chunk) {
                         try {
-                            $report->merge($this->runner->run($locale, $chunk, $force, $runId));
+                            $report->merge($this->runner->run($locale, $chunk, $force, $runId, $scope->cycle));
                         } catch (ProviderBatchRejected $rejected) {
                             # Only This Chunk Was Refused: Keep What the Retry Interrupted, and Record the Rest as Failed
                             $drafted = [];

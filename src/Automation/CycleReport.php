@@ -7,7 +7,11 @@ namespace LonelyLights\Prosetta\Automation;
 /** What one cycle did: counts, the refs that need a human, the files written and the tokens spent. */
 final readonly class CycleReport {
     /**
-     * @param list<string> $flagged "{locale} {ref}" drafts from this cycle that carry any issue
+     * @param list<string> $flagged what needs a person: "{locale} {ref}" for a draft from this cycle that carries any issue; then, each
+     *                              with its reason in brackets after it, "{locale} {ref} (…)" for a key that failed to translate in
+     *                              this run, one held back because a person's candidate awaits review, or one skipped after
+     *                              CycleFailures::LIMIT failures, and "{locale} {path} (…)" for a lang file the export held
+     *                              because a person's edit in it awaits review
      * @param list<string> $files lang files the export wrote
      */
     public function __construct(

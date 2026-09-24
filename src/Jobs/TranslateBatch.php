@@ -91,7 +91,7 @@ final class TranslateBatch implements ShouldQueue {
         }
 
         try {
-            $runner->run($this->locale, $this->keyIds, $this->force, $this->batchId);
+            $runner->run($this->locale, $this->keyIds, $this->force, $this->batchId, (bool) ($this->scope['cycle'] ?? false));
         } catch (CallDeferred $deferred) {
             if ($deferred->reason === 'held' || $deferred->outage) {
                 $this->stop($suspensions, $deferred->circuit, ($deferred->reason === 'held' ? SuspensionReason::Halted : SuspensionReason::Outage)->value);

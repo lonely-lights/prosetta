@@ -50,8 +50,9 @@ final readonly class Exporter {
     /**
      * @param list<string> $locales
      * @param list<string> $namespaces
+     * @param array<string, list<int>> $hold locale => ids of files to leave untouched, reported as held (the cycle's hand-edit guard)
      */
-    public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, bool $force = false): ExportReport {
+    public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, bool $force = false, array $hold = []): ExportReport {
         $includeDrafts ??= (bool) config('prosetta.export.include_drafts', false);
         $report = new ExportReport($dryRun);
         $source = $this->locales->source();
@@ -68,6 +69,12 @@ final readonly class Exporter {
                 $keys = $file->keys()->whereNull('obsolete_at')->get()->keyBy(fn (TranslationKey $key) => $key->key);
 
                 foreach ($targets as $locale) {
+                    if (in_array((int) $file->getKey(), $hold[$locale] ?? [], true)) {
+                        $report->held[] = ['locale' => $locale, 'path' => $this->reader->path($root, $locale, $file->group, $file->format)];
+
+                        continue;
+                    }
+
                     $this->exportFile($root, $file, $order, $keys, $source, $locale, $includeDrafts, $force, $report);
                 }
             }

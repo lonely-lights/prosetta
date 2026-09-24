@@ -298,7 +298,7 @@ it('prosetta:cycle --sync exits 1 when anything is flagged, 0 when clean', funct
 
 it('prosetta:cycle --sync exits 1 while an approved translation is stale', function () {
     cycleEditEnglish($this->fixture, 'These details do not match our records.');
-    # A Refusal Leaves No Draft, so Nothing Is Flagged or Suspended: Only the Stale Approval Remains
+    # A Refusal Leaves No Draft and Suspends Nothing: the Stale Approval Stays, Next to the Failed Key
     app()->instance(TranslationDriver::class, (new ScriptedDriver)->refuse('These details do not match our records.'));
 
     $this->artisan('prosetta:cycle --sync')->expectsOutputToContain('1 stale')->assertExitCode(1);

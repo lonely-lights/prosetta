@@ -23,10 +23,13 @@ final class ExportReport {
     /** @var list<string> target files whose source group no longer exists; left untouched */
     public array $orphaned = [];
 
+    /** @var list<array{locale: string, path: string}> target files the caller asked to hold; left untouched */
+    public array $held = [];
+
     public function __construct(public readonly bool $dryRun = false) {}
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned];
+        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held];
     }
 }

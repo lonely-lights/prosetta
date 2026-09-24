@@ -9,6 +9,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LonelyLights\Prosetta\Automation\CycleFailures;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\TranslationBatch;
@@ -18,6 +19,7 @@ use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\TranslationDrafted;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
+use LonelyLights\Prosetta\Exceptions\Provider\ProviderBatchRejected;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderException;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Guard\GlossaryGuard;
@@ -46,13 +48,15 @@ final readonly class TranslationRunner {
         private GlossaryGuard $glossary,
         private Dispatcher $events,
         private ProviderGate $gate,
+        private CycleFailures $failures,
     ) {}
 
     /**
      * @param list<int> $keyIds
+     * @param bool $cycle a prosetta:cycle run: keys the provider fails to translate are counted, so the cycle can stop resending them
      * @throws Throwable when a database transaction fails, or a ProviderException, CallDeferred or BudgetExhausted when the provider can't be called
      */
-    public function run(string $locale, array $keyIds, bool $force = false, ?string $runId = null): TranslateReport {
+    public function run(string $locale, array $keyIds, bool $force = false, ?string $runId = null, bool $cycle = false): TranslateReport {
         $report = new TranslateReport;
         $target = $this->locales->find($locale) ?? throw new ProsettaException("Unknown locale [$locale].");
         $keyModel = Settings::model('key');
@@ -80,7 +84,16 @@ final readonly class TranslationRunner {
 
         $source = $this->locales->source();
         $batch = new TranslationBatch($source, $target, LocaleCode::isVariantOf($locale, $source) ? $source : null, $this->model($locale), $items);
-        $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+
+        try {
+            $outcomes = $this->attempt($driver, $batch, $locale, $runId);
+        } catch (ProviderBatchRejected $rejected) {
+            # The Provider Refused the Whole Batch: Every Key in It Failed
+            $this->failures->settle($locale, $cycle ? $keys->values()->all() : [], [], $runId);
+
+            throw $rejected;
+        }
+
         $stopped = null;
 
         try {
@@ -106,9 +119,21 @@ final readonly class TranslationRunner {
             $stopped = $e;
         }
 
+        $failed = [];
+        $drafted = [];
+
         foreach ($outcomes as $id => $outcome) {
-            $this->persist($keys->get((int) $id), $existing->get((int) $id), $locale, $outcome, $report);
+            $key = $keys->get((int) $id);
+            $this->persist($key, $existing->get((int) $id), $locale, $outcome, $report);
+
+            if ($outcome['value'] === null) {
+                $failed[] = $key;
+            } else {
+                $drafted[] = (int) $id;
+            }
         }
+
+        $this->failures->settle($locale, $cycle ? $failed : [], $drafted, $runId);
 
         if ($stopped !== null) {
             if ($stopped instanceof ProviderException) {

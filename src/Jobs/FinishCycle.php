@@ -16,11 +16,13 @@ use Throwable;
 final class FinishCycle implements ShouldQueue {
     use Dispatchable, InteractsWithQueue, Queueable;
 
+    /** @param list<string> $held keys the cycle held back from its work, with their reasons */
     public function __construct(
         public string $batchId,
         public string $runId,
         public int $startedAt,
         public int $confirmed,
+        public array $held = [],
     ) {
         $connection = config('prosetta.queue.connection');
 
@@ -33,6 +35,6 @@ final class FinishCycle implements ShouldQueue {
 
     /** @throws Throwable when a database transaction fails */
     public function handle(Cycle $cycle): CycleReport {
-        return $cycle->finish($this->runId, $this->startedAt, $this->confirmed, batchId: $this->batchId);
+        return $cycle->finish($this->runId, $this->startedAt, $this->confirmed, batchId: $this->batchId, held: $this->held);
     }
 }

@@ -7,6 +7,8 @@ namespace LonelyLights\Prosetta\Automation;
 use Illuminate\Support\Collection;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
+use LonelyLights\Prosetta\Enums\TranslationOrigin;
+use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
@@ -18,15 +20,30 @@ use LonelyLights\Prosetta\Translation\SourceChange;
  * translations whose English changed substantively (update mode), and in
  * auto-translate languages, every other key that needs work: nothing yet,
  * only a rejected candidate, or an unapproved draft made from older English.
+ * Two kinds of key it would send are held back and reported instead: one a
+ * person's candidate is waiting on (never overwritten by the AI, whatever
+ * English it was made from), and one the provider failed to translate
+ * CycleFailures::LIMIT times from its current English.
  */
 final readonly class CycleWork {
-    public function __construct(private LocaleSource $locales) {}
+    public function __construct(private LocaleSource $locales, private CycleFailures $failures) {}
 
     /** @return array<string, array<int, list<int>>> locale => file id => key ids */
     public function build(): array {
+        return $this->plan()['work'];
+    }
+
+    /**
+     * The work, and the keys held back from it, each with its reason.
+     *
+     * @return array{work: array<string, array<int, list<int>>>, held: list<string>}
+     */
+    public function plan(): array {
         $auto = $this->locales->autoTranslateTargets();
         $keys = $this->keys();
+        $failures = $this->failures->all();
         $work = [];
+        $held = [];
 
         foreach ($this->targets() as $locale) {
             $existing = $this->translations($locale, $keys);
@@ -38,13 +55,23 @@ final readonly class CycleWork {
                     ? $this->needsUpdate($key, $translation)
                     : in_array($locale, $auto, true) && WorkState::needsWork($key, $translation);
 
-                if ($needed) {
+                if (! $needed) {
+                    continue;
+                }
+
+                $ref = $locale.' '.$key->ref()->toString();
+
+                if ($this->awaitsPerson($translation)) {
+                    $held[] = "$ref (awaiting human review)";
+                } elseif (CycleFailures::capped($failures, $locale, $key)) {
+                    $held[] = sprintf('%s (skipped: translation failed %d times; the cycle tries again once its English changes)', $ref, CycleFailures::LIMIT);
+                } else {
                     $work[$locale][(int) $key->file_id][] = (int) $key->getKey();
                 }
             }
         }
 
-        return $work;
+        return ['work' => $work, 'held' => $held];
     }
 
     /**
@@ -74,6 +101,14 @@ final readonly class CycleWork {
         return WorkState::isStale($key, $translation)
             && ! WorkState::hasCurrentCandidate($key, $translation)
             && ! ($translation->approved_source_value !== null && SourceChange::isCosmetic($translation->approved_source_value, $key->source_value));
+    }
+
+    /** A candidate from a person or an import, not yet reviewed: the AI must not overwrite it. */
+    private function awaitsPerson(?Translation $translation): bool {
+        return $translation !== null
+            && $translation->value !== null
+            && $translation->origin !== TranslationOrigin::Ai
+            && in_array($translation->status, [TranslationStatus::Draft, TranslationStatus::NeedsReview], true);
     }
 
     /** @return list<string> */
