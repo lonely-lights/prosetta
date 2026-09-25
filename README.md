@@ -356,6 +356,28 @@ A controller reading the queue looks like:
 $queue = app(ReviewQueue::class)->for(Viewer::for($request->user()), $request->only(['locale', 'reason', 'namespace', 'group', 'search']));
 ```
 
+## Translating database content
+
+Add `TranslatesContent` to a model and list its fields, each with a note for the AI:
+
+```php
+use LonelyLights\Prosetta\Content\TranslatesContent;
+
+final class Pillar extends Model {
+    use TranslatesContent;
+
+    public function translatableFields(): array {
+        return ['name' => 'The name of a pillar.', 'subtitle' => 'One sentence describing it.'];
+    }
+}
+```
+
+Once a save commits, the model's fields are kept as keys under `content/<table>` (`content::pillars.technology.name`, with the route key, a slug where there is one, as the record part). An English edit makes the translations stale, a slug change renames the keys and keeps them, and a delete marks them obsolete. The cycle drafts them and they are reviewed like any string.
+
+Read them with `$model->translated('name')` (the current locale, falling back to English) or `$model->translations()`; `$model->name` always stays English, so saving never writes another language into it. Approved values are cached per folder and refreshed on approval. Content is never exported to lang files, and people can approve it even where `prosetta.review.editable` is off, since it never has to reach git; `QueueItem` and `KeyRow` carry an `editable` flag per row. Override `translationFolder()`, `translationKey()`, `translationMaxLength($field)` or `shouldTranslate()` to adjust, and call `queueContent()` to draft a record now rather than at the next cycle.
+
+`php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
+
 ## Services for your own admin
 
 `Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.
