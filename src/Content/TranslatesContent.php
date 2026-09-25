@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Content;
 
 use Illuminate\Database\Eloquent\Model;
+use LonelyLights\Prosetta\Contracts\LocaleSource;
+use LonelyLights\Prosetta\ProsettaManager;
 
 /**
  * Makes a model's text fields translatable content. Its keys follow the
@@ -53,6 +55,40 @@ trait TranslatesContent {
     /** False keeps this record's keys obsolete, e.g. for a draft. */
     public function shouldTranslate(): bool {
         return true;
+    }
+
+    /** The approved translation of a field in a locale (default: the current one), else its English. */
+    public function translated(string $field, ?string $locale = null): ?string {
+        $english = $this->getAttribute($field);
+        $locale ??= app()->getLocale();
+
+        if (! array_key_exists($field, $this->translatableFields()) || $locale === app(LocaleSource::class)->source()) {
+            return $english === null ? null : (string) $english;
+        }
+
+        return app(ContentTranslations::class)->value($this->translationFolder(), $this->translationKey(), $field, $locale)
+            ?? ($english === null ? null : (string) $english);
+    }
+
+    /** @return array<string, string|null> every translatable field, translated */
+    public function translations(?string $locale = null): array {
+        $values = [];
+
+        foreach (array_keys($this->translatableFields()) as $field) {
+            $values[$field] = $this->translated($field, $locale);
+        }
+
+        return $values;
+    }
+
+    /** Asks for AI drafts of this record's fields now, rather than at the next cycle. */
+    public function queueContent(): void {
+        $refs = array_map(
+            fn (string $field) => ContentKeys::NAMESPACE.'::'.$this->translationFolder().'.'.$this->translationKey().'.'.$field,
+            array_keys($this->translatableFields()),
+        );
+
+        app(ProsettaManager::class)->translate(keys: $refs, queue: true);
     }
 
     /** This record as it was loaded, before unsaved changes. */

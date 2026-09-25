@@ -25,7 +25,7 @@ use LonelyLights\Prosetta\Support\Settings;
 final readonly class ContentKeys {
     public const string NAMESPACE = 'content';
 
-    public function __construct(private Dispatcher $events) {}
+    public function __construct(private Dispatcher $events, private ContentTranslations $translations) {}
 
     public function file(string $folder): TranslationFile {
         $model = Settings::model('file');
@@ -120,6 +120,8 @@ final readonly class ContentKeys {
         foreach ($this->keys($file, $from) as $key) {
             $key->update(['key' => $to.substr($key->key, strlen($from))]);
         }
+
+        $this->translations->forget($file->group);
     }
 
     private function retire(TranslationKey $key, TranslationFile $file): void {
@@ -128,6 +130,7 @@ final readonly class ContentKeys {
         }
 
         $key->update(['obsolete_at' => now()]);
+        $this->translations->forget($file->group);
         $key->setRelation('file', $file);
         $this->events->dispatch(new KeyObsoleted($key));
     }

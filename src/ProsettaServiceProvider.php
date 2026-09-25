@@ -24,9 +24,11 @@ use LonelyLights\Prosetta\Console\ReviewCommand;
 use LonelyLights\Prosetta\Console\StatsCommand;
 use LonelyLights\Prosetta\Console\SyncCommand;
 use LonelyLights\Prosetta\Console\TranslateCommand;
+use LonelyLights\Prosetta\Content\ForgetApprovedContent;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Events\TranslationApproved;
 use LonelyLights\Prosetta\Locales\DatabaseLocaleSource;
 use LonelyLights\Prosetta\Resilience\LogResilienceEvents;
 
@@ -77,6 +79,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
         RateLimiter::for('prosetta-ai', fn (): Limit => Limit::perMinute(max(1, (int) config('prosetta.queue.rate_per_minute', 60))));
 
         Event::subscribe(LogResilienceEvents::class);
+        Event::listen(TranslationApproved::class, ForgetApprovedContent::class);
 
         $every = config('prosetta.resilience.resume_every');
 
