@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Enums\KeyKind;
 use LonelyLights\Prosetta\Events\KeyAdded;
 use LonelyLights\Prosetta\Events\KeyChanged;
 use LonelyLights\Prosetta\Events\KeyObsoleted;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Guard\Placeholders;
 use LonelyLights\Prosetta\Models\TranslationFile;
 use LonelyLights\Prosetta\Models\TranslationKey;
@@ -92,11 +93,23 @@ final readonly class ContentKeys {
 
             $previous = $current->source_value;
             $changed = $current->source_hash !== $attributes['source_hash'];
+            $restored = $current->obsolete_at !== null;
             $current->update($attributes);
             $current->setRelation('file', $file);
 
+            if ($restored) {
+                $this->translations->forget($file->group);
+            }
+
             if ($changed) {
                 $this->events->dispatch(new KeyChanged($current, $previous));
+            }
+        }
+
+        # A Field the Model No Longer Translates Stops Waiting for Drafts and Review
+        foreach ($existing as $name => $key) {
+            if (! array_key_exists(substr($name, strlen($record) + 1), $model->translatableFields())) {
+                $this->retire($key, $file);
             }
         }
     }
@@ -116,9 +129,21 @@ final readonly class ContentKeys {
             ->keyBy('key');
     }
 
+    /** @throws ProsettaException when another current record already holds the new record key */
     private function rename(TranslationFile $file, string $from, string $to): void {
+        $taken = $this->keys($file, $to);
+
         foreach ($this->keys($file, $from) as $key) {
-            $key->update(['key' => $to.substr($key->key, strlen($from))]);
+            $name = $to.substr($key->key, strlen($from));
+            $leftover = $taken->get($name);
+
+            if ($leftover !== null && $leftover->obsolete_at === null) {
+                throw new ProsettaException("Content key [$name] already belongs to a current record.");
+            }
+
+            # A Deleted Record's Keys (and Their Translations) Give Way to the Record Taking Its Name
+            $leftover?->delete();
+            $key->update(['key' => $name]);
         }
 
         $this->translations->forget($file->group);

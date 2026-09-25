@@ -19,6 +19,9 @@ final class BatchReport {
     /** Ids skipped before any write: in a language the viewer can't review, or no longer there. */
     public int $forbidden = 0;
 
+    /** File translations left alone because review is read-only here; content is still approved. */
+    public int $locked = 0;
+
     /** @var array<int, string> translation id => reason */
     public array $skipped = [];
 

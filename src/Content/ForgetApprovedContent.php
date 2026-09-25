@@ -15,7 +15,8 @@ final readonly class ForgetApprovedContent {
         $file = $event->translation->key->file;
 
         if ($file->format === FileFormat::Database) {
-            $this->translations->forget($file->group);
+            # After Commit: a Read Between the Forget and the Commit Would Cache the Old Value for Good
+            $event->translation->getConnection()->afterCommit(fn () => $this->translations->forget($file->group));
         }
     }
 }

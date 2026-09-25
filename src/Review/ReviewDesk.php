@@ -43,7 +43,14 @@ final readonly class ReviewDesk {
         $expected = [];
 
         foreach ($this->queue->all($viewer, $filters) as $item) {
-            if ($item->translationId === null || $item->candidate === null || ! in_array($item->reason, ['draft', 'flagged', 'pending'], true) || ! $viewer->canReview($item->locale) || ! $item->editable) {
+            if ($item->translationId === null || $item->candidate === null || ! in_array($item->reason, ['draft', 'flagged', 'pending'], true) || ! $viewer->canReview($item->locale)) {
+                continue;
+            }
+
+            if (! $item->editable) {
+                $report->skipped[$item->translationId] = 'locked';
+                $report->locked++;
+
                 continue;
             }
 
@@ -175,6 +182,7 @@ final readonly class ReviewDesk {
             # Read-Only Here: File Translations Wait for an Environment Whose Approvals Reach the Lang Files
             if ($viewer->user !== null && ! Viewer::editable($translation->key)) {
                 $report->skipped[(int) $id] = 'locked';
+                $report->locked++;
 
                 continue;
             }
