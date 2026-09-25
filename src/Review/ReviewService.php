@@ -13,6 +13,7 @@ use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Enums\FileFormat;
 use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
@@ -25,6 +26,7 @@ use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Fingerprint;
 use LonelyLights\Prosetta\Support\Settings;
@@ -49,8 +51,8 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function edit(int $translationId, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false, ?string $expected = null): Translation {
-        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->unlocked($by, $translation->key);
         $this->current($translation, $expected);
         $this->authorizer->authorize($by, $approve ? Ability::Review : Ability::Translate, $translation->locale);
         $key = $translation->key;
@@ -96,12 +98,13 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function write(string $keyRef, string $locale, string $value, ?Authenticatable $by, ?string $notes = null, bool $approve = false): Translation {
-        $this->unlocked($by);
         $key = $this->finder->find($keyRef);
 
         if ($key === null || $key->obsolete_at !== null) {
             throw new ProsettaException("No current key [$keyRef].");
         }
+
+        $this->unlocked($by, $key);
 
         if (! in_array($locale, array_map(fn (LocaleDescriptor $target) => $target->code, $this->locales->targets()), true)) {
             throw new ProsettaException("[$locale] is not a locale Prosetta maintains.");
@@ -126,12 +129,12 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null, array $expected = []): ApproveReport {
-        $this->unlocked($by);
         $report = new ApproveReport;
         $translations = array_map(fn ($id) => $this->load((int) $id), (array) $translationIds);
 
         # Check Every Locale First, so a Mixed Batch Never Half-Applies
         foreach ($translations as $translation) {
+            $this->unlocked($by, $translation->key);
             $this->authorizer->authorize($by, Ability::Review, $translation->locale);
         }
 
@@ -172,8 +175,8 @@ final readonly class ReviewService {
 
     /** @throws Throwable when a database transaction fails */
     public function reject(int $translationId, ?Authenticatable $by, ?string $notes = null, ?string $expected = null): Translation {
-        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->unlocked($by, $translation->key);
         $this->current($translation, $expected);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
         $alreadyRejected = $translation->status === TranslationStatus::Rejected;
@@ -201,8 +204,8 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function confirm(int $translationId, ?Authenticatable $by, ?string $notes = null, ?string $expected = null): Translation {
-        $this->unlocked($by);
         $translation = $this->load($translationId);
+        $this->unlocked($by, $translation->key);
         $this->current($translation, $expected);
         $this->authorizer->authorize($by, Ability::Review, $translation->locale);
         $key = $translation->key;
@@ -235,7 +238,6 @@ final readonly class ReviewService {
      * @throws Throwable when a database transaction fails
      */
     public function approveClean(string $locale, ?string $namespace = null, ?string $group = null, ?Authenticatable $by = null, bool $strict = false, ?int $since = null): ApproveReport {
-        $this->unlocked($by);
         $this->authorizer->authorize($by, Ability::Review, $locale);
         $t = Settings::table('translations');
         $k = Settings::table('keys');
@@ -252,6 +254,8 @@ final readonly class ReviewService {
             ->when($namespace !== null, fn ($query) => $query->where("$f.namespace", $namespace))
             ->when($group !== null, fn ($query) => $query->where("$f.group", $group))
             ->when($strict || $since !== null, fn ($query) => $query->whereNull("$t.issues"))
+            # Where Review Is Read-Only, a Person Can Still Approve Content, Which Never Reaches a File
+            ->when($by !== null && ! Viewer::editable(), fn ($query) => $query->where("$f.format", FileFormat::Database->value))
             ->when($since !== null, fn ($query) => $query
                 ->whereIn("$t.origin", [TranslationOrigin::Ai->value, TranslationOrigin::Derived->value])
                 ->where("$t.status", TranslationStatus::Draft->value)
@@ -310,9 +314,9 @@ final readonly class ReviewService {
         return null;
     }
 
-    /** People can't change translations where review is read-only; the system (no user) always can. */
-    private function unlocked(?Authenticatable $by): void {
-        if ($by !== null && ! Viewer::editable()) {
+    /** People can't change file translations where review is read-only; content, and the system (no user), always can. */
+    private function unlocked(?Authenticatable $by, ?TranslationKey $key = null): void {
+        if ($by !== null && ! Viewer::editable($key)) {
             throw ReviewLocked::make();
         }
     }

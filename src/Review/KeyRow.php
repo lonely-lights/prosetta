@@ -18,11 +18,12 @@ final readonly class KeyRow {
         public string $source,
         public ?string $context,
         public array $cells,
+        public bool $editable,
     ) {}
 
     /** @param array<string, KeyCell> $cells */
     public static function from(TranslationKey $key, array $cells): self {
-        return new self((int) $key->getKey(), $key->ref()->toString(), $key->file->namespace, $key->file->group, $key->key, $key->source_value, $key->context, $cells);
+        return new self((int) $key->getKey(), $key->ref()->toString(), $key->file->namespace, $key->file->group, $key->key, $key->source_value, $key->context, $cells, Viewer::editable($key));
     }
 
     /** @return array<string, mixed> */

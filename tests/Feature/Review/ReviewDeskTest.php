@@ -94,11 +94,13 @@ it('estimates and queues a re-draft of chosen keys, and queues a cycle', functio
     expect(State::get('cycle.last_run'))->not->toBeNull();
 });
 
-it('refuses batches, re-drafts and cycles where review is read-only', function () {
+it('approves no file translation in a batch, and refuses cycles, where review is read-only', function () {
+    $draft = deskDraft('auth.throttle', 'Uno :seconds');
     config(['prosetta.review.editable' => false]);
     $viewer = Viewer::for(new GenericUser(['id' => 'u1']));
 
-    expect(fn () => app(ReviewDesk::class)->approveMatching($viewer, []))->toThrow(ReviewLocked::class)
+    expect(app(ReviewDesk::class)->approveMatching($viewer, [])->approved)->toBe(0)
+        ->and($draft->refresh()->status)->toBe(TranslationStatus::Draft)
         ->and(fn () => app(ReviewDesk::class)->runCycle($viewer))->toThrow(ReviewLocked::class);
 });
 

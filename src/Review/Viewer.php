@@ -9,6 +9,8 @@ use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Enums\FileFormat;
+use LonelyLights\Prosetta\Models\TranslationKey;
 
 /**
  * A person looking at translations, and what they may do: resolved once
@@ -41,8 +43,12 @@ final readonly class Viewer {
         );
     }
 
-    /** Whether people may change translations in this environment. */
-    public static function editable(): bool {
+    /** Whether people may change translations here; content keys can always be changed, since they never reach a file. */
+    public static function editable(?TranslationKey $key = null): bool {
+        if ($key !== null && $key->file->format === FileFormat::Database) {
+            return true;
+        }
+
         $configured = config('prosetta.review.editable');
 
         return $configured === null
