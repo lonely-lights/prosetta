@@ -369,6 +369,7 @@ interface LocaleSource {
 - **`queueTranslation(array $fields = [], array $locales = [])`** throws on a field outside the whitelist. It dispatches with `ShouldBeUnique` per (model, field) so rapid edits coalesce.
 - **Warning:** a non-source locale set outside Prosetta's approval path triggers a warning (spatie writes plain assignments to the current app locale).
 - **Open decision:** whether spatie is a Composer `suggest` (recommended) or a hard `require`.
+- **Member content (decided 2026-09-24, designed separately):** members write in their own language, so a post's source locale is the author's, not the app's. English is then a **target** like any other: it gets drafted, flagged and reviewed. Review and Keys screens must list English for content keys. For UI strings it stays the source language, shown first in overviews with its key count and never reviewed.
 
 ## 13. Undaunted adoption (summary; the full hand-off report is written at the end)
 
