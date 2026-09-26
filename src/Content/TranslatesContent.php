@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Content;
 
 use Illuminate\Database\Eloquent\Model;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
+use LogicException;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\ProsettaManager;
 
@@ -22,6 +24,11 @@ trait TranslatesContent {
     abstract public function translatableFields(): array;
 
     public static function bootTranslatesContent(): void {
+        # The Interface Is How Prosetta (and Your IDE) Knows This Model's Shape; Say So Plainly When It's Missing
+        if (! is_subclass_of(static::class, TranslatableContent::class)) {
+            throw new LogicException(static::class.' uses TranslatesContent, so it must also implements TranslatableContent ('.TranslatableContent::class.').');
+        }
+
         static::saving(function (self $model): void {
             $model->prosettaPreviousRecord = $model->exists ? $model->prosettaOriginal()->translationKey() : null;
         });

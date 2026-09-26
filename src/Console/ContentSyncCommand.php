@@ -7,7 +7,7 @@ namespace LonelyLights\Prosetta\Console;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use LonelyLights\Prosetta\Content\ContentKeys;
-use LonelyLights\Prosetta\Content\TranslatesContent;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
 
 /**
  * Brings every row of the given TranslatesContent models in line with its
@@ -30,8 +30,8 @@ final class ContentSyncCommand extends Command {
         }
 
         foreach ($classes as $class) {
-            if (! is_string($class) || ! class_exists($class) || ! is_subclass_of($class, Model::class) || ! in_array(TranslatesContent::class, class_uses_recursive($class), true)) {
-                $this->error('['.(is_string($class) ? $class : get_debug_type($class)).'] is not a model using TranslatesContent.');
+            if (! is_string($class) || ! class_exists($class) || ! is_subclass_of($class, Model::class) || ! is_subclass_of($class, TranslatableContent::class)) {
+                $this->error('['.(is_string($class) ? $class : get_debug_type($class)).'] is not a model implementing TranslatableContent.');
 
                 return self::FAILURE;
             }
@@ -40,8 +40,8 @@ final class ContentSyncCommand extends Command {
         foreach ($classes as $class) {
             $count = 0;
 
-            /** @var class-string<Model> $class */
-            $class::query()->lazyById()->each(function (Model $model) use ($content, &$count): void {
+            /** @var class-string<Model&TranslatableContent> $class */
+            $class::query()->lazyById()->each(function (Model&TranslatableContent $model) use ($content, &$count): void {
                 $content->sync($model);
                 $count++;
             });

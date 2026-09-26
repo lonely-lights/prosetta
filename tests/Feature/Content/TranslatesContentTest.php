@@ -100,3 +100,16 @@ it('creates no keys when the saving transaction rolls back', function () {
 
     expect(contentKey('technology.name'))->toBeNull();
 });
+
+it('asks a model using the trait to declare the TranslatableContent interface, by name', function () {
+    # It Fails as the Class First Boots, Before Anything Is Saved
+    expect(fn () => new class extends Illuminate\Database\Eloquent\Model {
+        use LonelyLights\Prosetta\Content\TranslatesContent;
+
+        protected $table = 'pillars';
+
+        public function translatableFields(): array {
+            return ['name' => 'A name.'];
+        }
+    })->toThrow(LogicException::class, 'implements TranslatableContent');
+});

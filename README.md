@@ -358,12 +358,13 @@ $queue = app(ReviewQueue::class)->for(Viewer::for($request->user()), $request->o
 
 ## Translating database content
 
-Add `TranslatesContent` to a model and list its fields, each with a note for the AI:
+Implement `TranslatableContent` and use the `TranslatesContent` trait on a model (the trait does the work; the interface gives Prosetta and your IDE its shape), then list its fields, each with a note for the AI:
 
 ```php
 use LonelyLights\Prosetta\Content\TranslatesContent;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
 
-final class Pillar extends Model {
+final class Pillar extends Model implements TranslatableContent {
     use TranslatesContent;
 
     public function translatableFields(): array {
