@@ -11,6 +11,8 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
+use LonelyLights\Prosetta\Http\ApprovalsController;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
@@ -18,6 +20,7 @@ use LonelyLights\Prosetta\Console\ContentImportCommand;
 use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
 use LonelyLights\Prosetta\Console\HealthCommand;
+use LonelyLights\Prosetta\Console\PullCommand;
 use LonelyLights\Prosetta\Console\InstallCommand;
 use LonelyLights\Prosetta\Console\RenameCommand;
 use LonelyLights\Prosetta\Console\ResumeCommand;
@@ -49,6 +52,10 @@ final class ProsettaServiceProvider extends ServiceProvider {
     }
 
     public function boot(): void {
+        # Always Registered, but a 404 Unless prosetta.pull.token Is Set and Given (ApprovalsController)
+        Route::get((string) config('prosetta.pull.path', 'prosetta/approvals'), ApprovalsController::class)
+            ->middleware('throttle:60,1')->name('prosetta.approvals');
+
         if ($this->app->runningInConsole()) {
             $this->publishes([__DIR__.'/../config/prosetta.php' => config_path('prosetta.php')], 'prosetta-config');
 
@@ -69,7 +76,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
             $this->commands([
                 InstallCommand::class, SyncCommand::class, ContentImportCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
-                ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class,
+                ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class, PullCommand::class,
             ]);
         }
 

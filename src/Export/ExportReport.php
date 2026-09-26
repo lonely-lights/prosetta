@@ -29,6 +29,9 @@ final class ExportReport {
     /** @var list<array{locale: string, path: string}> PHP target files Prosetta didn't generate (no header), kept when the caller asked; left untouched */
     public array $handWritten = [];
 
+    /** True where prosetta.export.enabled is off: nothing was written, by design. */
+    public bool $disabled = false;
+
     public function __construct(public readonly bool $dryRun = false) {}
 
     /** @return array<string, mixed> */

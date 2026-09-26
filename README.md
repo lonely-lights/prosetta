@@ -378,6 +378,10 @@ Read them with `$model->translated('name')` (the current locale, falling back to
 
 `php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
 
+## Reviewing in production
+
+Interface text is normally approved in development, since only there can an approval reach the lang files in git. To let people approve it on the live site too, set the same `PROSETTA_PULL_TOKEN` on both sides, and in production set `PROSETTA_EXPORT_ENABLED=false` (no lang file is written there) and `prosetta.review.editable` to true. Production then serves its interface-text approvals at `prosetta/approvals` (a 404 without the token). In development, `php artisan prosetta:pull --export` (with `PROSETTA_PULL_URL` pointing at that endpoint) applies each approval whose English still matches, never over a newer approval made here, records it in the review trail as pulled from production, and exports; commit the lang files as usual. Each pull asks only for what's new since the last one (`--since` overrides). Database content needs none of this: it is approved and served in production directly.
+
 ## Services for your own admin
 
 `Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.

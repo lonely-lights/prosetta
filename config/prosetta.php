@@ -32,7 +32,21 @@ return [
     'exclude_paths' => ['lang/vendor', 'vendor'],
 
     'export' => [
+        # False Where People Review in Production: No Lang File Is Written There, and prosetta:pull Brings Its Approvals to Development
+        'enabled' => env('PROSETTA_EXPORT_ENABLED', true),
         'include_drafts' => env('PROSETTA_EXPORT_DRAFTS', false),
+    ],
+
+    /*
+    | Production review, pulled back into development. Set the same token on
+    | both sides: production then serves its interface-text approvals at
+    | `path` (a 404 without the token), and development's prosetta:pull
+    | fetches them from `url`.
+    */
+    'pull' => [
+        'token' => env('PROSETTA_PULL_TOKEN'),
+        'url' => env('PROSETTA_PULL_URL'),
+        'path' => env('PROSETTA_PULL_PATH', 'prosetta/approvals'),
     ],
 
     'review' => [
