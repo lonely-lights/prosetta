@@ -27,6 +27,8 @@ use LonelyLights\Prosetta\Console\SyncCommand;
 use LonelyLights\Prosetta\Console\TranslateCommand;
 use LonelyLights\Prosetta\Content\ForgetApprovedContent;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
+use LonelyLights\Prosetta\Contracts\PriceCatalogue;
+use LonelyLights\Prosetta\Pricing\ConfigPriceCatalogue;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Events\TranslationApproved;
@@ -35,6 +37,7 @@ use LonelyLights\Prosetta\Resilience\LogResilienceEvents;
 
 final class ProsettaServiceProvider extends ServiceProvider {
     public function register(): void {
+        $this->app->bindIf(PriceCatalogue::class, ConfigPriceCatalogue::class);
         $this->mergeConfigFrom(__DIR__.'/../config/prosetta.php', 'prosetta');
 
         $this->app->singleton(Authorizer::class);

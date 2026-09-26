@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
+use LonelyLights\Prosetta\Contracts\PriceCatalogue;
 use LonelyLights\Prosetta\Review\Status;
 use LonelyLights\Prosetta\Review\Viewer;
 use LonelyLights\Prosetta\Support\Settings;
@@ -24,6 +25,7 @@ final readonly class Coverage {
         private CycleFailures $failures,
         private Rejections $rejections,
         private UsageLedger $usage,
+        private PriceCatalogue $prices,
         private Budget $budget,
         private Circuits $circuits,
         private Health $health,
@@ -55,6 +57,8 @@ final readonly class Coverage {
                 'keys' => $keys->count(),
                 ...$counts,
                 'tokensThisMonth' => $this->usage->sum(from: now()->startOfMonth(), locale: $code),
+                'costThisMonth' => ($cost = $this->usage->cost(from: now()->startOfMonth(), locale: $code))->amount,
+                'unpricedTokensThisMonth' => $cost->unpricedTokens,
             ];
         }
 
@@ -73,6 +77,7 @@ final readonly class Coverage {
             $this->budget->usage(),
             $this->health->problems(),
             $viewer->isEditable,
+            $this->prices->currency(),
         );
     }
 
