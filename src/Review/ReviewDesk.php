@@ -54,6 +54,13 @@ final readonly class ReviewDesk {
                 continue;
             }
 
+            # A Member's Report Needs a Person to Read It, So Never Rides Along in a Batch
+            if (collect($item->issues)->contains(fn (array $issue) => ($issue['code'] ?? '') === 'reported')) {
+                $report->skippedWarnings++;
+
+                continue;
+            }
+
             if ($item->blocking) {
                 $report->skippedErrors++;
 

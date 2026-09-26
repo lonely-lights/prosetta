@@ -30,3 +30,11 @@ A signed-in member reading the site in another language selects words that read 
 - **Member side**: a small `ReportTranslation` component in the app layout, active only for signed-in members reading in a language other than the source. Selecting text shows a **Report translation** button; its dialog takes an optional suggestion and note and posts to `POST /translations/reports` (throttled 10 per hour). The toast thanks them.
 - **Bridge side**: Review shows a "Reported" marker and count on reported rows (they are already "Hand edits"), and a short **Reports we couldn't match** list above the table (text, page link, note, dismiss) for reviewers of that language.
 - All copy in lang files; English only, the cycle drafts the rest.
+
+## Amendments after the final review (2026-09-26)
+
+- A report never overwrites work: with a draft or edit already waiting, it is added to it as a `reported` warning carrying the member's note and suggestion.
+- A report becomes a hand edit of its own only where the string is current (not stale) and can be changed here (content anywhere; interface text only where review is editable). Otherwise it is not queued (`queued` false) and appears in the staff list with the string it names.
+- Only a person closes a report: the cycle's approvals and confirmations leave it open. Approving drops the `reported` warning.
+- The reporter counts as the author for self-approval, and reported strings never ride along in approve-matching.
+

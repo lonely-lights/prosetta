@@ -302,7 +302,7 @@ final readonly class ReviewService {
 
         if ($by !== null && ! config('prosetta.review.allow_self_approval', true)) {
             $last = $translation->reviews()
-                ->whereIn('action', [ReviewAction::Edited->value, ReviewAction::Submitted->value])
+                ->whereIn('action', [ReviewAction::Edited->value, ReviewAction::Submitted->value, ReviewAction::Reported->value])
                 ->latest('id')
                 ->first();
 

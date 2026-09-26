@@ -22,6 +22,7 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property string $reporter_id
  * @property string|null $url
  * @property string $status open, accepted or dismissed
+ * @property bool $queued whether it reached the review queue; if not, staff see it in a list
  * @property string|null $resolved_by
  * @property Carbon|null $resolved_at
  * @property Carbon $created_at
@@ -34,9 +35,9 @@ class TranslationReport extends Model {
 
     public const string DISMISSED = 'dismissed';
 
-    protected $fillable = ['key_id', 'locale', 'selected_text', 'suggestion', 'notes', 'reporter_id', 'url', 'status', 'resolved_by', 'resolved_at'];
+    protected $fillable = ['key_id', 'locale', 'selected_text', 'suggestion', 'notes', 'reporter_id', 'url', 'status', 'queued', 'resolved_by', 'resolved_at'];
 
-    protected $casts = ['resolved_at' => 'datetime'];
+    protected $casts = ['resolved_at' => 'datetime', 'queued' => 'boolean'];
 
     protected $attributes = ['status' => self::OPEN];
 

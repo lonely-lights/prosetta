@@ -13,7 +13,17 @@ final readonly class CloseReports {
     public function __construct(private Reports $reports) {}
 
     public function handle(TranslationApproved|TranslationRejected $event): void {
+        # Only a Person Answers a Report: the Cycle's Approvals and Confirmations Leave It Open
+        if ($event->by === null) {
+            return;
+        }
+
         $translation = $event->translation;
+
+        # An Approved String Carries No "Reported" Warning Forward
+        if ($event instanceof TranslationApproved && collect($translation->issues ?? [])->contains(fn (array $issue) => ($issue['code'] ?? '') === 'reported')) {
+            $translation->forceFill(['issues' => array_values(array_filter($translation->issues, fn (array $issue) => ($issue['code'] ?? '') !== 'reported')) ?: null])->save();
+        }
 
         $this->reports->close(
             (int) $translation->key_id,

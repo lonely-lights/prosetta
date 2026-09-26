@@ -92,3 +92,67 @@ it('closes a report as accepted when its translation is approved, and as dismiss
     expect($second->refresh()->status)->toBe('dismissed')
         ->and(TranslationReport::query()->where('status', 'open')->count())->toBe(0);
 });
+
+it('never overwrites work already waiting for review; it adds the report to it', function () {
+    $translation = ($this->failed)();
+    $translation->update(['value' => 'Un borrador de la IA.', 'status' => TranslationStatus::Draft, 'origin' => TranslationOrigin::Ai]);
+
+    $report = app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Credenciales incorrectas.', notes: 'Stiff.');
+    $translation->refresh();
+
+    expect($translation->value)->toBe('Un borrador de la IA.')
+        ->and($translation->origin)->toBe(TranslationOrigin::Ai)
+        ->and(collect($translation->issues)->firstWhere('code', 'reported')['message'])->toContain('Credenciales incorrectas.')
+        ->and($report->queued)->toBeTrue();
+});
+
+it('lists for staff, rather than queueing, a report on a string that is stale or locked here', function () {
+    $key = app(KeyFinder::class)->find('auth.failed');
+    $key->update(['source_value' => 'These credentials are wrong.', 'source_hash' => sha1('These credentials are wrong.')]);
+
+    $stale = app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Credenciales incorrectas.');
+
+    expect($stale->queued)->toBeFalse()
+        ->and(($this->failed)()->status)->toBe(TranslationStatus::Approved);
+
+    config(['prosetta.review.editable' => false]);
+    $locked = app(Reports::class)->report('es', 'credenciales', new GenericUser(['id' => 'member-2']), keyRef: 'auth.failed', suggestion: 'Otra.');
+
+    expect($locked->queued)->toBeFalse()
+        ->and(collect(app(Reports::class)->unqueued(Viewer::for(new GenericUser(['id' => 'reviewer']))))->pluck('id')->all())
+        ->toEqualCanonicalizing([$stale->id, $locked->id]);
+});
+
+it('leaves reports open when the system, not a person, approves the string', function () {
+    $report = app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Estas credenciales no son correctas.');
+
+    app(ReviewService::class)->approve([($this->failed)()->id], null);
+
+    expect($report->refresh()->status)->toBe('open');
+});
+
+it('lets no one approve their own reported wording where self-approval is off', function () {
+    config(['prosetta.review.allow_self_approval' => false]);
+    app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Estas credenciales no son correctas.');
+
+    $result = app(ReviewService::class)->approve([($this->failed)()->id], $this->member);
+
+    expect($result->skipped[($this->failed)()->id] ?? null)->toBe('self_approval');
+});
+
+it('leaves reported strings out of approve-matching, even with warnings included', function () {
+    app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Estas credenciales no son correctas.');
+
+    $report = app(\LonelyLights\Prosetta\Review\ReviewDesk::class)->approveMatching(Viewer::for(new GenericUser(['id' => 'reviewer'])), ['locale' => 'es'], includeWarnings: true);
+
+    expect($report->approved)->toBe(0)
+        ->and(($this->failed)()->status)->toBe(TranslationStatus::NeedsReview);
+});
+
+it('drops the reported warning once a person approves', function () {
+    app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Estas credenciales no son correctas.');
+
+    app(ReviewService::class)->approve([($this->failed)()->id], new GenericUser(['id' => 'reviewer']));
+
+    expect(collect(($this->failed)()->issues)->firstWhere('code', 'reported'))->toBeNull();
+});

@@ -19,6 +19,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Models\TranslationReport;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
+use LonelyLights\Prosetta\Support\WorkState;
 use Throwable;
 
 /**
@@ -68,11 +69,11 @@ final readonly class Reports {
             /** @var TranslationReport $report */
             $report = $model::query()->create([
                 'key_id' => $key?->getKey(), 'locale' => $locale, 'selected_text' => $selectedText,
-                'suggestion' => $suggestion, 'notes' => $notes, 'reporter_id' => $reporter, 'url' => $url,
+                'suggestion' => $suggestion, 'notes' => $notes, 'reporter_id' => $reporter, 'url' => $url, 'queued' => false,
             ]);
 
-            if ($key !== null) {
-                $this->candidate($key, $locale, $suggestion, $notes);
+            if ($key !== null && $this->queue($key, $locale, $suggestion, $notes, $reporter)) {
+                $report->forceFill(['queued' => true])->save();
             }
 
             return $report;
@@ -103,6 +104,21 @@ final readonly class Reports {
         $model = Settings::model('report');
 
         return array_values($model::query()->with('key.file')->where('status', TranslationReport::OPEN)
+            ->whereIn('locale', array_values(array_filter($viewer->locales(), $viewer->canReview(...))))
+            ->latest('id')->limit(200)->get()->all());
+    }
+
+    /**
+     * Open reports that didn't reach the review queue, in the viewer's review
+     * languages: words that matched no single string, or a string that is
+     * stale or can't be changed here. Newest first.
+     *
+     * @return list<TranslationReport>
+     */
+    public function unqueued(Viewer $viewer): array {
+        $model = Settings::model('report');
+
+        return array_values($model::query()->with('key.file')->where('status', TranslationReport::OPEN)->where('queued', false)
             ->whereIn('locale', array_values(array_filter($viewer->locales(), $viewer->canReview(...))))
             ->latest('id')->limit(200)->get()->all());
     }
@@ -142,17 +158,40 @@ final readonly class Reports {
         return $keyModel::query()->with('file')->find($keyIds->first());
     }
 
-    /** Puts the report in front of a reviewer as a hand edit; what is live stays until they approve something. */
-    private function candidate(TranslationKey $key, string $locale, ?string $suggestion, ?string $notes): void {
+    /**
+     * Puts the report in front of a reviewer, never over anyone's work: added
+     * to a draft or edit already waiting, or as a hand edit of its own where
+     * the string is current and can be changed here. What is live stays until
+     * a reviewer approves something. False when it can't safely be queued,
+     * so staff see it in the list instead.
+     */
+    private function queue(TranslationKey $key, string $locale, ?string $suggestion, ?string $notes, string $reporter): bool {
         $translationModel = Settings::model('translation');
-        /** @var Translation $translation */
-        $translation = $translationModel::query()->firstOrCreate(
-            ['key_id' => $key->getKey(), 'locale' => $locale],
-            ['status' => TranslationStatus::Draft, 'origin' => TranslationOrigin::Manual],
-        );
-        $value = $suggestion ?? $translation->approved_value ?? $translation->value ?? '';
+        /** @var Translation|null $translation */
+        $translation = $translationModel::query()->where('key_id', $key->getKey())->where('locale', $locale)->first();
+        $warning = Issue::warning('reported', 'A member reported this'
+            .($notes === null ? '' : ': '.$notes)
+            .($suggestion === null ? '.' : ($notes === null ? '. ' : ' ').'Suggested: "'.$suggestion.'"'));
+
+        # Someone's Draft or Edit Is Already Waiting: the Report Joins It Rather Than Replacing It
+        if ($translation !== null && WorkState::hasCurrentCandidate($key, $translation)) {
+            $issues = array_values(array_filter($translation->issues ?? [], fn (array $issue) => ($issue['code'] ?? '') !== 'reported'));
+            $translation->update(['issues' => [...$issues, $warning->toArray()]]);
+            $translation->logReview(ReviewAction::Reported, $reporter, null, $suggestion, $notes);
+
+            return true;
+        }
+
+        # Stale (the English Moved On) or Locked Here: a Hand Edit Would Hide the One or Never Be Reviewable
+        $value = $suggestion ?? $translation?->approved_value;
+
+        if ($value === null || $value === '' || WorkState::isStale($key, $translation) || ! Viewer::editable($key)) {
+            return false;
+        }
+
+        $translation ??= $translationModel::query()->create(['key_id' => $key->getKey(), 'locale' => $locale, 'status' => TranslationStatus::Draft, 'origin' => TranslationOrigin::Manual]);
         $issues = $this->guard->check($key->source_value, $value, $locale);
-        $issues[] = Issue::warning('reported', 'A member reported this'.($notes === null ? '.' : ': '.$notes));
+        $issues[] = $warning;
         $previous = $translation->value;
 
         $translation->update([
@@ -160,7 +199,10 @@ final readonly class Reports {
             'status' => TranslationStatus::NeedsReview, 'origin' => TranslationOrigin::Manual,
             'issues' => Issue::store($issues),
         ]);
-        $translation->logReview(ReviewAction::Reported, null, $previous, $value, $notes);
+        # The Reporter Is the Author, so Self-Approval Rules See Them
+        $translation->logReview(ReviewAction::Reported, $reporter, $previous, $value, $notes);
+
+        return true;
     }
 
     private function blankToNull(?string $value): ?string {

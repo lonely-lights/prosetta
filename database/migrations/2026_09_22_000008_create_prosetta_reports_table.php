@@ -22,6 +22,8 @@ return new class extends Migration {
             $table->string('reporter_id')->index();
             $table->string('url', 2048)->nullable();
             $table->string('status', 20)->default('open');
+            # Whether It Reached the Review Queue (as a Hand Edit, or Added to Work Already There); if Not, Staff See It in a List
+            $table->boolean('queued')->default(false);
             $table->string('resolved_by')->nullable();
             $table->timestamp('resolved_at')->nullable();
             $table->timestamps();
