@@ -6,6 +6,6 @@ Security fixes go into the latest release. Until 1.0, that means the latest 0.x 
 
 ## Reporting a problem
 
-Please don't open a public issue for a security problem. Use GitHub's private reporting instead: on the repository's **Security** tab, choose **Report a vulnerability**.
+Please don't open a public issue for a security problem. Use GitHub's private reporting instead: on the repository's **Security** tab, choose **Report a vulnerability**. If you can't use GitHub, email security@lonelylights.com.
 
 Say what the problem is, how to reproduce it, and which versions it affects. You'll get a reply within a week. Once a fix is released, you'll be credited in the changelog unless you'd rather not be.

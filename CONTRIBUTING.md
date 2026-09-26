@@ -2,6 +2,8 @@
 
 Thanks for helping. Bug reports, fixes and documentation improvements are all welcome.
 
+Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Reporting a bug
 
 Open an issue with the Prosetta, PHP and Laravel versions, what you did, what you expected, and what happened instead. A failing test is the most useful report of all.

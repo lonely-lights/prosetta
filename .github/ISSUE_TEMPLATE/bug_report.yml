@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Prosetta doesn't work as documented.
+labels: [bug]
+body:
+  - type: input
+    id: prosetta
+    attributes:
+      label: Prosetta version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: php
+    attributes:
+      label: PHP version
+      placeholder: "8.4"
+    validations:
+      required: true
+  - type: input
+    id: laravel
+    attributes:
+      label: Laravel version
+      placeholder: "13.0"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The command you ran or the code you called, with enough context to repeat it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include any error message and stack trace.
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: A failing test or snippet (optional)
+      description: A Pest test that fails is the fastest way to a fix.
+      render: php

@@ -67,6 +67,7 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "support": {
+        "email": "opensource@lonelylights.com",
         "issues": "https://github.com/lonely-lights/prosetta/issues",
         "source": "https://github.com/lonely-lights/prosetta"
     }
