@@ -1,6 +1,6 @@
 {
     "name": "lonely-lights/prosetta",
-    "description": "Translation workflow for Laravel: canonical source lang files, AI drafts through a host-supplied driver, per-language review, and export to root and module lang folders.",
+    "description": "Translate a Laravel app with AI, review each language, and write the approved text back into your lang files.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -9,7 +9,8 @@
         "i18n",
         "localization",
         "ai",
-        "prosetta"
+        "lang-files",
+        "review"
     ],
     "homepage": "https://github.com/lonely-lights/prosetta",
     "authors": [
@@ -30,6 +31,9 @@
         "orchestra/testbench": "^10.0|^11.0",
         "pestphp/pest": "^3.0|^4.0|^5.1",
         "pestphp/pest-plugin-laravel": "^3.0|^4.0|^5.0"
+    },
+    "suggest": {
+        "laravel/ai": "A ready-made AI client for writing your TranslationDriver (see docs/ai-drivers.md)"
     },
     "autoload": {
         "psr-4": {
