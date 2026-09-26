@@ -96,7 +96,7 @@ final class PullCommand extends Command {
             $next = $response->json('next');
         } while (is_array($next));
 
-        $this->info("Pulled {$this->pulled}; {$this->same} already here; ".count($this->skipped).' skipped.');
+        $this->info("Pulled $this->pulled; $this->same already here; ".count($this->skipped).' skipped.');
 
         foreach ($this->skipped as $line) {
             $this->line("  skipped $line");
