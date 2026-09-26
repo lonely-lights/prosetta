@@ -35,3 +35,10 @@ The review guard is unchanged: a host that wants interface text approved in prod
 ## Undaunted
 
 Configuration only: the environment variables above are wired in `config/prosetta.php`, and `review.editable` reads `PROSETTA_REVIEW_EDITABLE` so production can opt in. Turning it on in production is the owner's call and is not done here.
+
+## Amendments after the final review (2026-09-26)
+
+- The endpoint reads approval events from the review trail (still the live wording), paged by the trail's own id: no timestamps or time zones, and an approval isn't lost when the row's status later moves on. `--since` became `--after` (a production review id).
+- `prosetta:pull` syncs the lang files first (so keys deployed alongside are known), names each skipped approval and why, keeps a developer's pending edit (only the approved wording changes under it), credits production's reviewer in the trail's notes rather than as a local user, refuses a non-https URL outside local, and doesn't follow redirects.
+- `ExportReport::toArray()` carries `disabled`.
+

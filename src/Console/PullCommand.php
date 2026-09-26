@@ -20,17 +20,22 @@ use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Support\State;
+use LonelyLights\Prosetta\Support\WorkState;
+use LonelyLights\Prosetta\Sync\Syncer;
 use Throwable;
 
 /**
  * Brings the interface-text approvals production has made into this
  * database, so the usual export can write them to the lang files for a
- * commit. An approval applies only where the key still exists with the
- * same English, and never over a newer approval made here.
+ * commit. Syncs the lang files first, so keys deployed alongside are known.
+ * An approval applies only where the key exists with the same English; a
+ * developer's edit waiting for review is kept. Production's reviewers are
+ * credited in the trail's notes, since their ids mean nothing here.
  */
 final class PullCommand extends Command {
     protected $signature = 'prosetta:pull
-        {--since= : Pull approvals made after this time, instead of after the last pull}
+        {--after= : Pull approvals after this production review id, instead of after the last pull}
+        {--no-sync : Skip reading the lang files first}
         {--export : Export right after pulling}';
 
     protected $description = 'Pull approvals made in production into this database';
@@ -39,17 +44,14 @@ final class PullCommand extends Command {
 
     private int $same = 0;
 
-    private int $englishDiffers = 0;
-
-    private int $unknown = 0;
-
-    private int $newerHere = 0;
+    /** @var list<string> */
+    private array $skipped = [];
 
     /** @var array<string, true> */
     private array $locales = [];
 
     /** @throws Throwable when a transaction fails */
-    public function handle(KeyFinder $finder, LocaleSource $source, Dispatcher $events, Exporter $exporter): int {
+    public function handle(KeyFinder $finder, LocaleSource $source, Dispatcher $events, Exporter $exporter, Syncer $syncer): int {
         $url = config('prosetta.pull.url');
         $token = config('prosetta.pull.token');
 
@@ -59,14 +61,22 @@ final class PullCommand extends Command {
             return self::FAILURE;
         }
 
+        # The Token Must Never Cross the Network in the Clear
+        if (! str_starts_with(strtolower($url), 'https://') && ! $this->getLaravel()->environment('local')) {
+            $this->error('prosetta.pull.url must use https, so the token is never sent in the clear.');
+
+            return self::FAILURE;
+        }
+
+        if (! $this->option('no-sync')) {
+            $syncer->sync(quiet: true);
+        }
+
         $targets = array_map(fn (LocaleDescriptor $locale) => $locale->code, $source->targets());
-        # Where the Last Pull Stopped: a Time and the Id Within It, So a Same-Second Approval Isn't Skipped
-        $since = $this->option('since') ?: State::get('pull.since');
-        $after = $this->option('since') ? 0 : (int) State::get('pull.after', 0);
+        $after = $this->option('after') !== null ? (int) $this->option('after') : (int) State::get('pull.after', 0);
 
         do {
-            $response = Http::withToken($token)->acceptJson()->timeout(30)
-                ->get($url, array_filter(['since' => $since, 'after' => $after ?: null]));
+            $response = Http::withToken($token)->acceptJson()->timeout(30)->withoutRedirecting()->get($url, ['after' => $after]);
 
             if (! $response->successful()) {
                 $this->error("Production answered {$response->status()}; check the URL and token.");
@@ -79,20 +89,26 @@ final class PullCommand extends Command {
 
             foreach ($approvals as $approval) {
                 DB::transaction(fn () => $this->apply($approval, $finder, $targets, $events));
-                $since = $approval['reviewed_at'];
                 $after = (int) $approval['id'];
-                State::put('pull.since', $since);
                 State::put('pull.after', $after);
             }
 
             $next = $response->json('next');
         } while (is_array($next));
 
-        $this->info("Pulled {$this->pulled}; {$this->same} already here; skipped {$this->englishDiffers} whose English differs here, {$this->newerHere} approved more recently here, {$this->unknown} unknown.");
+        $this->info("Pulled {$this->pulled}; {$this->same} already here; ".count($this->skipped).' skipped.');
+
+        foreach ($this->skipped as $line) {
+            $this->line("  skipped $line");
+        }
+
+        if ($this->skipped !== []) {
+            $this->line('Once those are resolved here, pull them again with --after=<an earlier production review id>.');
+        }
 
         if ($this->option('export') && $this->locales !== []) {
             $report = $exporter->export(array_keys($this->locales));
-            $this->line(count($report->written).' lang files written.');
+            $this->line($report->disabled ? 'Export is turned off here, so no lang files were written.' : count($report->written).' lang files written.');
         }
 
         return self::SUCCESS;
@@ -103,16 +119,17 @@ final class PullCommand extends Command {
      * @param list<string> $targets
      */
     private function apply(array $approval, KeyFinder $finder, array $targets, Dispatcher $events): void {
+        $label = "{$approval['ref']} ({$approval['locale']})";
         $key = $finder->find($approval['ref']);
 
         if ($key === null || $key->obsolete_at !== null || ! in_array($approval['locale'], $targets, true)) {
-            $this->unknown++;
+            $this->skipped[] = "$label: no such current key or language here";
 
             return;
         }
 
         if ($key->source_hash !== $approval['source_hash']) {
-            $this->englishDiffers++;
+            $this->skipped[] = "$label: its English differs here";
 
             return;
         }
@@ -127,23 +144,27 @@ final class PullCommand extends Command {
             return;
         }
 
-        $reviewedAt = Carbon::parse($approval['reviewed_at']);
+        $previous = $translation->approved_value;
+        $credit = 'Pulled from production'.($approval['reviewed_by'] === null ? '' : " (reviewer {$approval['reviewed_by']})").', approved there '.Carbon::parse($approval['reviewed_at'])->toDateTimeString().'.';
+        $approved = [
+            'approved_value' => $approval['value'], 'approved_source_hash' => $key->source_hash, 'approved_source_value' => $key->source_value,
+            'reviewed_by' => null, 'reviewed_at' => now(),
+        ];
 
-        if ($translation->exists && $translation->reviewed_at !== null && $translation->reviewed_at->greaterThan($reviewedAt)) {
-            $this->newerHere++;
-
-            return;
+        # A Developer's Edit Waiting for Review Stays; Only What Is Approved Changes Under It
+        if ($translation->exists && WorkState::hasCurrentCandidate($key, $translation)) {
+            $translation->fill($approved)->save();
+        } else {
+            $translation->fill([
+                ...$approved,
+                'value' => $approval['value'], 'source_hash' => $key->source_hash,
+                'status' => TranslationStatus::Approved, 'issues' => null,
+                'origin' => $translation->exists ? $translation->origin : TranslationOrigin::Imported,
+            ])->save();
         }
 
-        $previous = $translation->value;
-        $translation->fill([
-            'value' => $approval['value'], 'source_hash' => $key->source_hash,
-            'approved_value' => $approval['value'], 'approved_source_hash' => $key->source_hash, 'approved_source_value' => $key->source_value,
-            'status' => TranslationStatus::Approved, 'origin' => $translation->exists ? $translation->origin : TranslationOrigin::Imported,
-            'issues' => null, 'reviewed_by' => $approval['reviewed_by'], 'reviewed_at' => $reviewedAt,
-        ])->save();
-        $translation->logReview(ReviewAction::Approved, $approval['reviewed_by'], $previous, $approval['value'], 'Pulled from production.');
-        $events->dispatch(new TranslationApproved($translation, $approval['reviewed_by']));
+        $translation->logReview(ReviewAction::Approved, null, $previous, $approval['value'], $credit);
+        $events->dispatch(new TranslationApproved($translation, null));
         $this->locales[$approval['locale']] = true;
         $this->pulled++;
     }

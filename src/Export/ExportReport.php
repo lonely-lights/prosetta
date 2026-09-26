@@ -36,6 +36,6 @@ final class ExportReport {
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held, 'hand_written' => $this->handWritten];
+        return ['dry_run' => $this->dryRun, 'disabled' => $this->disabled, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held, 'hand_written' => $this->handWritten];
     }
 }
