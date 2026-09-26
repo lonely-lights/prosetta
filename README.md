@@ -18,7 +18,7 @@ php artisan prosetta:install   # publishes config/prosetta.php and the migration
 php artisan migrate
 ```
 
-`prosetta:install` publishes the six workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`, `prosetta_usage`, `prosetta_state`), re-dated to the moment you publish so they run after your own migrations. It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`), widen `locale_initials` to 35 characters, and add the background-mode columns (`auto_translate`, `style_note`, `glossary`; see [Language settings](#language-settings)). Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
+`prosetta:install` publishes the seven workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`, `prosetta_usage`, `prosetta_state`, `prosetta_reports`), re-dated to the moment you publish so they run after your own migrations. It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`), widen `locale_initials` to 35 characters, and add the background-mode columns (`auto_translate`, `style_note`, `glossary`; see [Language settings](#language-settings)). Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
 
 Target locales are rows in `prosetta_locales` where `active` (offered to members) or `translated` (maintained, even if not offered) is true. Codes must match your lang folder names exactly (`zh-CN`, `en_GB`) and can't change once created.
 
@@ -377,6 +377,10 @@ Once a save commits, the model's fields are kept as keys under `content/<table>`
 Read them with `$model->translated('name')` (the current locale, falling back to English) or `$model->translations()`; `$model->name` always stays English, so saving never writes another language into it. Approved values are cached per folder and refreshed on approval. Content is never exported to lang files, and people can approve it even where `prosetta.review.editable` is off, since it never has to reach git; `QueueItem` and `KeyRow` carry an `editable` flag per row. Override `translationFolder()`, `translationKey()`, `translationMaxLength($field)` or `shouldTranslate()` to adjust, and call `queueContent()` to draft a record now rather than at the next cycle.
 
 `php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
+
+## Members reporting a bad translation
+
+`app(Reports::class)->report($locale, $selectedText, $member, suggestion: ..., notes: ..., url: ...)` records a member's report that some words read wrong (`keyRef:` attaches it to a string you know; otherwise Prosetta traces the words to the one current translation in that language whose approved text contains them). A traced report becomes a hand edit waiting for review, so it appears in `ReviewQueue` as `pending`, with `QueueItem::$reports` counting the open reports: the member's suggestion, or the current wording flagged with a `reported` warning carrying their note. What is live never changes until a reviewer approves something; approving closes the string's reports as `accepted`, rejecting as `dismissed`. Words that can't be traced to one string are kept (`Reports::open($viewer)`) for staff to look at and `dismiss()`. Reports need a signed-in member, one open report per member per string, at least 3 characters of selection, and a translated language; throttle the route that calls it.
 
 ## Services for your own admin
 

@@ -15,7 +15,7 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
 
 final readonly class ReviewQueue {
-    public function __construct(private CycleFailures $failures, private Rejections $rejections) {}
+    public function __construct(private CycleFailures $failures, private Rejections $rejections, private Reports $reports) {}
 
     /**
      * @param array{status?: string|list<string>, stale?: bool, namespace?: string, group?: string, origin?: string, issues?: bool, search?: string} $filters
@@ -146,6 +146,7 @@ final readonly class ReviewQueue {
 
         foreach ($locales as $locale) {
             $translations = $translationModel::query()->where('locale', $locale)->whereIn('key_id', $keys->modelKeys())->get()->keyBy('key_id');
+            $reports = $this->reports->counts($locale);
 
             foreach ($keys as $key) {
                 $translation = $translations->get($key->getKey());
@@ -155,7 +156,7 @@ final readonly class ReviewQueue {
                     continue;
                 }
 
-                $item = QueueItem::from($key, $translation, $locale, $reason);
+                $item = QueueItem::from($key, $translation, $locale, $reason, $reports[$key->getKey().':'.$locale] ?? 0);
 
                 if ($search !== '' && ! str_contains(mb_strtolower(implode("\n", [$item->keyRef, $item->source, (string) $item->candidate, (string) $item->approved])), $search)) {
                     continue;

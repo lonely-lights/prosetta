@@ -16,6 +16,7 @@ final readonly class Settings {
         'key' => \LonelyLights\Prosetta\Models\TranslationKey::class,
         'translation' => \LonelyLights\Prosetta\Models\Translation::class,
         'review' => \LonelyLights\Prosetta\Models\TranslationReview::class,
+        'report' => \LonelyLights\Prosetta\Models\TranslationReport::class,
     ];
 
     public static function sourceLocale(): string {

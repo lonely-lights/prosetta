@@ -56,7 +56,7 @@ it('publishes config and workflow migrations on install, leaving an existing loc
         $published = glob(database_path('migrations/*prosetta*.php'));
 
         expect(is_file(config_path('prosetta.php')))->toBeTrue()
-            ->and($published)->toHaveCount(6)
+            ->and($published)->toHaveCount(7)
             ->and(array_filter($published, fn (string $path) => str_contains($path, 'create_prosetta_locales_table')))->toBe([]);
     } finally {
         if (is_file(config_path('prosetta.php'))) {
