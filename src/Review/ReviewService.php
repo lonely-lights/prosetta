@@ -154,8 +154,8 @@ final readonly class ReviewService {
             }
 
             DB::transaction(fn () => $this->markApproved($translation, $by, $notes));
-            $this->rejections->clear($translation->locale, (int) $translation->key_id);
-            $this->failures->clear($translation->locale, (int) $translation->key_id);
+            $this->rejections->clear($translation->locale, $translation->key_id);
+            $this->failures->clear($translation->locale, $translation->key_id);
 
             $report->approved[] = (int) $translation->getKey();
             $this->events->dispatch(new TranslationApproved($translation, $this->id($by)));
@@ -270,9 +270,10 @@ final readonly class ReviewService {
 
     /** What a page saw of a translation: any change to its candidate, approval, status or English changes this. */
     public static function fingerprint(Translation $translation): string {
-        return Fingerprint::of(json_encode([
+        # serialize() Can't Fail on Any String, Where json_encode Throws on Invalid UTF-8
+        return Fingerprint::of(serialize([
             $translation->value, $translation->approved_value, $translation->status->value, $translation->source_hash, $translation->approved_source_hash,
-        ], JSON_THROW_ON_ERROR));
+        ]));
     }
 
     private function current(Translation $translation, ?string $expected): void {

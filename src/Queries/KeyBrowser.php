@@ -96,12 +96,7 @@ final readonly class KeyBrowser {
      */
     private function rows(Viewer $viewer, array $filters): array {
         $locales = array_values(array_filter($viewer->locales(), fn (string $code) => ($filters['locale'] ?? null) === null || $code === $filters['locale']));
-        $keyModel = Settings::model('key');
-        $keys = $keyModel::query()->with('file')->whereNull('obsolete_at')->orderBy('id')->get()
-            ->filter(fn (TranslationKey $key) => (($filters['namespace'] ?? null) === null || $key->file->namespace === $filters['namespace'])
-                && (($filters['group'] ?? null) === null || $key->file->group === $filters['group']))
-            ->sortBy(fn (TranslationKey $key) => [$key->file->namespace, $key->file->group, $key->getKey()])
-            ->values();
+        $keys = CurrentKeys::matching($filters);
         $translations = $this->translationsFor($locales, $keys);
         $failures = $this->failures->all();
         $rejections = $this->rejections->all();

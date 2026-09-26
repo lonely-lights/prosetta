@@ -34,6 +34,8 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property string|null $exported_hash
  * @property string|null $reviewed_by
  * @property Carbon|null $reviewed_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  * @property-read TranslationKey $key
  */
 class Translation extends Model {

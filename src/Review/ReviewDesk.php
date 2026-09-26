@@ -96,11 +96,11 @@ final readonly class ReviewDesk {
 
         foreach ($this->admissible($viewer, $expected, $report) as $id => $fingerprint) {
             try {
-                $this->service->reject((int) $id, $viewer->user, $note, expected: $fingerprint);
+                $this->service->reject($id, $viewer->user, $note, expected: $fingerprint);
                 $report->rejected++;
             } catch (ReviewConflict) {
                 $report->conflicts++;
-                $report->skipped[(int) $id] = 'conflict';
+                $report->skipped[$id] = 'conflict';
             }
         }
 
@@ -131,7 +131,7 @@ final readonly class ReviewDesk {
         $this->unlocked($viewer);
 
         foreach ($refsByLocale as $locale => $refs) {
-            $this->prosetta->translate([$locale], [], $refs, force: true, queue: true, by: $viewer->user);
+            $this->prosetta->translate([$locale], [], $refs, force: true, by: $viewer->user);
         }
     }
 
@@ -177,10 +177,10 @@ final readonly class ReviewDesk {
         $allowed = [];
 
         foreach ($expected as $id => $fingerprint) {
-            $translation = $translations->get((int) $id);
+            $translation = $translations->get($id);
 
             if ($translation === null || ! $viewer->canReview((string) $translation->locale)) {
-                $report->skipped[(int) $id] = $translation === null ? 'missing' : 'forbidden';
+                $report->skipped[$id] = $translation === null ? 'missing' : 'forbidden';
                 $report->forbidden++;
 
                 continue;
@@ -188,13 +188,13 @@ final readonly class ReviewDesk {
 
             # Read-Only Here: File Translations Wait for an Environment Whose Approvals Reach the Lang Files
             if ($viewer->user !== null && ! Viewer::editable($translation->key)) {
-                $report->skipped[(int) $id] = 'locked';
+                $report->skipped[$id] = 'locked';
                 $report->locked++;
 
                 continue;
             }
 
-            $allowed[(int) $id] = $fingerprint;
+            $allowed[$id] = $fingerprint;
         }
 
         return $allowed;

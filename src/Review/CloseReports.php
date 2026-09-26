@@ -26,7 +26,7 @@ final readonly class CloseReports {
         }
 
         $this->reports->close(
-            (int) $translation->key_id,
+            $translation->key_id,
             $translation->locale,
             $event instanceof TranslationApproved ? TranslationReport::ACCEPTED : TranslationReport::DISMISSED,
             $event->by,

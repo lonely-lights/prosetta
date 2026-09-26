@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Queries\CurrentKeys;
 use LonelyLights\Prosetta\Support\Settings;
 
 final readonly class ReviewQueue {
@@ -132,13 +133,8 @@ final readonly class ReviewQueue {
      */
     public function all(Viewer $viewer, array $filters = []): array {
         $locales = array_values(array_filter($viewer->locales(), fn (string $code) => ($filters['locale'] ?? null) === null || $code === $filters['locale']));
-        $keyModel = Settings::model('key');
         $translationModel = Settings::model('translation');
-        $keys = $keyModel::query()->with('file')->whereNull('obsolete_at')->orderBy('id')->get()
-            ->filter(fn (TranslationKey $key) => (($filters['namespace'] ?? null) === null || $key->file->namespace === $filters['namespace'])
-                && (($filters['group'] ?? null) === null || $key->file->group === $filters['group']))
-            ->sortBy(fn (TranslationKey $key) => [$key->file->namespace, $key->file->group, $key->getKey()])
-            ->values();
+        $keys = CurrentKeys::matching($filters);
         $failures = $this->failures->all();
         $rejections = $this->rejections->all();
         $search = mb_strtolower((string) ($filters['search'] ?? ''));
