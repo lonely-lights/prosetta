@@ -59,6 +59,14 @@ final readonly class Exporter {
     public function export(array $locales = [], array $namespaces = [], ?bool $includeDrafts = null, bool $dryRun = false, bool $force = false, array $hold = [], bool $keepHandWritten = false): ExportReport {
         $includeDrafts ??= (bool) config('prosetta.export.include_drafts', false);
         $report = new ExportReport($dryRun);
+
+        # A Site That Reviews in Production Writes No Lang Files There; Development Pulls Its Approvals Instead
+        if (! filter_var(config('prosetta.export.enabled', true), FILTER_VALIDATE_BOOL)) {
+            $report->disabled = true;
+
+            return $report;
+        }
+
         $source = $this->locales->source();
         $targets = array_values(array_filter(
             array_map(fn (LocaleDescriptor $locale) => $locale->code, $this->locales->targets()),

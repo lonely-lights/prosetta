@@ -21,6 +21,12 @@ final class ExportCommand extends Command {
         $dryRun = (bool) $this->option('dry-run');
         $report = $prosetta->export($this->option('locale'), $this->option('namespace'), $this->option('include-drafts') ? true : null, $dryRun, force: (bool) $this->option('force'));
 
+        if ($report->disabled) {
+            $this->components->info('Export is turned off here (prosetta.export.enabled), so no lang files were written. Pull these approvals into development with prosetta:pull.');
+
+            return self::SUCCESS;
+        }
+
         foreach ($report->written as $path) {
             $this->line(($dryRun ? 'would write ' : 'wrote ').$path.' ('.($report->keys[$path] ?? 0).' keys)');
         }
