@@ -8,11 +8,11 @@ use LonelyLights\Prosetta\Automation\CycleFailures;
 use LonelyLights\Prosetta\Automation\Health;
 use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
+use LonelyLights\Prosetta\Contracts\PriceCatalogue;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
-use LonelyLights\Prosetta\Contracts\PriceCatalogue;
 use LonelyLights\Prosetta\Review\Status;
 use LonelyLights\Prosetta\Review\Viewer;
 use LonelyLights\Prosetta\Support\Settings;
@@ -51,11 +51,17 @@ final readonly class Coverage {
 
             $languages[] = [
                 'code' => $code,
-                'name' => $descriptor?->englishName ?? $code,
-                'nativeName' => $descriptor?->nativeName ?? $code,
-                'mode' => ($descriptor?->replacements ?? []) !== [] ? 'derived' : 'ai',
+                'name' => $descriptor->englishName ?? $code,
+                'nativeName' => $descriptor->nativeName ?? $code,
+                'mode' => ($descriptor->replacements ?? []) !== [] ? 'derived' : 'ai',
                 'keys' => $keys->count(),
-                ...$counts,
+                'approved' => $counts['approved'],
+                'draft' => $counts['draft'],
+                'flagged' => $counts['flagged'],
+                'pending' => $counts['pending'],
+                'stale' => $counts['stale'],
+                'missing' => $counts['missing'],
+                'held' => $counts['held'],
                 'tokensThisMonth' => $this->usage->sum(from: now()->startOfMonth(), locale: $code),
                 'costThisMonth' => ($cost = $this->usage->cost(from: now()->startOfMonth(), locale: $code))->amount,
                 'unpricedTokensThisMonth' => $cost->unpricedTokens,

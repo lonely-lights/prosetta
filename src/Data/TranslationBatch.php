@@ -13,7 +13,7 @@ namespace LonelyLights\Prosetta\Data;
 final readonly class TranslationBatch {
     /**
      * @param list<TranslationItem> $items
-     * @param array<string, list<string>> $feedback
+     * @param array<array-key, list<string>> $feedback
      */
     public function __construct(
         public string $sourceLocale,
@@ -29,7 +29,7 @@ final readonly class TranslationBatch {
         return new self($this->sourceLocale, $this->target, $this->variantOf, $this->model, $items, $this->feedback);
     }
 
-    /** @param array<string, list<string>> $feedback */
+    /** @param array<array-key, list<string>> $feedback */
     public function withFeedback(array $feedback): self {
         return new self($this->sourceLocale, $this->target, $this->variantOf, $this->model, $this->items, $feedback);
     }

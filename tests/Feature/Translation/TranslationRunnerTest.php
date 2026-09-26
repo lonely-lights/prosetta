@@ -1,13 +1,17 @@
 <?php
 
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Data\TranslationBatch;
+use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
+use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Resilience\BudgetExhausted;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
@@ -126,7 +130,7 @@ it('records strings the provider refused as failed, without retrying them', func
 it('keeps the first attempt\'s drafts when the retry call fails', function () {
     config(['prosetta.resilience.cache_store' => 'array']);
     $driver = new class extends ScriptedDriver {
-        public function translate(\LonelyLights\Prosetta\Data\TranslationBatch $batch): \LonelyLights\Prosetta\Data\TranslationBatchResult {
+        public function translate(TranslationBatch $batch): TranslationBatchResult {
             if ($batch->feedback !== []) {
                 $this->calls[] = $batch;
 
@@ -135,7 +139,7 @@ it('keeps the first attempt\'s drafts when the retry call fails', function () {
 
             $result = parent::translate($batch);
 
-            return new \LonelyLights\Prosetta\Data\TranslationBatchResult(
+            return new TranslationBatchResult(
                 array_map(fn (string $value) => str_replace(':name', '', $value), $result->values),
                 $result->provider, $result->model, $result->inputTokens, $result->outputTokens,
             );
@@ -157,13 +161,13 @@ it('names the run it belongs to when counting tokens', function () {
     app(TranslationRunner::class)->run('es', keyIds('auth.failed'), force: true, runId: 'run-9');
 
     expect(fn () => app(TranslationRunner::class)->run('es', keyIds('auth.throttle'), runId: 'run-9'))
-        ->toThrow(\LonelyLights\Prosetta\Resilience\BudgetExhausted::class);
+        ->toThrow(BudgetExhausted::class);
 });
 
 it('runs the glossary guard with the target\'s glossary', function () {
     config(['prosetta.resilience.cache_store' => 'array']);
-    \LonelyLights\Prosetta\Models\Locale::findByCode('es')->update(['glossary' => [['source' => 'credentials', 'target' => 'credenciales', 'banned' => []]]]);
-    app()->instance(TranslationDriver::class, new \LonelyLights\Prosetta\Testing\ScriptedDriver);
+    Locale::findByCode('es')->update(['glossary' => [['source' => 'credentials', 'target' => 'credenciales', 'banned' => []]]]);
+    app()->instance(TranslationDriver::class, new ScriptedDriver);
 
     app(TranslationRunner::class)->run('es', keyIds('auth.failed'), force: true);
 

@@ -1,9 +1,17 @@
 {
     "name": "lonely-lights/prosetta",
-    "description": "Translation workflow for Laravel: canonical source lang files, AI drafts through a host-supplied driver, per-language review, and export to root and module lang folders.",
+    "description": "Translate a Laravel app with AI, review each language, and write the approved text back into your lang files.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["laravel", "translation", "i18n", "localization", "ai", "prosetta"],
+    "keywords": [
+        "laravel",
+        "translation",
+        "i18n",
+        "localization",
+        "ai",
+        "lang-files",
+        "review"
+    ],
     "homepage": "https://github.com/lonely-lights/prosetta",
     "authors": [
         {
@@ -15,21 +23,17 @@
     ],
     "require": {
         "php": "^8.3",
-        "illuminate/auth": "^11.0|^12.0|^13.0",
-        "illuminate/bus": "^11.0|^12.0|^13.0",
-        "illuminate/cache": "^11.0|^12.0|^13.0",
-        "illuminate/console": "^11.0|^12.0|^13.0",
-        "illuminate/contracts": "^11.0|^12.0|^13.0",
-        "illuminate/database": "^11.0|^12.0|^13.0",
-        "illuminate/filesystem": "^11.0|^12.0|^13.0",
-        "illuminate/queue": "^11.0|^12.0|^13.0",
-        "illuminate/support": "^11.0|^12.0|^13.0",
-        "illuminate/translation": "^11.0|^12.0|^13.0"
+        "laravel/framework": "^12.0|^13.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^11.0",
-        "pestphp/pest": "^5.1",
-        "pestphp/pest-plugin-laravel": "^5.0"
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.32",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0|^5.1",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0|^5.0"
+    },
+    "suggest": {
+        "laravel/ai": "A ready-made AI client for writing your TranslationDriver (see docs/ai-drivers.md)"
     },
     "autoload": {
         "psr-4": {
@@ -61,5 +65,9 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "support": {
+        "issues": "https://github.com/lonely-lights/prosetta/issues",
+        "source": "https://github.com/lonely-lights/prosetta"
+    }
 }

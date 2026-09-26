@@ -1,5 +1,6 @@
 <?php
 
+use LonelyLights\Prosetta\Data\TranslationBatchResult;
 use LonelyLights\Prosetta\Support\Fingerprint;
 use LonelyLights\Prosetta\Support\Settings;
 
@@ -45,7 +46,7 @@ it('ships the resilience and budget defaults', function () {
 });
 
 it('keeps a driver result compatible when it reports no refusals', function () {
-    $result = new \LonelyLights\Prosetta\Data\TranslationBatchResult(['1' => 'Hola'], 'fake', 'm');
+    $result = new TranslationBatchResult(['1' => 'Hola'], 'fake', 'm');
 
     expect($result->refused)->toBe([]);
 });

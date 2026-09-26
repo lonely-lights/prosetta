@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Auth\GenericUser;
-use LonelyLights\Prosetta\Auth\Authorizer;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Exceptions\ReviewLocked;
 use LonelyLights\Prosetta\Models\Translation;

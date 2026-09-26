@@ -48,7 +48,11 @@ final readonly class Suspensions {
         });
     }
 
-    /** Serializes a read-compute-write transition through a short blocking lock. */
+    /**
+     * Serializes a read-compute-write transition through a short blocking lock.
+     *
+     * @param Closure(): void $change
+     */
     private function mutate(Closure $change): void {
         Settings::cacheStore()->locked(self::KEY.':write', self::WRITE_LOCK_SECONDS, self::WRITE_LOCK_WAIT_SECONDS, $change);
     }

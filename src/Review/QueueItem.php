@@ -38,7 +38,7 @@ final readonly class QueueItem {
     public static function from(TranslationKey $key, ?Translation $translation, string $locale, string $reason, int $reports = 0): self {
         $previous = $translation?->approved_source_value;
         $previous = $previous !== null && $previous !== $key->source_value ? $previous : null;
-        $issues = $translation?->issues ?? [];
+        $issues = $translation->issues ?? [];
 
         return new self(
             $translation === null ? null : (int) $translation->getKey(),

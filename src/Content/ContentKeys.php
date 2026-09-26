@@ -42,7 +42,6 @@ final readonly class ContentKeys {
     /**
      * Brings a record's keys in line with its fields: renames them when its
      * record key changed, then adds, updates, restores or obsoletes each one.
-     *
      */
     public function sync(Model&TranslatableContent $model, ?string $previousRecord = null): void {
         $file = $this->file($model->translationFolder());
@@ -130,6 +129,7 @@ final readonly class ContentKeys {
         $query = $keyModel::query();
         $column = $query->getQuery()->getGrammar()->wrap('key');
 
+        // @phpstan-ignore argument.type (the column is wrapped by the grammar; the value is bound)
         return $query->where('file_id', $file->getKey())->whereRaw("$column like ? escape '!'", [$prefix])->get()
             ->filter(fn (TranslationKey $key) => str_starts_with($key->key, "$record."))
             ->keyBy('key');

@@ -25,8 +25,8 @@ function esTranslation(string $ref): Translation {
 }
 
 function pulled(array $approvals): void {
-    config(['prosetta.pull.url' => 'https://undaunted.space/prosetta/approvals', 'prosetta.pull.token' => 'secret-token']);
-    Http::fake(['undaunted.space/*' => Http::response(['approvals' => $approvals, 'next' => null])]);
+    config(['prosetta.pull.url' => 'https://example.com/prosetta/approvals', 'prosetta.pull.token' => 'secret-token']);
+    Http::fake(['example.com/*' => Http::response(['approvals' => $approvals, 'next' => null])]);
 }
 
 it('writes no lang file anywhere export is turned off, and says so', function () {
@@ -136,7 +136,7 @@ it('asks only for what is new on the next pull', function () {
 it('refuses to send the token over plain http, and to pull without somewhere to pull from', function () {
     $this->artisan('prosetta:pull')->assertExitCode(1);
 
-    config(['prosetta.pull.url' => 'http://undaunted.space/prosetta/approvals', 'prosetta.pull.token' => 'secret-token']);
+    config(['prosetta.pull.url' => 'http://example.com/prosetta/approvals', 'prosetta.pull.token' => 'secret-token']);
     Http::fake();
 
     $this->artisan('prosetta:pull')->expectsOutputToContain('https')->assertExitCode(1);

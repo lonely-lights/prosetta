@@ -5,6 +5,7 @@ use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Events\ExportCompleted;
 use LonelyLights\Prosetta\Export\Exporter;
+use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Review\ReviewService;
@@ -24,7 +25,7 @@ const SPANISH_IN_USE = 'Este código de acceso se está usando para registrarse 
 it('exports approved values only by default, in source key order', function () {
     app(Exporter::class)->export(['es'], ['identity']);
 
-    expect(file_get_contents($this->fixture.'/modules/Identity/Lang/es/onboarding.php'))->toBe(<<<PHP
+    expect(file_get_contents($this->fixture.'/modules/Identity/Lang/es/onboarding.php'))->toBe(<<<'PHP'
 <?php
 
 declare(strict_types=1);
@@ -51,7 +52,7 @@ it('exports drafts when asked, with placeholders intact', function () {
 
     app(Exporter::class)->export(['es'], ['identity'], includeDrafts: true);
 
-    expect(file_get_contents($this->fixture.'/modules/Identity/Lang/es/onboarding.php'))->toBe(<<<PHP
+    expect(file_get_contents($this->fixture.'/modules/Identity/Lang/es/onboarding.php'))->toBe(<<<'PHP'
 <?php
 
 declare(strict_types=1);
@@ -197,7 +198,7 @@ it('refuses to overwrite a hand edit that sync has not imported yet', function (
 it('refuses to overwrite a target file it has never synced', function () {
     mkdir($this->fixture.'/lang/fr');
     file_put_contents($this->fixture.'/lang/fr/auth.php', "<?php return ['failed' => 'Identifiants incorrects.'];");
-    \LonelyLights\Prosetta\Models\Locale::findByCode('fr')->update(['translated' => true]);
+    Locale::findByCode('fr')->update(['translated' => true]);
 
     $report = app(Exporter::class)->export(['fr']);
 

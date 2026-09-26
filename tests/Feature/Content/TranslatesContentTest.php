@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use LonelyLights\Prosetta\Content\TranslatesContent;
 use LonelyLights\Prosetta\Enums\KeyKind;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
@@ -103,8 +105,8 @@ it('creates no keys when the saving transaction rolls back', function () {
 
 it('asks a model using the trait to declare the TranslatableContent interface, by name', function () {
     # It Fails as the Class First Boots, Before Anything Is Saved
-    expect(fn () => new class extends Illuminate\Database\Eloquent\Model {
-        use LonelyLights\Prosetta\Content\TranslatesContent;
+    expect(fn () => new class extends Model {
+        use TranslatesContent;
 
         protected $table = 'pillars';
 

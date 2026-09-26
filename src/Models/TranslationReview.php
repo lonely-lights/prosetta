@@ -6,6 +6,7 @@ namespace LonelyLights\Prosetta\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Support\Settings;
 
@@ -17,6 +18,7 @@ use LonelyLights\Prosetta\Support\Settings;
  * @property string|null $previous_value
  * @property string|null $new_value
  * @property string|null $notes
+ * @property Carbon|null $created_at
  */
 class TranslationReview extends Model {
     protected $fillable = ['translation_id', 'reviewer_id', 'action', 'previous_value', 'new_value', 'notes'];

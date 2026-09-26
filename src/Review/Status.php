@@ -20,7 +20,7 @@ final readonly class Status {
     public const array NEEDS_PERSON = ['draft', 'flagged', 'pending', 'stale', 'held'];
 
     /**
-     * @param array<string, array<string, array{hash: string, count: int}>> $failures from CycleFailures::all()
+     * @param array<string, array<string, array{hash: string, count: int, run: string|null, ref: string}>> $failures from CycleFailures::all()
      * @param array<string, array<string, array{hash: string, count: int}>> $rejections from Rejections::all()
      */
     public static function of(TranslationKey $key, ?Translation $translation, string $locale, array $failures, array $rejections): string {

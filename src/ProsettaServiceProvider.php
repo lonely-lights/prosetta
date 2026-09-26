@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
-use LonelyLights\Prosetta\Http\ApprovalsController;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
@@ -21,8 +20,8 @@ use LonelyLights\Prosetta\Console\ContentSyncCommand;
 use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
 use LonelyLights\Prosetta\Console\HealthCommand;
-use LonelyLights\Prosetta\Console\PullCommand;
 use LonelyLights\Prosetta\Console\InstallCommand;
+use LonelyLights\Prosetta\Console\PullCommand;
 use LonelyLights\Prosetta\Console\RenameCommand;
 use LonelyLights\Prosetta\Console\ResumeCommand;
 use LonelyLights\Prosetta\Console\ReviewCommand;
@@ -32,14 +31,15 @@ use LonelyLights\Prosetta\Console\TranslateCommand;
 use LonelyLights\Prosetta\Content\ForgetApprovedContent;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\PriceCatalogue;
-use LonelyLights\Prosetta\Pricing\ConfigPriceCatalogue;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Events\TranslationApproved;
 use LonelyLights\Prosetta\Events\TranslationRejected;
-use LonelyLights\Prosetta\Review\CloseReports;
+use LonelyLights\Prosetta\Http\ApprovalsController;
 use LonelyLights\Prosetta\Locales\DatabaseLocaleSource;
+use LonelyLights\Prosetta\Pricing\ConfigPriceCatalogue;
 use LonelyLights\Prosetta\Resilience\LogResilienceEvents;
+use LonelyLights\Prosetta\Review\CloseReports;
 
 final class ProsettaServiceProvider extends ServiceProvider {
     public function register(): void {

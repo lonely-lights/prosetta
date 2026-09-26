@@ -1,17 +1,17 @@
 <?php
 
+use Illuminate\Auth\GenericUser;
+use Illuminate\Support\Facades\DB;
+use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Contracts\PriceCatalogue;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\ModelPrice;
 use LonelyLights\Prosetta\Queries\Coverage;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Review\Viewer;
-use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
-use Illuminate\Auth\GenericUser;
-use Illuminate\Support\Facades\DB;
 
 beforeEach(function () {
     $this->useFixtureApp();

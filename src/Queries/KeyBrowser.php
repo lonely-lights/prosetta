@@ -80,11 +80,11 @@ final readonly class KeyBrowser {
         foreach ($viewer->locales() as $locale) {
             $translationId = $row->cells[$locale]->translationId;
             $reviewModel = Settings::model('review');
-            $history[$locale] = $translationId === null ? [] : $reviewModel::query()->where('translation_id', $translationId)->orderBy('id')->get()
+            $history[$locale] = $translationId === null ? [] : array_values($reviewModel::query()->where('translation_id', $translationId)->orderBy('id')->get()
                 ->map(fn (TranslationReview $review) => [
                     'action' => $review->action->value, 'reviewer' => $review->reviewer_id, 'previous' => $review->previous_value,
-                    'new' => $review->new_value, 'notes' => $review->notes, 'at' => $review->created_at?->toIso8601String() ?? '',
-                ])->values()->all();
+                    'new' => $review->new_value, 'notes' => $review->notes, 'at' => (string) $review->created_at?->toIso8601String(),
+                ])->all());
         }
 
         return new KeyDetail($row, $history);
@@ -127,7 +127,7 @@ final readonly class KeyBrowser {
     /**
      * @param list<string> $locales
      * @param array<string, Collection<int, Translation>> $translations locale => translations keyed by key id
-     * @param array<string, array<string, array{hash: string, count: int}>> $failures
+     * @param array<string, array<string, array{hash: string, count: int, run: string|null, ref: string}>> $failures
      * @param array<string, array<string, array{hash: string, count: int}>> $rejections
      */
     private function row(TranslationKey $key, array $locales, array $translations, array $failures, array $rejections): KeyRow {

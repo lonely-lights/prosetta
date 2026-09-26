@@ -2,6 +2,7 @@
 
 use Illuminate\Auth\GenericUser;
 use LonelyLights\Prosetta\Auth\Authorizer;
+use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Review\Viewer;
 
@@ -39,7 +40,7 @@ it('reads the editable flag, defaulting to local and staging only', function () 
 
 it('gives a manager every target language to translate and review', function () {
     app(Authorizer::class)->using(fn ($user, Ability $ability, ?string $locale) => $ability === Ability::Manage);
-    $targets = array_map(fn ($locale) => $locale->code, app(\LonelyLights\Prosetta\Contracts\LocaleSource::class)->targets());
+    $targets = array_map(fn ($locale) => $locale->code, app(LocaleSource::class)->targets());
 
     $viewer = Viewer::for(new GenericUser(['id' => 'u1']));
 

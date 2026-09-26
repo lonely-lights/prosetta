@@ -75,8 +75,8 @@ final readonly class Estimator {
         }
 
         return [
-            'inPerItem' => $this->median($rows->pluck('input_tokens')->map(fn ($v) => (int) $v)->all()),
-            'outPerItem' => $this->median($rows->pluck('output_tokens')->map(fn ($v) => (int) $v)->all()),
+            'inPerItem' => $this->median($rows->pluck('input_tokens')->map(fn ($v) => (int) $v)->values()->all()),
+            'outPerItem' => $this->median($rows->pluck('output_tokens')->map(fn ($v) => (int) $v)->values()->all()),
             'l' => $this->median($rows->map(fn ($row) => mb_strlen((string) $row->key?->source_value))->all()),
         ];
     }

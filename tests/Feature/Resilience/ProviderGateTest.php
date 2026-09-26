@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Data\TranslationBatch;
@@ -47,7 +48,7 @@ it('passes a successful call through and counts its tokens against the budget', 
 it('records a usage row for a successful call', function () {
     callThrough(new ScriptedDriver, 'run-1');
 
-    $row = \Illuminate\Support\Facades\DB::table(Settings::table('usage'))->first();
+    $row = DB::table(Settings::table('usage'))->first();
 
     expect($row)->not->toBeNull()
         ->and($row->run_id)->toBe('run-1')

@@ -21,6 +21,8 @@ use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Queries\Stats;
 use LonelyLights\Prosetta\Review\ApproveReport;
+use LonelyLights\Prosetta\Review\MissingItem;
+use LonelyLights\Prosetta\Review\ReviewItem;
 use LonelyLights\Prosetta\Review\ReviewQueue;
 use LonelyLights\Prosetta\Review\ReviewService;
 use LonelyLights\Prosetta\Review\Viewer;
@@ -96,12 +98,18 @@ readonly class ProsettaManager {
         return $this->translator->translate($locales, $namespaces, $keys, $force, $queue);
     }
 
-    /** @param array<string, mixed> $filters */
+    /**
+     * @param array<string, mixed> $filters
+     * @return LengthAwarePaginator<int, ReviewItem>
+     */
     public function reviewQueue(string $locale, array $filters = [], int $perPage = 50): LengthAwarePaginator {
         return $this->queue->forLocale($locale, $filters, $perPage);
     }
 
-    /** @param array<string, mixed> $filters */
+    /**
+     * @param array<string, mixed> $filters
+     * @return LengthAwarePaginator<int, MissingItem>
+     */
     public function missing(string $locale, array $filters = [], int $perPage = 50): LengthAwarePaginator {
         return $this->queue->missing($locale, $filters, $perPage);
     }

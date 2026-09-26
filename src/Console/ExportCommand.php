@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
+use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
 use LonelyLights\Prosetta\ProsettaManager;
 
 final class ExportCommand extends Command {
+    use ReadsInput;
+
     protected $signature = 'prosetta:export
         {--locale=* : Only these locales}
         {--namespace=* : Only these namespaces}
@@ -19,7 +22,7 @@ final class ExportCommand extends Command {
 
     public function handle(ProsettaManager $prosetta): int {
         $dryRun = (bool) $this->option('dry-run');
-        $report = $prosetta->export($this->option('locale'), $this->option('namespace'), $this->option('include-drafts') ? true : null, $dryRun, force: (bool) $this->option('force'));
+        $report = $prosetta->export($this->texts('locale'), $this->texts('namespace'), $this->option('include-drafts') ? true : null, $dryRun, force: (bool) $this->option('force'));
 
         if ($report->disabled) {
             $this->components->info('Export is turned off here (prosetta.export.enabled), so no lang files were written. Pull these approvals into development with prosetta:pull.');

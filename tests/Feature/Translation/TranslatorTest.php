@@ -5,6 +5,7 @@ use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Bus;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
+use LonelyLights\Prosetta\Exceptions\MissingDriverException;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Sync\Syncer;
@@ -77,7 +78,7 @@ it('refuses to queue work when no driver is bound', function () {
     Bus::fake();
 
     expect(fn () => app(Translator::class)->translate(['es'], ['identity']))
-        ->toThrow(\LonelyLights\Prosetta\Exceptions\MissingDriverException::class);
+        ->toThrow(MissingDriverException::class);
 
     Bus::assertNothingBatched();
 });

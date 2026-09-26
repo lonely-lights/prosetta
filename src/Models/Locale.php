@@ -74,31 +74,53 @@ class Locale extends Model {
         });
     }
 
+    /**
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeActive(Builder $query): Builder {
         return $query->where('active', true);
     }
 
+    /**
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeDefault(Builder $query): Builder {
         return $query->where('is_default', true);
     }
 
+    /**
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeOrdered(Builder $query): Builder {
         return $query->orderBy('sort_order')->orderBy('english_name');
     }
 
-    /** Locales Prosetta maintains: offered to members or explicitly translated. */
+    /**
+     * Locales Prosetta maintains: offered to members or explicitly translated.
+     *
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeTargets(Builder $query): Builder {
         return $query->where(fn (Builder $inner) => $inner->where('active', true)->orWhere('translated', true));
     }
 
-    /** Locales whose drafts background mode translates without being asked. */
+    /**
+     * Locales whose drafts background mode translates without being asked.
+     *
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeAutoTranslate(Builder $query): Builder {
         return $query->where('auto_translate', true);
     }
 
     /** @return list<string> */
     public static function getActiveCodes(): array {
-        return static::query()->active()->ordered()->pluck('locale_initials')->all();
+        return array_values(array_map(strval(...), static::query()->active()->ordered()->pluck('locale_initials')->all()));
     }
 
     public static function getDefault(): ?static {

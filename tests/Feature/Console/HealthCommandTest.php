@@ -1,6 +1,6 @@
 <?php
 
-use LonelyLights\Prosetta\Resilience\Budget;
+use Illuminate\Support\Facades\Artisan;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Support\State;
@@ -81,8 +81,8 @@ it('starts each problem line with a stable code, so the output stays the same as
     app(Circuits::class)->for('test-circuit')->trip('rejected', 'bad key');
     app(UsageLedger::class)->record(null, 'test', 'es', 10, 0);
 
-    Illuminate\Support\Facades\Artisan::call('prosetta:health');
-    $lines = array_values(array_filter(array_map('trim', explode("\n", Illuminate\Support\Facades\Artisan::output()))));
+    Artisan::call('prosetta:health');
+    $lines = array_values(array_filter(array_map('trim', explode("\n", Artisan::output()))));
 
     expect($lines)->toHaveCount(3)
         ->and($lines[0])->toStartWith('[cycle_stale] ')->toContain('200 minutes')
@@ -93,7 +93,7 @@ it('starts each problem line with a stable code, so the output stays the same as
 it('codes a missing first cycle as stale too', function () {
     config(['prosetta.automation.every' => 30]);
 
-    Illuminate\Support\Facades\Artisan::call('prosetta:health');
+    Artisan::call('prosetta:health');
 
-    expect(trim(Illuminate\Support\Facades\Artisan::output()))->toStartWith('[cycle_stale] ');
+    expect(trim(Artisan::output()))->toStartWith('[cycle_stale] ');
 });

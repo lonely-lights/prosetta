@@ -1,9 +1,12 @@
 <?php
 
 use Illuminate\Auth\Access\AuthorizationException;
+use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Facades\Prosetta;
 use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Queries\Stats;
+use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
 
 beforeEach(function () {
     $this->useFixtureApp();
@@ -50,9 +53,9 @@ it('limits the check to the namespaces asked for', function () {
 
 it('counts a draft that also has issues once', function () {
     Prosetta::sync();
-    app()->instance(\LonelyLights\Prosetta\Contracts\TranslationDriver::class, (new \LonelyLights\Prosetta\Testing\FakeTranslationDriver)->dropPlaceholders());
+    app()->instance(TranslationDriver::class, (new FakeTranslationDriver)->dropPlaceholders());
     Prosetta::translate(['es'], ['identity'], queue: false);
 
     # es: capReached (draft with issues) + timedOut (draft); ar 3; en_GB 3
-    expect(app(\LonelyLights\Prosetta\Queries\Stats::class)->outstanding(['identity']))->toBe(8);
+    expect(app(Stats::class)->outstanding(['identity']))->toBe(8);
 });

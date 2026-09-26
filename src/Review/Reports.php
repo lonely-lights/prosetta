@@ -145,6 +145,7 @@ final readonly class Reports {
 
         $keyIds = $model::query()->toBase()->join($k, "$k.id", '=', "$t.key_id")
             ->where("$t.locale", $locale)->whereNull("$k.obsolete_at")->whereNotNull("$t.approved_value")
+            // @phpstan-ignore argument.type (the table name comes from config; the value is bound)
             ->whereRaw("lower($t.approved_value) like ? escape '!'", ['%'.$escaped.'%'])
             ->limit(2)->pluck("$t.key_id");
 

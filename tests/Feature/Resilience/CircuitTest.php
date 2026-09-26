@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\CircuitClosed;
 use LonelyLights\Prosetta\Events\CircuitOpened;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\Decision;
 use LonelyLights\Prosetta\Support\Settings;
@@ -138,7 +139,7 @@ it('serializes mutations through a write lock, so a concurrent worker cannot rac
     expect($writeLock->get())->toBeTrue();
 
     expect(fn () => $this->circuit->recordFailure('boom'))
-        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'Timed out');
+        ->toThrow(ProsettaException::class, 'Timed out');
 
     $writeLock->release();
     $this->circuit->recordFailure('boom');

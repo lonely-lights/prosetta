@@ -6,11 +6,14 @@ namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
+use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
 use LonelyLights\Prosetta\ProsettaManager;
 use LonelyLights\Prosetta\Review\ReviewItem;
 use Throwable;
 
 final class ReviewCommand extends Command {
+    use ReadsInput;
+
     protected $signature = 'prosetta:review
         {locale : The locale to review}
         {--approve-clean : Approve every current candidate without blocking issues}
@@ -21,7 +24,7 @@ final class ReviewCommand extends Command {
 
     /** @throws Throwable when a database transaction fails */
     public function handle(ProsettaManager $prosetta): int {
-        $locale = (string) $this->argument('locale');
+        $locale = $this->text('locale');
         $namespace = $this->option('namespace');
 
         if ($this->option('approve-clean')) {

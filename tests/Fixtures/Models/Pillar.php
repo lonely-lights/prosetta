@@ -18,7 +18,9 @@ final class Pillar extends Model implements TranslatableContent {
     use TranslatesContent;
 
     protected $table = 'pillars';
+
     protected $guarded = [];
+
     protected $casts = ['draft' => 'boolean'];
 
     public function getRouteKeyName(): string {

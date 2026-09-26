@@ -38,6 +38,7 @@ final class Circuit {
         $default = ['state' => 'closed', 'failures' => 0, 'opened_at' => null, 'until' => null, 'cooldown' => 0, 'reason' => null, 'halt' => null, 'message' => null];
         $stored = $this->cache->get($this->key());
 
+        // @phpstan-ignore return.type (only this class writes the entry, always in this shape)
         return is_array($stored) ? array_replace($default, array_intersect_key($stored, $default)) : $default;
     }
 
@@ -167,6 +168,11 @@ final class Circuit {
     }
 
     /** Serializes a read-compute-write transition through a short blocking lock, separate from the test lock. */
+    /**
+     * @template T
+     * @param Closure(): T $change
+     * @return T
+     */
     private function mutate(Closure $change): mixed {
         return $this->cache->locked($this->key().':write', self::WRITE_LOCK_SECONDS, self::WRITE_LOCK_WAIT_SECONDS, $change);
     }

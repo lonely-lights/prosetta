@@ -22,10 +22,10 @@ final readonly class KeyCell {
     public static function from(?Translation $translation, string $status): self {
         return new self(
             $status,
-            $translation?->approved_value ?? $translation?->value,
+            $translation->approved_value ?? $translation?->value,
             $translation?->value,
             $translation?->approved_value,
-            $translation?->issues ?? [],
+            $translation->issues ?? [],
             $translation === null ? null : (int) $translation->getKey(),
             $translation === null ? null : ReviewService::fingerprint($translation),
         );
