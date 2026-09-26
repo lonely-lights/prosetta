@@ -6,6 +6,7 @@ namespace LonelyLights\Prosetta\Tests\Fixtures\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use LonelyLights\Prosetta\Content\TranslatesContent;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
 
 /**
  * @property string $slug
@@ -13,7 +14,7 @@ use LonelyLights\Prosetta\Content\TranslatesContent;
  * @property string|null $badge
  * @property bool $draft
  */
-final class Pillar extends Model {
+final class Pillar extends Model implements TranslatableContent {
     use TranslatesContent;
 
     protected $table = 'pillars';

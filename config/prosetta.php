@@ -35,6 +35,24 @@ return [
         'include_drafts' => env('PROSETTA_EXPORT_DRAFTS', false),
     ],
 
+    /*
+    | Tokens a translation must keep exactly, beyond Laravel's :name ones:
+    | regular expressions, e.g. '/\[@\]/' for a "[@]" the host replaces
+    | with a member's name. A translation that drops or alters one is flagged.
+    */
+    'placeholders' => [
+        'patterns' => [],
+    ],
+
+    /*
+    | Models using TranslatesContent, for prosetta:content:sync to bring rows
+    | that already exist in line with their keys (e.g. right after adopting
+    | the trait on a table with data).
+    */
+    'content' => [
+        'models' => [],
+    ],
+
     'review' => [
         'allow_self_approval' => true,
         # null: editable only in the local and staging environments. Writes made by a person

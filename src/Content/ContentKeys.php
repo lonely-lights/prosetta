@@ -7,6 +7,7 @@ namespace LonelyLights\Prosetta\Content;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
 use LonelyLights\Prosetta\Enums\FileFormat;
 use LonelyLights\Prosetta\Enums\KeyKind;
 use LonelyLights\Prosetta\Events\KeyAdded;
@@ -42,9 +43,8 @@ final readonly class ContentKeys {
      * Brings a record's keys in line with its fields: renames them when its
      * record key changed, then adds, updates, restores or obsoletes each one.
      *
-     * @param Model $model a model using TranslatesContent
      */
-    public function sync(Model $model, ?string $previousRecord = null): void {
+    public function sync(Model&TranslatableContent $model, ?string $previousRecord = null): void {
         $file = $this->file($model->translationFolder());
         $record = $model->translationKey();
 
@@ -124,7 +124,13 @@ final readonly class ContentKeys {
     private function keys(TranslationFile $file, string $record): Collection {
         $keyModel = Settings::model('key');
 
-        return $keyModel::query()->where('file_id', $file->getKey())->get()
+        # Narrowed in SQL (a folder can hold thousands of records' keys), Then Checked Exactly Here, Since LIKE's Case Rules Vary by Database
+        $prefix = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $record).'.%';
+
+        $query = $keyModel::query();
+        $column = $query->getQuery()->getGrammar()->wrap('key');
+
+        return $query->where('file_id', $file->getKey())->whereRaw("$column like ? escape '!'", [$prefix])->get()
             ->filter(fn (TranslationKey $key) => str_starts_with($key->key, "$record."))
             ->keyBy('key');
     }
