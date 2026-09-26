@@ -31,9 +31,11 @@ final readonly class QueueItem {
         public ?string $updatedAt,
         public ?string $fingerprint,
         public bool $editable,
+        /** Open member reports on this string in this language. */
+        public int $reports = 0,
     ) {}
 
-    public static function from(TranslationKey $key, ?Translation $translation, string $locale, string $reason): self {
+    public static function from(TranslationKey $key, ?Translation $translation, string $locale, string $reason, int $reports = 0): self {
         $previous = $translation?->approved_source_value;
         $previous = $previous !== null && $previous !== $key->source_value ? $previous : null;
         $issues = $translation?->issues ?? [];
@@ -58,6 +60,7 @@ final readonly class QueueItem {
             $translation?->updated_at?->toIso8601String(),
             $translation === null ? null : ReviewService::fingerprint($translation),
             Viewer::editable($key),
+            $reports,
         );
     }
 

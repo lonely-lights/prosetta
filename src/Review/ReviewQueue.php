@@ -12,10 +12,11 @@ use LonelyLights\Prosetta\Automation\Rejections;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Queries\CurrentKeys;
 use LonelyLights\Prosetta\Support\Settings;
 
 final readonly class ReviewQueue {
-    public function __construct(private CycleFailures $failures, private Rejections $rejections) {}
+    public function __construct(private CycleFailures $failures, private Rejections $rejections, private Reports $reports) {}
 
     /**
      * @param array{status?: string|list<string>, stale?: bool, namespace?: string, group?: string, origin?: string, issues?: bool, search?: string} $filters
@@ -132,13 +133,8 @@ final readonly class ReviewQueue {
      */
     public function all(Viewer $viewer, array $filters = []): array {
         $locales = array_values(array_filter($viewer->locales(), fn (string $code) => ($filters['locale'] ?? null) === null || $code === $filters['locale']));
-        $keyModel = Settings::model('key');
         $translationModel = Settings::model('translation');
-        $keys = $keyModel::query()->with('file')->whereNull('obsolete_at')->orderBy('id')->get()
-            ->filter(fn (TranslationKey $key) => (($filters['namespace'] ?? null) === null || $key->file->namespace === $filters['namespace'])
-                && (($filters['group'] ?? null) === null || $key->file->group === $filters['group']))
-            ->sortBy(fn (TranslationKey $key) => [$key->file->namespace, $key->file->group, $key->getKey()])
-            ->values();
+        $keys = CurrentKeys::matching($filters);
         $failures = $this->failures->all();
         $rejections = $this->rejections->all();
         $search = mb_strtolower((string) ($filters['search'] ?? ''));
@@ -146,6 +142,7 @@ final readonly class ReviewQueue {
 
         foreach ($locales as $locale) {
             $translations = $translationModel::query()->where('locale', $locale)->whereIn('key_id', $keys->modelKeys())->get()->keyBy('key_id');
+            $reports = $this->reports->counts($locale);
 
             foreach ($keys as $key) {
                 $translation = $translations->get($key->getKey());
@@ -155,7 +152,7 @@ final readonly class ReviewQueue {
                     continue;
                 }
 
-                $item = QueueItem::from($key, $translation, $locale, $reason);
+                $item = QueueItem::from($key, $translation, $locale, $reason, $reports[$key->getKey().':'.$locale] ?? 0);
 
                 if ($search !== '' && ! str_contains(mb_strtolower(implode("\n", [$item->keyRef, $item->source, (string) $item->candidate, (string) $item->approved])), $search)) {
                     continue;

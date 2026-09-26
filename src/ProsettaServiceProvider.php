@@ -31,6 +31,8 @@ use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Events\TranslationApproved;
+use LonelyLights\Prosetta\Events\TranslationRejected;
+use LonelyLights\Prosetta\Review\CloseReports;
 use LonelyLights\Prosetta\Locales\DatabaseLocaleSource;
 use LonelyLights\Prosetta\Resilience\LogResilienceEvents;
 
@@ -64,6 +66,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
                 __DIR__.'/../database/migrations/2026_09_22_000005_create_prosetta_reviews_table.php' => database_path('migrations/2026_09_22_000005_create_prosetta_reviews_table.php'),
                 __DIR__.'/../database/migrations/2026_09_22_000006_create_prosetta_usage_table.php' => database_path('migrations/2026_09_22_000006_create_prosetta_usage_table.php'),
                 __DIR__.'/../database/migrations/2026_09_22_000007_create_prosetta_state_table.php' => database_path('migrations/2026_09_22_000007_create_prosetta_state_table.php'),
+                __DIR__.'/../database/migrations/2026_09_22_000008_create_prosetta_reports_table.php' => database_path('migrations/2026_09_22_000008_create_prosetta_reports_table.php'),
             ], 'prosetta-migrations');
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
@@ -82,6 +85,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
         Event::subscribe(LogResilienceEvents::class);
         Event::listen(TranslationApproved::class, ForgetApprovedContent::class);
+        Event::listen([TranslationApproved::class, TranslationRejected::class], CloseReports::class);
 
         $every = config('prosetta.resilience.resume_every');
 

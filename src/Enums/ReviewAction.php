@@ -11,4 +11,6 @@ enum ReviewAction: string {
     case Edited = 'edited';
     case Imported = 'imported';
     case Confirmed = 'confirmed';
+    /** A member reported the translation; the report became a candidate. */
+    case Reported = 'reported';
 }

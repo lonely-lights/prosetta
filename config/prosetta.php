@@ -85,6 +85,7 @@ return [
         'key' => \LonelyLights\Prosetta\Models\TranslationKey::class,
         'translation' => \LonelyLights\Prosetta\Models\Translation::class,
         'review' => \LonelyLights\Prosetta\Models\TranslationReview::class,
+        'report' => \LonelyLights\Prosetta\Models\TranslationReport::class,
     ],
 
     'table_names' => [
@@ -95,6 +96,7 @@ return [
         'reviews' => 'prosetta_reviews',
         'usage' => 'prosetta_usage',
         'state' => 'prosetta_state',
+        'reports' => 'prosetta_reports',
     ],
 
     /*

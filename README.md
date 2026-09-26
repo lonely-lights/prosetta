@@ -18,7 +18,7 @@ php artisan prosetta:install   # publishes config/prosetta.php and the migration
 php artisan migrate
 ```
 
-`prosetta:install` publishes the six workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`, `prosetta_usage`, `prosetta_state`), re-dated to the moment you publish so they run after your own migrations. It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`), widen `locale_initials` to 35 characters, and add the background-mode columns (`auto_translate`, `style_note`, `glossary`; see [Language settings](#language-settings)). Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
+`prosetta:install` publishes the seven workflow tables (`prosetta_files`, `prosetta_keys`, `prosetta_translations`, `prosetta_reviews`, `prosetta_usage`, `prosetta_state`, `prosetta_reports`), re-dated to the moment you publish so they run after your own migrations. It publishes the `prosetta_locales` migration only if that table doesn't exist yet. Hosts upgrading from an earlier Prosetta keep their locales table; add a boolean `translated` column (default `false`), widen `locale_initials` to 35 characters, and add the background-mode columns (`auto_translate`, `style_note`, `glossary`; see [Language settings](#language-settings)). Queued translation uses Laravel job batches, so the host needs the `job_batches` table (`php artisan make:queue-batches-table`).
 
 Target locales are rows in `prosetta_locales` where `active` (offered to members) or `translated` (maintained, even if not offered) is true. Codes must match your lang folder names exactly (`zh-CN`, `en_GB`) and can't change once created.
 
@@ -382,6 +382,10 @@ A table that already has rows when its model adopts the trait gets its keys with
 Tokens your app swaps in besides Laravel's `:name` ones, such as a `[@]` replaced with a member's name, go in `prosetta.placeholders.patterns` as regular expressions (`'/\[@\]/'`); the guard then flags any translation that drops or changes one, exactly as it does for `:name`.
 
 `php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
+
+## Members reporting a bad translation
+
+`app(Reports::class)->report($locale, $selectedText, $member, suggestion: ..., notes: ..., url: ...)` records a member's report that some words read wrong (`keyRef:` attaches it to a string you know; otherwise Prosetta traces the words to the one current translation in that language whose approved text contains them). A traced report reaches the review queue without ever overwriting anyone's work: added as a `reported` warning (with the member's note and suggestion) to a draft or edit already waiting, or, where the string is current and can be changed here, as a hand edit of its own (`pending`); `QueueItem::$reports` counts the open reports. A report on a stale string, on one that can't be changed here, or on words matching no single string isn't queued: `Reports::unqueued($viewer)` lists those for staff to act on and `dismiss()`. What is live never changes until a reviewer approves something; a person approving closes the string's reports as `accepted` and rejecting as `dismissed` (the cycle's own approvals leave them open), reported strings never ride along in approve-matching, and the reporter counts as the author for self-approval. Reports need a signed-in member, one open report per member per string, at least 3 characters of selection, and a translated language; throttle the route that calls it.
 
 ## Services for your own admin
 
