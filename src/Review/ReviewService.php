@@ -125,7 +125,7 @@ final readonly class ReviewService {
 
     /**
      * @param int|list<int> $translationIds
-     * $expected maps a translation id to the fingerprint the page saw; a changed one is skipped as 'conflict'.
+     * @param array<int, string> $expected maps a translation id to the fingerprint the page saw; a changed one is skipped as 'conflict'.
      * @throws Throwable when a database transaction fails
      */
     public function approve(int|array $translationIds, ?Authenticatable $by, ?string $notes = null, array $expected = []): ApproveReport {
@@ -263,9 +263,10 @@ final readonly class ReviewService {
             ->orderBy("$t.id")
             ->pluck("$t.id")
             ->map(fn ($id) => (int) $id)
+            ->values()
             ->all();
 
-        return $this->approve($ids, $by);
+        return $this->approve(array_values($ids), $by);
     }
 
     /** What a page saw of a translation: any change to its candidate, approval, status or English changes this. */

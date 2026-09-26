@@ -156,7 +156,7 @@ final readonly class SourceChange {
         $result = [];
         foreach ($parts as $part) {
             // Filter out empty strings
-            if ($part !== '' && $part !== null) {
+            if ($part !== '') {
                 $result[] = $part;
             }
         }

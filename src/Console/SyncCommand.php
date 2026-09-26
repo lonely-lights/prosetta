@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
+use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
 use LonelyLights\Prosetta\ProsettaManager;
 use Throwable;
 
 final class SyncCommand extends Command {
+    use ReadsInput;
+
     protected $signature = 'prosetta:sync
         {--namespace=* : Only these namespaces (* is the root lang folder)}
         {--check : Change nothing; exit 1 when anything is missing, stale, unreviewed or broken}';
@@ -17,7 +20,7 @@ final class SyncCommand extends Command {
 
     /** @throws Throwable when a database transaction fails */
     public function handle(ProsettaManager $prosetta): int {
-        $namespaces = $this->option('namespace');
+        $namespaces = $this->texts('namespace');
         $check = (bool) $this->option('check');
         $report = $prosetta->sync($namespaces === [] ? null : $namespaces, $check);
 

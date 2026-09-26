@@ -31,6 +31,7 @@ final readonly class SourceComments {
         $header = [];
         $keys = [];
         $pending = [];
+        /** @var list<string|null> $stack the key each open bracket belongs to, or null for a list or the root */
         $stack = [];
         $returned = false;
         $lastKey = null;

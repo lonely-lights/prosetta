@@ -114,7 +114,7 @@ final readonly class Cycle {
      */
     public function finish(string $runId, int $startedAt, int $confirmed, ?TranslateReport $inline = null, ?string $batchId = null, array $held = []): CycleReport {
         $drafts = $this->drafts($startedAt);
-        $touched = $drafts->pluck('locale')->unique()->values()->all();
+        $touched = array_values(array_filter($drafts->pluck('locale')->unique()->all(), is_string(...)));
         $approvedPerLocale = [];
 
         foreach ($this->approvable($touched) as $locale) {

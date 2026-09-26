@@ -129,6 +129,7 @@ final readonly class ContentKeys {
         $query = $keyModel::query();
         $column = $query->getQuery()->getGrammar()->wrap('key');
 
+        // @phpstan-ignore argument.type (the column is wrapped by the grammar; the value is bound)
         return $query->where('file_id', $file->getKey())->whereRaw("$column like ? escape '!'", [$prefix])->get()
             ->filter(fn (TranslationKey $key) => str_starts_with($key->key, "$record."))
             ->keyBy('key');

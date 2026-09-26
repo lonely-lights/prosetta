@@ -33,8 +33,11 @@ final readonly class Settings {
         return (string) (config("prosetta.table_names.$name") ?? "prosetta_$name");
     }
 
-    /** @return class-string */
+    /**
+     * @return ($name is 'locale' ? class-string<Locale> : ($name is 'file' ? class-string<TranslationFile> : ($name is 'key' ? class-string<TranslationKey> : ($name is 'translation' ? class-string<Translation> : ($name is 'review' ? class-string<TranslationReview> : class-string<TranslationReport>)))))
+     */
     public static function model(string $name): string {
+        // @phpstan-ignore return.type (a configured model must extend the one it replaces)
         return (string) (config("prosetta.models.$name") ?? self::MODELS[$name]);
     }
 

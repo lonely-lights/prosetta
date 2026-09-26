@@ -6,12 +6,15 @@ namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Bus\Batch;
 use Illuminate\Console\Command;
+use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
 use LonelyLights\Prosetta\ProsettaManager;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Translation\Estimator;
 use Throwable;
 
 final class TranslateCommand extends Command {
+    use ReadsInput;
+
     protected $signature = 'prosetta:translate
         {--locale=* : Only these locales}
         {--namespace=* : Only these namespaces}
@@ -25,7 +28,7 @@ final class TranslateCommand extends Command {
     /** @throws Throwable when the queued batch cannot be dispatched */
     public function handle(ProsettaManager $prosetta, Estimator $estimator, Budget $budget): int {
         if ($this->option('estimate')) {
-            $estimate = $estimator->estimate($this->option('locale'), $this->option('namespace'), $this->option('key'), (bool) $this->option('force'));
+            $estimate = $estimator->estimate($this->texts('locale'), $this->texts('namespace'), $this->texts('key'), (bool) $this->option('force'));
             $this->table(['Locale', 'Strings', 'Characters', 'Input tokens', 'Output tokens', 'Based on'], array_map(
                 fn (string $locale, array $row) => [$locale, $row['strings'], $row['chars'], $row['input'], $row['output'], $row['from_history'] ? 'history' : 'defaults'],
                 array_keys($estimate), $estimate,
@@ -50,9 +53,9 @@ final class TranslateCommand extends Command {
         }
 
         $result = $prosetta->translate(
-            $this->option('locale'),
-            $this->option('namespace'),
-            $this->option('key'),
+            $this->texts('locale'),
+            $this->texts('namespace'),
+            $this->texts('key'),
             (bool) $this->option('force'),
             ! $this->option('sync'),
         );

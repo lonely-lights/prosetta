@@ -60,10 +60,18 @@ class TranslationKey extends Model {
         return $this->hasMany(Settings::model('translation'), 'key_id');
     }
 
+    /**
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeCurrent(Builder $query): Builder {
         return $query->whereNull($query->qualifyColumn('obsolete_at'));
     }
 
+    /**
+     * @param Builder<static> $query
+     * @return Builder<static>
+     */
     public function scopeWithKey(Builder $query, string $key): Builder {
         return $query->where($query->qualifyColumn('key_hash'), Fingerprint::of($key));
     }

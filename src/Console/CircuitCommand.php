@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
+use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
 use LonelyLights\Prosetta\Resilience\Budget;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Support\State;
 
 final class CircuitCommand extends Command {
+    use ReadsInput;
+
     protected $signature = 'prosetta:circuit
         {action=status : status or reset}
         {circuit? : One circuit to reset; all when omitted}';
@@ -19,7 +22,7 @@ final class CircuitCommand extends Command {
 
     public function handle(Circuits $circuits, Suspensions $suspensions, Budget $budget): int {
         if ($this->argument('action') === 'reset') {
-            $names = $this->argument('circuit') !== null ? [(string) $this->argument('circuit')] : $circuits->names();
+            $names = $this->argument('circuit') !== null ? [$this->text('circuit')] : $circuits->names();
 
             foreach ($names as $name) {
                 $circuits->for($name)->reset();

@@ -53,7 +53,7 @@ final readonly class ApprovalsController {
         $rows = $rows->take(self::PAGE);
 
         return response()->json([
-            'approvals' => $rows->map(fn (object $row): array => [
+            'approvals' => $rows->map(fn (\stdClass $row): array => [
                 'id' => (int) $row->id,
                 'ref' => (new KeyRef((string) $row->namespace, (string) $row->group, (string) $row->key))->toString(),
                 'locale' => (string) $row->locale,

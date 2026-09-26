@@ -3,7 +3,21 @@ includes:
 
 parameters:
     level: 7
+    # Values read back from the cache, JSON columns and config are checked defensively, not trusted to match their PHPDoc shape.
+    treatPhpDocTypesAsCertain: false
     paths:
         - src/
         - config/
         - database/
+    ignoreErrors:
+        # The package's own config file is merged into the app's config, so env() is correct here.
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: config/prosetta.php
+        # Collection::values()->all() is always a list, but Larastan types it array<int, T>.
+        - '#expects list<.+>, array<int, .+> given#'
+        - '#should return list<.+> but returns array<int, .+>#'
+        # Used by the host's models and the test fixtures, which are outside the analysed paths.
+        -
+            identifier: trait.unused
+            path: src/Content/TranslatesContent.php

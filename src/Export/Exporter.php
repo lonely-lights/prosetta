@@ -152,7 +152,7 @@ final readonly class Exporter {
         }
 
         # A Derived Locale Writes Only What It Changes: Laravel Falls Back to the Source for the Rest
-        if (($this->locales->find($locale)?->replacements ?? []) !== []) {
+        if (($this->locales->find($locale)->replacements ?? []) !== []) {
             $values = $this->onlyChanged($values, $keys);
             $written = array_intersect_key($written, $values);
         }
