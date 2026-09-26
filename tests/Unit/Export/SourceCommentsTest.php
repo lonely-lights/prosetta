@@ -38,3 +38,16 @@ it('finds nothing in a file without comments, or one that isn\'t PHP', function 
     expect(SourceComments::fromSource("<?php\n\nreturn ['a' => 'b'];\n")->keys)->toBe([])
         ->and(SourceComments::fromSource('not php')->header)->toBeNull();
 });
+
+it('leaves a comment trailing a line with that line, not the key below it', function () {
+    $comments = SourceComments::fromSource("<?php\n\nreturn [\n    'a' => 'b', // about a\n    'c' => 'd',\n];\n");
+
+    expect($comments->keys)->toBe([]);
+});
+
+it('reads a single-quoted key literally, as PHP does', function () {
+    # The Key Is 'a\nb' in Single Quotes: a Backslash and an n, Not a Newline
+    $comments = SourceComments::fromSource("<?php\n\nreturn [\n    // note\n    'a\\nb' => 'x',\n];\n");
+
+    expect(array_keys($comments->keys))->toBe(['a\\nb']);
+});

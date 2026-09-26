@@ -35,6 +35,8 @@ final readonly class SourceComments {
         $returned = false;
         $lastKey = null;
         $afterArrow = false;
+        # Whether a Line Has Ended Since the Last Code: a Comment Before That Trails the Code, It Doesn't Head the Next Key
+        $lineEnded = true;
         $count = count($tokens);
 
         for ($i = 0; $i < $count; $i++) {
@@ -43,15 +45,23 @@ final readonly class SourceComments {
             $text = is_array($token) ? $token[1] : $token;
 
             if ($type === T_COMMENT || $type === T_DOC_COMMENT) {
-                # A Line Comment Carries Its Newline; the Writer Adds Its Own
-                $pending[] = rtrim($text);
+                if ($lineEnded) {
+                    # A Line Comment Carries Its Newline; the Writer Adds Its Own
+                    $pending[] = rtrim($text);
+                }
+
+                $lineEnded = $lineEnded || str_ends_with($text, "\n");
 
                 continue;
             }
 
             if ($type === T_WHITESPACE || $type === T_OPEN_TAG) {
+                $lineEnded = $lineEnded || str_contains($text, "\n");
+
                 continue;
             }
+
+            $lineEnded = false;
 
             if (! $returned) {
                 if ($type === T_RETURN) {
@@ -80,7 +90,12 @@ final readonly class SourceComments {
             }
 
             if (($type === T_CONSTANT_ENCAPSED_STRING || $type === T_LNUMBER) && self::nextIsArrow($tokens, $i)) {
-                $key = $type === T_LNUMBER ? $text : stripcslashes(substr($text, 1, -1));
+                $key = match (true) {
+                    $type === T_LNUMBER => $text,
+                    # Single Quotes Unescape Only \\ and \', as PHP Reads Them
+                    str_starts_with($text, "'") => strtr(substr($text, 1, -1), ['\\\\' => '\\', "\\'" => "'"]),
+                    default => stripcslashes(substr($text, 1, -1)),
+                };
                 $path = implode('.', [...array_filter($stack, fn ($part) => $part !== null), $key]);
 
                 if ($pending !== []) {

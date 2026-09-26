@@ -74,3 +74,16 @@ it('shows each language\'s cost this month on the overview', function () {
         ->and($spanish['unpricedTokensThisMonth'])->toBe(0)
         ->and($report['currency'])->toBe('USD');
 });
+
+it('finds a price for the provider\'s versioned or dotted model name', function () {
+    config(['prosetta.ai.prices' => [
+        'gpt-4.1' => ['input' => 2.0, 'output' => 8.0],
+        'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0],
+    ]]);
+    $catalogue = app(PriceCatalogue::class);
+
+    expect($catalogue->price('gpt-4.1')?->input)->toBe(2.0)
+        ->and($catalogue->price('gpt-4.1-2025-04-14')?->input)->toBe(2.0)
+        ->and($catalogue->price('claude-sonnet-5-20260101')?->output)->toBe(15.0)
+        ->and($catalogue->price('gpt-4.1-mini'))->toBeNull();
+});
