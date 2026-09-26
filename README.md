@@ -378,6 +378,12 @@ Read them with `$model->translated('name')` (the current locale, falling back to
 
 `php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
 
+## What the AI costs
+
+Every call records the model that spent its tokens. List prices per million tokens under `prosetta.ai.prices` (`'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0]`, by the model name your driver reports) and `prosetta.ai.currency`, or bind `LonelyLights\Prosetta\Contracts\PriceCatalogue` to read them from your own table. `UsageLedger::cost(from:, to:, locale:)` returns a `Cost` (amount, currency, and how many tokens it couldn't price, so you can say "about"), and `Coverage` carries each language's `costThisMonth` and `unpricedTokensThisMonth` with the report's `currency`. Budgets are still counted in tokens.
+
+Comments in your source PHP lang files (the heading above `return`, and a comment directly above any key) are copied into every translated file Prosetta writes, above the same keys.
+
 ## Services for your own admin
 
 `Prosetta::reviewQueue($locale, $filters)` returns a paginator of `ReviewItem` (key, source, candidate, approved value, status, stale flag, issues, provenance), ready for Inertia props. `Prosetta::missing($locale, $filters)` lists keys with nothing yet in that locale, and `Prosetta::write($keyRef, $locale, $value, $by, approve: false)` translates any of them by hand through the same review trail. `edit(..., approve: true)` saves and approves together, or changes nothing. `edit()`, `approve()`, `approveClean()`, `reject()`, `export()`, `rename()`, `stats()` and `lookup()` complete the surface. Every method that acts on behalf of a user takes `?Authenticatable $by`; `null` means the system.
