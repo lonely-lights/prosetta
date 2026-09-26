@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Queries;
 
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Support\Settings;
 
