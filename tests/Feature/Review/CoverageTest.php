@@ -5,6 +5,7 @@ use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Automation\Cycle;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Queries\Coverage;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Review\Viewer;
@@ -36,7 +37,7 @@ it('counts only the viewer\'s languages, by the same rules as the queue', functi
 });
 
 it('reports a derived language, this month\'s tokens per language, and the last cycle', function () {
-    \LonelyLights\Prosetta\Models\Locale::query()->where('locale_initials', 'en_GB')->update(['replacements' => [['from' => 'color', 'to' => 'colour']]]);
+    Locale::query()->where('locale_initials', 'en_GB')->update(['replacements' => [['from' => 'color', 'to' => 'colour']]]);
     app(UsageLedger::class)->record(null, 'c', 'es', 100, 50);
     app()->instance(TranslationDriver::class, new ScriptedDriver);
     app(Cycle::class)->run(sync: true);

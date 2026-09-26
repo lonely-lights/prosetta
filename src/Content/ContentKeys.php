@@ -42,7 +42,6 @@ final readonly class ContentKeys {
     /**
      * Brings a record's keys in line with its fields: renames them when its
      * record key changed, then adds, updates, restores or obsoletes each one.
-     *
      */
     public function sync(Model&TranslatableContent $model, ?string $previousRecord = null): void {
         $file = $this->file($model->translationFolder());

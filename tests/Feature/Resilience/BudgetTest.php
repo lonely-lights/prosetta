@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use LonelyLights\Prosetta\Events\BudgetReached;
 use LonelyLights\Prosetta\Resilience\Budget;
@@ -91,7 +92,7 @@ it('keeps counting spending after the cache is cleared', function () {
     config(['prosetta.budgets.daily' => 1000]);
     app(UsageLedger::class)->record('run-1', 'c', 'es', 600, 500);
 
-    \Illuminate\Support\Facades\Cache::store('array')->flush();
+    Cache::store('array')->flush();
 
     expect(app(Budget::class)->exhausted('run-2'))->toBe('daily');
 });

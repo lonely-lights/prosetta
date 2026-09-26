@@ -2,9 +2,11 @@
 
 use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Review\ReviewService;
+use LonelyLights\Prosetta\Support\WorkState;
 use LonelyLights\Prosetta\Sync\Syncer;
 
 beforeEach(function () {
@@ -55,10 +57,10 @@ it('confirms a stale translation without changing it, keeping its origin', funct
     expect($confirmed->approved_value)->toBe($before->approved_value)
         ->and($confirmed->origin)->toBe(TranslationOrigin::Imported)
         ->and($confirmed->approved_source_value)->toBe('These credentials do not match our records!')
-        ->and(\LonelyLights\Prosetta\Support\WorkState::isStale($confirmed->key, $confirmed))->toBeFalse()
+        ->and(WorkState::isStale($confirmed->key, $confirmed))->toBeFalse()
         ->and($confirmed->reviews()->latest('id')->first()->action)->toBe(ReviewAction::Confirmed);
 });
 
 it('refuses to confirm a translation that is current', function () {
-    expect(fn () => app(ReviewService::class)->confirm(spanishFailed()->id, null))->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class);
+    expect(fn () => app(ReviewService::class)->confirm(spanishFailed()->id, null))->toThrow(ProsettaException::class);
 });

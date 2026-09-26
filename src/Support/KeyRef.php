@@ -14,7 +14,9 @@ use Stringable;
  */
 final readonly class KeyRef implements Stringable {
     public const string ROOT = '*';
+
     public const string JSON_GROUP = '*';
+
     private const string JSON_PREFIX = 'json:';
 
     public function __construct(

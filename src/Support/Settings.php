@@ -6,17 +6,23 @@ namespace LonelyLights\Prosetta\Support;
 
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
+use LonelyLights\Prosetta\Models\Locale;
+use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationFile;
+use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Models\TranslationReport;
+use LonelyLights\Prosetta\Models\TranslationReview;
 use LonelyLights\Prosetta\Resilience\CacheStore;
 
 /** Reads Prosetta's config with its defaults, so no other class repeats them. */
 final readonly class Settings {
     private const array MODELS = [
-        'locale' => \LonelyLights\Prosetta\Models\Locale::class,
-        'file' => \LonelyLights\Prosetta\Models\TranslationFile::class,
-        'key' => \LonelyLights\Prosetta\Models\TranslationKey::class,
-        'translation' => \LonelyLights\Prosetta\Models\Translation::class,
-        'review' => \LonelyLights\Prosetta\Models\TranslationReview::class,
-        'report' => \LonelyLights\Prosetta\Models\TranslationReport::class,
+        'locale' => Locale::class,
+        'file' => TranslationFile::class,
+        'key' => TranslationKey::class,
+        'translation' => Translation::class,
+        'review' => TranslationReview::class,
+        'report' => TranslationReport::class,
     ];
 
     public static function sourceLocale(): string {

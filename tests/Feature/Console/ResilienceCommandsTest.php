@@ -2,6 +2,7 @@
 
 use Illuminate\Bus\PendingBatch;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -10,14 +11,18 @@ use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Data\TranslationBatch;
 use LonelyLights\Prosetta\Data\TranslationBatchResult;
+use LonelyLights\Prosetta\Events\CircuitOpened;
 use LonelyLights\Prosetta\Events\TranslationResumed;
 use LonelyLights\Prosetta\Exceptions\MissingDriverException;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Exceptions\Provider\ProviderUnavailable;
 use LonelyLights\Prosetta\Jobs\TranslateBatch;
+use LonelyLights\Prosetta\ProsettaServiceProvider;
 use LonelyLights\Prosetta\Resilience\Circuits;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
+use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\HealthCheckedScriptedDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
@@ -122,7 +127,7 @@ it('shows and resets circuits', function () {
 
 it('schedules resume when resume_every is set', function () {
     config(['prosetta.resilience.resume_every' => 10]);
-    (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
+    (new ProsettaServiceProvider(app()))->boot();
 
     $events = collect(app(Schedule::class)->events())->filter(fn ($event) => str_contains((string) $event->command, 'prosetta:resume'));
 
@@ -134,7 +139,7 @@ it('logs circuit and suspension events', function () {
     Log::shouldReceive('channel')->andReturnSelf();
     Log::shouldReceive('warning')->once();
 
-    event(new \LonelyLights\Prosetta\Events\CircuitOpened('scripted-driver:default', 300, 5, 'down'));
+    event(new CircuitOpened('scripted-driver:default', 300, 5, 'down'));
 });
 
 it('resumes a forced run without re-translating what it already drafted', function () {
@@ -227,7 +232,7 @@ it('keeps a suspension that a job records again while resume is requeueing it', 
 });
 
 it('gives the test turn back when the driver cannot be built during resume', function () {
-    app()->bind(TranslationDriver::class, fn () => throw new \Illuminate\Contracts\Container\BindingResolutionException('missing API key'));
+    app()->bind(TranslationDriver::class, fn () => throw new BindingResolutionException('missing API key'));
     $circuit = app(Circuits::class)->for('scripted-driver:default');
     foreach (range(1, 5) as $ignored) {
         $circuit->recordFailure('down');
@@ -236,6 +241,6 @@ it('gives the test turn back when the driver cannot be built during resume', fun
     $this->travel(301)->seconds();
 
     expect(fn () => $this->artisan('prosetta:resume')->run())
-        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'could not be built');
-    expect(\LonelyLights\Prosetta\Support\Settings::cacheStore()->lock('prosetta:circuit:scripted-driver:default:test', 1)->get())->toBeTrue();
+        ->toThrow(ProsettaException::class, 'could not be built');
+    expect(Settings::cacheStore()->lock('prosetta:circuit:scripted-driver:default:test', 1)->get())->toBeTrue();
 });

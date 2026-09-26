@@ -1,3 +1,5 @@
 <?php
 
-uses(LonelyLights\Prosetta\Tests\TestCase::class)->in('Feature', 'Unit');
+use LonelyLights\Prosetta\Tests\TestCase;
+
+uses(TestCase::class)->in('Feature', 'Unit');

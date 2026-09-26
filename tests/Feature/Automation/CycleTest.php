@@ -1,10 +1,15 @@
 <?php
 
+use Carbon\CarbonImmutable;
 use Illuminate\Bus\PendingBatch;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Testing\Fakes\BatchFake;
 use LonelyLights\Prosetta\Automation\Cycle;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Data\TranslationBatch;
@@ -17,12 +22,17 @@ use LonelyLights\Prosetta\Export\Exporter;
 use LonelyLights\Prosetta\Jobs\FinishCycle;
 use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\ProsettaServiceProvider;
 use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Resilience\RunScope;
+use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Resilience\UsageLedger;
 use LonelyLights\Prosetta\Review\ReviewService;
 use LonelyLights\Prosetta\Support\State;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
+use LonelyLights\Prosetta\Translation\TranslationRunner;
 
 beforeEach(function () {
     $this->useFixtureApp();
@@ -274,9 +284,9 @@ it('finishes a queued cycle by counting and approving what its jobs drafted', fu
     $startedAt = now()->getTimestamp();
     $driver = cycleIssueDriver();
     app()->instance(TranslationDriver::class, $driver);
-    $missing = LonelyLights\Prosetta\Models\TranslationKey::query()->whereNull('obsolete_at')->get()
+    $missing = TranslationKey::query()->whereNull('obsolete_at')->get()
         ->filter(fn ($key) => cycleTranslation($key->ref()->toString(), 'es') === null)->modelKeys();
-    app(LonelyLights\Prosetta\Translation\TranslationRunner::class)->run('es', array_values($missing), false, 'batch-1');
+    app(TranslationRunner::class)->run('es', array_values($missing), false, 'batch-1');
 
     $report = (new FinishCycle('batch-1', 'batch-1', $startedAt, 0))->handle(app(Cycle::class));
 
@@ -323,7 +333,7 @@ it('prints the queued batch id without --sync', function () {
 
 it('schedules the cycle when automation.every is set', function () {
     config(['prosetta.automation.every' => 15]);
-    (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
+    (new ProsettaServiceProvider(app()))->boot();
 
     $events = collect(app(Schedule::class)->events())->filter(fn ($event) => str_contains((string) $event->command, 'prosetta:cycle'));
 
@@ -334,7 +344,7 @@ it('schedules the cycle when automation.every is set', function () {
 
 it('lets the cycle\'s overlap lock expire after twice the interval, at least 10 minutes, so a killed cycle blocks only briefly', function (int $every, int $expires) {
     config(['prosetta.automation.every' => $every]);
-    (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
+    (new ProsettaServiceProvider(app()))->boot();
 
     $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains((string) $event->command, 'prosetta:cycle'));
 
@@ -343,7 +353,7 @@ it('lets the cycle\'s overlap lock expire after twice the interval, at least 10 
 })->with([[15, 30], [3, 10], [30, 60]]);
 
 it('does not schedule the cycle by default', function () {
-    (new \LonelyLights\Prosetta\ProsettaServiceProvider(app()))->boot();
+    (new ProsettaServiceProvider(app()))->boot();
 
     $events = collect(app(Schedule::class)->events())->filter(fn ($event) => str_contains((string) $event->command, 'prosetta:cycle'));
 
@@ -354,7 +364,7 @@ it('approves only its own clean drafts, never an older draft or a person\'s pend
     cycleAutoTranslate('es');
     app()->instance(TranslationDriver::class, new ScriptedDriver);
     $this->travel(-1)->hours();
-    app(LonelyLights\Prosetta\Translation\TranslationRunner::class)->run('es', [app(KeyFinder::class)->find('auth.throttle')->id]);
+    app(TranslationRunner::class)->run('es', [app(KeyFinder::class)->find('auth.throttle')->id]);
     $this->travelBack();
     app(ReviewService::class)->write('messages.welcome', 'es', '¡Bienvenido, :name!', null);
 
@@ -376,7 +386,7 @@ it('re-drafts an unapproved AI draft in an auto language when its English change
     $driver = new ScriptedDriver;
     app()->instance(TranslationDriver::class, $driver);
     $throttle = app(KeyFinder::class)->find('auth.throttle');
-    app(LonelyLights\Prosetta\Translation\TranslationRunner::class)->run('es', [$throttle->id]);
+    app(TranslationRunner::class)->run('es', [$throttle->id]);
     config(['prosetta.automation.approve' => 'none']);
     $path = $this->fixture.'/lang/en/auth.php';
     file_put_contents($path, str_replace('Too many login attempts.', 'Too many sign-in attempts.', file_get_contents($path)));
@@ -394,13 +404,13 @@ it('re-drafts an unapproved AI draft in an auto language when its English change
 
 it('clears a suspended cycle run on resume instead of re-translating its scope', function () {
     Bus::fake();
-    $suspensions = app(LonelyLights\Prosetta\Resilience\Suspensions::class);
-    $scope = new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], [], false, now()->getTimestamp(), cycle: true);
+    $suspensions = app(Suspensions::class);
+    $scope = new RunScope(['es', 'ar'], [], [], false, now()->getTimestamp(), cycle: true);
     $suspensions->suspend('scripted-driver:default', $scope, 'outage');
 
-    expect(LonelyLights\Prosetta\Resilience\RunScope::fromArray($scope->toArray())->cycle)->toBeTrue()
-        ->and($scope->id())->not->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['es', 'ar'], [], []))->id())
-        ->and($scope->id())->toBe((new LonelyLights\Prosetta\Resilience\RunScope(['ar', 'es'], [], [], false, 1, cycle: true))->id());
+    expect(RunScope::fromArray($scope->toArray())->cycle)->toBeTrue()
+        ->and($scope->id())->not->toBe((new RunScope(['es', 'ar'], [], []))->id())
+        ->and($scope->id())->toBe((new RunScope(['ar', 'es'], [], [], false, 1, cycle: true))->id());
 
     $this->artisan('prosetta:resume')->expectsOutputToContain('Cleared 1 suspended cycle run(s)')->assertSuccessful();
 
@@ -417,7 +427,7 @@ it('skips a cycle started after the batch finished but before its FinishCycle ra
     # Every Job Ran: Laravel Marks the Batch Finished, While FinishCycle Still Waits in the Queue
     $batch = Bus::findBatch($first->batchId);
     $batch->pendingJobs = 0;
-    $batch->finishedAt = Carbon\CarbonImmutable::now();
+    $batch->finishedAt = CarbonImmutable::now();
 
     $second = app(Cycle::class)->run();
 
@@ -444,8 +454,8 @@ it('keeps a newer cycle\'s guard when a stale FinishCycle for an older batch run
 
 it('decides when a stored cycle batch is abandoned', function () {
     $cycle = app(Cycle::class);
-    $now = Carbon\CarbonImmutable::now();
-    $batch = fn (int $pending, int $failed, ?Carbon\CarbonImmutable $finished = null, ?Carbon\CarbonImmutable $cancelled = null) => new Illuminate\Support\Testing\Fakes\BatchFake('b', 'prosetta:translate', 3, $pending, $failed, [], [], $now->subDay(), $cancelled, $finished);
+    $now = CarbonImmutable::now();
+    $batch = fn (int $pending, int $failed, ?CarbonImmutable $finished = null, ?CarbonImmutable $cancelled = null) => new BatchFake('b', 'prosetta:translate', 3, $pending, $failed, [], [], $now->subDay(), $cancelled, $finished);
     $stored = ['batch_id' => 'b', 'started_at' => $now->subDay()->getTimestamp()];
 
     expect($cycle->isAbandoned(null, $stored, $now))->toBeTrue()
@@ -474,10 +484,10 @@ it('proceeds past a settled batch whose FinishCycle never ran, and logs it', fun
     app()->instance(TranslationDriver::class, new ScriptedDriver);
     $old = Bus::batch([new FinishCycle('x', 'x', 0, 0)])->dispatch();
     $old->pendingJobs = 0;
-    $old->finishedAt = Carbon\CarbonImmutable::now()->subHours(2);
+    $old->finishedAt = CarbonImmutable::now()->subHours(2);
     State::put('cycle.batch', ['batch_id' => $old->id, 'started_at' => now()->subHours(3)->getTimestamp()]);
-    Illuminate\Support\Facades\Log::shouldReceive('channel')->andReturnSelf();
-    Illuminate\Support\Facades\Log::shouldReceive('warning')->once()->withArgs(fn (string $message) => str_contains($message, "Cycle batch $old->id was abandoned"));
+    Log::shouldReceive('channel')->andReturnSelf();
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message) => str_contains($message, "Cycle batch $old->id was abandoned"));
 
     $report = app(Cycle::class)->run(sync: true);
 
@@ -487,10 +497,10 @@ it('proceeds past a settled batch whose FinishCycle never ran, and logs it', fun
 });
 
 it('keeps a manual run and a cycle run over the same locales as separate suspensions', function () {
-    $suspensions = app(LonelyLights\Prosetta\Resilience\Suspensions::class);
-    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], []), 'outage');
-    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], [], false, 1, cycle: true), 'outage');
-    $suspensions->suspend('scripted-driver:default', new LonelyLights\Prosetta\Resilience\RunScope(['es'], [], [], false, 2, cycle: true), 'outage');
+    $suspensions = app(Suspensions::class);
+    $suspensions->suspend('scripted-driver:default', new RunScope(['es'], [], []), 'outage');
+    $suspensions->suspend('scripted-driver:default', new RunScope(['es'], [], [], false, 1, cycle: true), 'outage');
+    $suspensions->suspend('scripted-driver:default', new RunScope(['es'], [], [], false, 2, cycle: true), 'outage');
 
     $all = $suspensions->all();
     expect($all)->toHaveCount(2)
@@ -499,7 +509,7 @@ it('keeps a manual run and a cycle run over the same locales as separate suspens
 
 it('leaves no guard behind when a queued cycle completes inside dispatch on a sync queue', function () {
     # A Real Batch Repository Needs Laravel's job_batches Table, Which the Package's Test Database Lacks
-    Illuminate\Support\Facades\Schema::create('job_batches', function (Illuminate\Database\Schema\Blueprint $table) {
+    Schema::create('job_batches', function (Blueprint $table) {
         $table->string('id')->primary();
         $table->string('name');
         $table->integer('total_jobs');

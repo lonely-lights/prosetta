@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Review\ReviewService;
 use LonelyLights\Prosetta\Sync\Syncer;
+use LonelyLights\Prosetta\Testing\FakeTranslationDriver;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
 use LonelyLights\Prosetta\Translation\TranslationRunner;
 
@@ -67,7 +68,7 @@ it('releases the hold once a person writes or approves a value', function () {
 
 it('keeps the rejection note in the feedback when a re-draft is retried for failing the guard', function () {
     app(ReviewService::class)->reject($this->draft->id, new GenericUser(['id' => 'u1']), 'Sound friendlier.');
-    $driver = (new \LonelyLights\Prosetta\Testing\FakeTranslationDriver)->dropPlaceholders();
+    $driver = (new FakeTranslationDriver)->dropPlaceholders();
     app()->instance(TranslationDriver::class, $driver);
 
     app(TranslationRunner::class)->run('ar', [$this->key->id]);

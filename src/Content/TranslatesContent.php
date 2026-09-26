@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace LonelyLights\Prosetta\Content;
 
 use Illuminate\Database\Eloquent\Model;
-use LonelyLights\Prosetta\Contracts\TranslatableContent;
 use LogicException;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
+use LonelyLights\Prosetta\Contracts\TranslatableContent;
 use LonelyLights\Prosetta\ProsettaManager;
 
 /**

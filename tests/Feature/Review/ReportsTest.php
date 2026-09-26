@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Auth\GenericUser;
+use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Exceptions\ProsettaException;
@@ -8,10 +9,10 @@ use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationReport;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Review\Reports;
+use LonelyLights\Prosetta\Review\ReviewDesk;
 use LonelyLights\Prosetta\Review\ReviewQueue;
 use LonelyLights\Prosetta\Review\ReviewService;
 use LonelyLights\Prosetta\Review\Viewer;
-use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Sync\Syncer;
 
 beforeEach(function () {
@@ -143,7 +144,7 @@ it('lets no one approve their own reported wording where self-approval is off', 
 it('leaves reported strings out of approve-matching, even with warnings included', function () {
     app(Reports::class)->report('es', 'nuestros registros', $this->member, suggestion: 'Estas credenciales no son correctas.');
 
-    $report = app(\LonelyLights\Prosetta\Review\ReviewDesk::class)->approveMatching(Viewer::for(new GenericUser(['id' => 'reviewer'])), ['locale' => 'es'], includeWarnings: true);
+    $report = app(ReviewDesk::class)->approveMatching(Viewer::for(new GenericUser(['id' => 'reviewer'])), ['locale' => 'es'], includeWarnings: true);
 
     expect($report->approved)->toBe(0)
         ->and(($this->failed)()->status)->toBe(TranslationStatus::NeedsReview);

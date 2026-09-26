@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Models\Locale;
 use LonelyLights\Prosetta\Models\Translation;
 use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Queries\KeyFinder;
+use LonelyLights\Prosetta\Review\ReviewService;
 use LonelyLights\Prosetta\Support\Settings;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Testing\ScriptedDriver;
@@ -39,7 +40,7 @@ it('exports only the strings a derived locale changes, keeping a list whole when
         ['from' => 'language', 'to' => 'tongue'],
     ]]);
     app(TranslationRunner::class)->run('en_GB', TranslationKey::query()->pluck('id')->map(fn ($id) => (int) $id)->all(), force: true);
-    app(\LonelyLights\Prosetta\Review\ReviewService::class)->approveClean('en_GB');
+    app(ReviewService::class)->approveClean('en_GB');
 
     app(Exporter::class)->export(['en_GB']);
 

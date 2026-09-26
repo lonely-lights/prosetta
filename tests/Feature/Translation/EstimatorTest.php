@@ -1,6 +1,11 @@
 <?php
 
+use Illuminate\Support\Facades\Bus;
+use LonelyLights\Prosetta\Enums\FileFormat;
+use LonelyLights\Prosetta\Enums\KeyKind;
 use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationFile;
+use LonelyLights\Prosetta\Models\TranslationKey;
 use LonelyLights\Prosetta\Sync\Syncer;
 use LonelyLights\Prosetta\Translation\Estimator;
 
@@ -20,11 +25,11 @@ it('estimates from the default rates before a locale has history', function () {
 });
 
 it('estimates from a locale\'s own history once it has fifty AI drafts', function () {
-    $file = \LonelyLights\Prosetta\Models\TranslationFile::query()->first();
+    $file = TranslationFile::query()->first();
 
     foreach (range(1, 50) as $i) {
-        $key = \LonelyLights\Prosetta\Models\TranslationKey::query()->create([
-            'file_id' => $file->id, 'kind' => \LonelyLights\Prosetta\Enums\KeyKind::File, 'key' => "history.$i",
+        $key = TranslationKey::query()->create([
+            'file_id' => $file->id, 'kind' => KeyKind::File, 'key' => "history.$i",
             'source_value' => 'Ten chars.', 'source_hash' => 'h'.$i,
         ]);
         Translation::query()->create([
@@ -47,13 +52,13 @@ it('estimates from a locale\'s own history once it has fifty AI drafts', functio
 it('does not overestimate long strings from short-string history', function () {
     // Its own file/namespace, so the work list below holds exactly the five long, untranslated
     // keys: none of the fixture's other 'ar' work and none of these fifty translated shorts.
-    $file = \LonelyLights\Prosetta\Models\TranslationFile::query()->create([
-        'namespace' => 'longtest', 'group' => 'longtest', 'format' => \LonelyLights\Prosetta\Enums\FileFormat::Php,
+    $file = TranslationFile::query()->create([
+        'namespace' => 'longtest', 'group' => 'longtest', 'format' => FileFormat::Php,
     ]);
 
     foreach (range(1, 50) as $i) {
-        $key = \LonelyLights\Prosetta\Models\TranslationKey::query()->create([
-            'file_id' => $file->id, 'kind' => \LonelyLights\Prosetta\Enums\KeyKind::File, 'key' => "short.$i",
+        $key = TranslationKey::query()->create([
+            'file_id' => $file->id, 'kind' => KeyKind::File, 'key' => "short.$i",
             'source_value' => 'Ten chars.', 'source_hash' => 'sh'.$i,
         ]);
         Translation::query()->create([
@@ -63,8 +68,8 @@ it('does not overestimate long strings from short-string history', function () {
     }
 
     foreach (range(1, 5) as $i) {
-        \LonelyLights\Prosetta\Models\TranslationKey::query()->create([
-            'file_id' => $file->id, 'kind' => \LonelyLights\Prosetta\Enums\KeyKind::File, 'key' => "long.$i",
+        TranslationKey::query()->create([
+            'file_id' => $file->id, 'kind' => KeyKind::File, 'key' => "long.$i",
             'source_value' => str_repeat('x', 300), 'source_hash' => 'lo'.$i,
         ]);
     }
@@ -83,13 +88,13 @@ it('does not overestimate long strings from short-string history', function () {
 });
 
 it('prints an estimate without queueing anything', function () {
-    \Illuminate\Support\Facades\Bus::fake();
+    Bus::fake();
 
     $this->artisan('prosetta:translate --locale=ar --estimate')
         ->expectsOutputToContain('ar')
         ->assertSuccessful();
 
-    \Illuminate\Support\Facades\Bus::assertNothingBatched();
+    Bus::assertNothingBatched();
 });
 
 it('compares the estimate with the per-run limit as well as the daily and monthly budgets', function () {

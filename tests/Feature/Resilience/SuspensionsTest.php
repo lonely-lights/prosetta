@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
 use LonelyLights\Prosetta\Events\TranslationSuspended;
+use LonelyLights\Prosetta\Exceptions\ProsettaException;
 use LonelyLights\Prosetta\Resilience\RunScope;
 use LonelyLights\Prosetta\Resilience\Suspensions;
 use LonelyLights\Prosetta\Support\Settings;
@@ -48,7 +49,7 @@ it('serializes mutations through a write lock, so concurrent workers cannot race
     expect($writeLock->get())->toBeTrue();
 
     expect(fn () => $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage'))
-        ->toThrow(\LonelyLights\Prosetta\Exceptions\ProsettaException::class, 'Timed out');
+        ->toThrow(ProsettaException::class, 'Timed out');
 
     $writeLock->release();
     $suspensions->suspend('fake:m', new RunScope(['es'], [], []), 'outage');

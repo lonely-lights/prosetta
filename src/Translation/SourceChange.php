@@ -62,6 +62,7 @@ final readonly class SourceChange {
         $translationNormalized = $translationMaxLen > 0 ? $translationDistance / $translationMaxLen : 0;
 
         $denominator = max($sourceNormalized, 0.01);
+
         return $translationNormalized / $denominator;
     }
 
@@ -257,7 +258,7 @@ final readonly class SourceChange {
                     $currentWords[] = $word;
                 } else {
                     // Flush any previous group
-                    if (!empty($currentWords)) {
+                    if (! empty($currentWords)) {
                         $grouped[] = self::formatGroupedDiff($currentWords, $type);
                         $currentWords = [];
                     }
@@ -273,7 +274,7 @@ final readonly class SourceChange {
                     $currentWords[] = $word;
                 } else {
                     // Flush any previous group
-                    if (!empty($currentWords)) {
+                    if (! empty($currentWords)) {
                         $grouped[] = self::formatGroupedDiff($currentWords, $type);
                         $currentWords = [];
                     }
@@ -283,7 +284,7 @@ final readonly class SourceChange {
                 }
             } else {
                 // Normal word
-                if (!empty($currentWords)) {
+                if (! empty($currentWords)) {
                     $grouped[] = self::formatGroupedDiff($currentWords, $type);
                     $currentWords = [];
                     $type = null;
@@ -293,7 +294,7 @@ final readonly class SourceChange {
         }
 
         // Flush any remaining group
-        if (!empty($currentWords)) {
+        if (! empty($currentWords)) {
             $grouped[] = self::formatGroupedDiff($currentWords, $type);
         }
 
@@ -313,6 +314,7 @@ final readonly class SourceChange {
         } elseif ($type === 'added') {
             return "{+$content+}";
         }
+
         return $content;
     }
 

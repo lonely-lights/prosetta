@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LonelyLights\Prosetta\Resilience;
 
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Events\Dispatcher;
 use LonelyLights\Prosetta\Events\BudgetReached;
 use LonelyLights\Prosetta\Support\Settings;
@@ -62,7 +63,7 @@ final readonly class Budget {
      * Daily, then monthly, then per_run: exhausted() names the first one reached, so a run over
      * both a shared budget and its own is suspended (per_run alone isn't) and resumes later.
      *
-     * @return array<string, array{key: string, runId: ?string, from: ?\Carbon\CarbonInterface, ttl: int}>
+     * @return array<string, array{key: string, runId: ?string, from: ?CarbonInterface, ttl: int}>
      */
     private function periods(?string $runId): array {
         $now = now();
@@ -78,7 +79,7 @@ final readonly class Budget {
         return $periods;
     }
 
-    /** @param array{key: string, runId: ?string, from: ?\Carbon\CarbonInterface, ttl: int} $bounds */
+    /** @param array{key: string, runId: ?string, from: ?CarbonInterface, ttl: int} $bounds */
     private function used(array $bounds): int {
         return $this->ledger->sum($bounds['runId'], $bounds['from']);
     }

@@ -6,7 +6,6 @@ namespace LonelyLights\Prosetta\Content;
 
 use Illuminate\Contracts\Cache\Repository;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
-use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Support\Settings;
 
 /** Approved content translations, cached per folder and locale. */

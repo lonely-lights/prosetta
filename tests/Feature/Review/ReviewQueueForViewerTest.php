@@ -2,11 +2,16 @@
 
 use Illuminate\Auth\GenericUser;
 use LonelyLights\Prosetta\Auth\Authorizer;
+use LonelyLights\Prosetta\Automation\CycleFailures;
 use LonelyLights\Prosetta\Enums\Ability;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
 use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Queries\Coverage;
 use LonelyLights\Prosetta\Queries\KeyFinder;
 use LonelyLights\Prosetta\Review\ReviewQueue;
+use LonelyLights\Prosetta\Review\ReviewService;
+use LonelyLights\Prosetta\Review\Status;
 use LonelyLights\Prosetta\Review\Viewer;
 use LonelyLights\Prosetta\Sync\Syncer;
 
@@ -80,11 +85,11 @@ it('shows the English an update was made from, with the word diff', function () 
         ->and($item->toArray())->toHaveKeys(['keyRef', 'reason', 'fingerprint']);
 });
 
-function capQueueKey(string $ref, string $locale): \LonelyLights\Prosetta\Models\TranslationKey {
+function capQueueKey(string $ref, string $locale): TranslationKey {
     $key = app(KeyFinder::class)->find($ref);
 
-    foreach (range(1, \LonelyLights\Prosetta\Automation\CycleFailures::LIMIT) as $run) {
-        app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->settle($locale, [$key], [], "run-$run");
+    foreach (range(1, CycleFailures::LIMIT) as $run) {
+        app(CycleFailures::class)->settle($locale, [$key], [], "run-$run");
     }
 
     return $key;
@@ -95,13 +100,13 @@ it('stops calling a capped key held once a person writes and approves it', funct
     $viewer = queueViewer(['es']);
     expect(collect(app(ReviewQueue::class)->all($viewer))->pluck('reason', 'keyRef')->get('auth.throttle'))->toBe('held');
 
-    app(\LonelyLights\Prosetta\Review\ReviewService::class)->write('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.', null, approve: true);
+    app(ReviewService::class)->write('auth.throttle', 'es', 'Demasiados intentos. Espera :seconds segundos.', null, approve: true);
 
-    $es = app(\LonelyLights\Prosetta\Queries\Coverage::class)->for($viewer)->languages[0];
+    $es = app(Coverage::class)->for($viewer)->languages[0];
 
     expect(collect(app(ReviewQueue::class)->all($viewer))->pluck('keyRef')->all())->not->toContain('auth.throttle')
         ->and($es['held'])->toBe(0)
-        ->and(app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->all())->toBe([]);
+        ->and(app(CycleFailures::class)->all())->toBe([]);
 });
 
 it('never calls a key approved when it has no approved value and only an outdated draft, as the cycle still works on it', function () {
@@ -111,12 +116,12 @@ it('never calls a key approved when it has no approved value and only an outdate
     $key = app(KeyFinder::class)->find('auth.throttle');
     $translation = Translation::query()->where('key_id', $key->id)->where('locale', 'es')->first();
 
-    expect(\LonelyLights\Prosetta\Review\Status::of($key, $translation, 'es', [], []))->toBe('missing');
+    expect(Status::of($key, $translation, 'es', [], []))->toBe('missing');
 
     capQueueKey('auth.throttle', 'es');
-    $failures = app(\LonelyLights\Prosetta\Automation\CycleFailures::class)->all();
+    $failures = app(CycleFailures::class)->all();
 
-    expect(\LonelyLights\Prosetta\Review\Status::of($key, $translation, 'es', $failures, []))->toBe('held');
+    expect(Status::of($key, $translation, 'es', $failures, []))->toBe('held');
 });
 
 it('shows a person\'s pending value on a capped key as pending, not held', function () {

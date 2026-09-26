@@ -1,5 +1,13 @@
 <?php
 
+use LonelyLights\Prosetta\Locales\DatabaseLocaleSource;
+use LonelyLights\Prosetta\Models\Locale;
+use LonelyLights\Prosetta\Models\Translation;
+use LonelyLights\Prosetta\Models\TranslationFile;
+use LonelyLights\Prosetta\Models\TranslationKey;
+use LonelyLights\Prosetta\Models\TranslationReport;
+use LonelyLights\Prosetta\Models\TranslationReview;
+
 return [
 
     /*
@@ -93,17 +101,17 @@ return [
     ],
 
     'locales' => [
-        'source' => \LonelyLights\Prosetta\Locales\DatabaseLocaleSource::class,
+        'source' => DatabaseLocaleSource::class,
         'fallback' => ['en'],
     ],
 
     'models' => [
-        'locale' => \LonelyLights\Prosetta\Models\Locale::class,
-        'file' => \LonelyLights\Prosetta\Models\TranslationFile::class,
-        'key' => \LonelyLights\Prosetta\Models\TranslationKey::class,
-        'translation' => \LonelyLights\Prosetta\Models\Translation::class,
-        'review' => \LonelyLights\Prosetta\Models\TranslationReview::class,
-        'report' => \LonelyLights\Prosetta\Models\TranslationReport::class,
+        'locale' => Locale::class,
+        'file' => TranslationFile::class,
+        'key' => TranslationKey::class,
+        'translation' => Translation::class,
+        'review' => TranslationReview::class,
+        'report' => TranslationReport::class,
     ],
 
     'table_names' => [
