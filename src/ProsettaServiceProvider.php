@@ -15,6 +15,7 @@ use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
 use LonelyLights\Prosetta\Console\ContentImportCommand;
+use LonelyLights\Prosetta\Console\ContentSyncCommand;
 use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
 use LonelyLights\Prosetta\Console\HealthCommand;
@@ -67,7 +68,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
             $this->commands([
-                InstallCommand::class, SyncCommand::class, ContentImportCommand::class, TranslateCommand::class, ReviewCommand::class,
+                InstallCommand::class, SyncCommand::class, ContentImportCommand::class, ContentSyncCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
                 ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class,
             ]);

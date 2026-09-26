@@ -376,6 +376,10 @@ Once a save commits, the model's fields are kept as keys under `content/<table>`
 
 Read them with `$model->translated('name')` (the current locale, falling back to English) or `$model->translations()`; `$model->name` always stays English, so saving never writes another language into it. Approved values are cached per folder and refreshed on approval. Content is never exported to lang files, and people can approve it even where `prosetta.review.editable` is off, since it never has to reach git; `QueueItem` and `KeyRow` carry an `editable` flag per row. Override `translationFolder()`, `translationKey()`, `translationMaxLength($field)` or `shouldTranslate()` to adjust, and call `queueContent()` to draft a record now rather than at the next cycle.
 
+A table that already has rows when its model adopts the trait gets its keys with `php artisan prosetta:content:sync "App\Models\Badge"` (or list the models under `prosetta.content.models` and run it bare); it runs the same sync a save does, so it is safe to repeat.
+
+Tokens your app swaps in besides Laravel's `:name` ones, such as a `[@]` replaced with a member's name, go in `prosetta.placeholders.patterns` as regular expressions (`'/\[@\]/'`); the guard then flags any translation that drops or changes one, exactly as it does for `:name`.
+
 `php artisan prosetta:content:import pillars es lang/es/pillars.php` carries an existing lang file's translations over as approved content, e.g. when a catalogue moves from lang files into a table.
 
 ## Services for your own admin
