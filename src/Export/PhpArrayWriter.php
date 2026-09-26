@@ -7,11 +7,12 @@ namespace LonelyLights\Prosetta\Export;
 /**
  * Renders a lang array as readable PHP, the way a person would write it:
  * strict types, short arrays, four-space indents, single quotes, real
- * Unicode, and lists without their index keys.
+ * Unicode, and lists without their index keys. The source file's own
+ * comments (its heading, and the note above any key) can be carried over.
  */
 final readonly class PhpArrayWriter {
     /** @param array<array-key, mixed> $data */
-    public function render(array $data, string $header = ''): string {
+    public function render(array $data, string $header = '', ?SourceComments $comments = null): string {
         $output = "<?php\n\ndeclare(strict_types=1);\n\n";
 
         if ($header !== '') {
@@ -19,11 +20,18 @@ final readonly class PhpArrayWriter {
             $output .= "/*\n".implode("\n", $lines)."\n */\n\n";
         }
 
-        return $output.'return '.$this->array($data, 0).";\n";
+        if ($comments?->header !== null) {
+            $output .= $comments->header."\n";
+        }
+
+        return $output.'return '.$this->array($data, 0, '', $comments !== null ? $comments->keys : []).";\n";
     }
 
-    /** @param array<array-key, mixed> $data */
-    private function array(array $data, int $depth): string {
+    /**
+     * @param array<array-key, mixed> $data
+     * @param array<string, string> $comments dot path => the comment above that key
+     */
+    private function array(array $data, int $depth, string $path = '', array $comments = []): string {
         if ($data === []) {
             return '[]';
         }
@@ -33,7 +41,15 @@ final readonly class PhpArrayWriter {
         $lines = [];
 
         foreach ($data as $key => $value) {
-            $rendered = is_array($value) ? $this->array($value, $depth + 1) : $this->string((string) $value);
+            $at = $path === '' ? (string) $key : "$path.$key";
+            $rendered = is_array($value) ? $this->array($value, $depth + 1, $at, $comments) : $this->string((string) $value);
+
+            if (! $isList && isset($comments[$at])) {
+                foreach (explode("\n", $comments[$at]) as $line) {
+                    $lines[] = $indent.ltrim($line);
+                }
+            }
+
             $lines[] = $indent.($isList ? '' : (is_int($key) ? (string) $key : $this->string($key)).' => ').$rendered.',';
         }
 

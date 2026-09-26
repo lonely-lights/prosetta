@@ -16,6 +16,8 @@ return new class extends Migration {
             $table->string('run_id')->nullable()->index();
             $table->string('circuit');
             $table->string('locale', 35);
+            # Which Model Spent the Tokens, So PriceCatalogue Can Price Them; Null on Rows From Before It Was Recorded
+            $table->string('model')->nullable();
             $table->unsignedInteger('input_tokens')->default(0);
             $table->unsignedInteger('output_tokens')->default(0);
             $table->timestamp('created_at')->index();

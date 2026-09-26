@@ -78,6 +78,10 @@ return [
         'driver' => null,
         'model' => env('PROSETTA_AI_MODEL'),
         'models' => [],
+        # Per Million Tokens, by the Model Name the Driver Reports: 'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0]
+        # (Bind LonelyLights\Prosetta\Contracts\PriceCatalogue to Read Prices From Elsewhere)
+        'prices' => [],
+        'currency' => env('PROSETTA_AI_CURRENCY', 'USD'),
         'batch' => 25,
         'retries_on_issues' => 1,
     ],

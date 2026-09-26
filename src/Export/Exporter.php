@@ -170,7 +170,7 @@ final readonly class Exporter {
 
         $content = $file->format === FileFormat::Json
             ? $this->json->render($values)
-            : $this->php->render(Arr::undot($values), $this->header($file, $source));
+            : $this->php->render(Arr::undot($values), $this->header($file, $source), SourceComments::fromFile($this->reader->path($root, $source, $file->group, $file->format)));
 
         if ($exists && file_get_contents($path) === $content) {
             $report->unchanged[] = $path;
