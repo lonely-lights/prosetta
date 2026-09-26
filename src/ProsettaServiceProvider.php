@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use LonelyLights\Prosetta\Auth\Authorizer;
 use LonelyLights\Prosetta\Console\CircuitCommand;
+use LonelyLights\Prosetta\Console\ContentImportCommand;
 use LonelyLights\Prosetta\Console\CycleCommand;
 use LonelyLights\Prosetta\Console\ExportCommand;
 use LonelyLights\Prosetta\Console\HealthCommand;
@@ -24,9 +25,11 @@ use LonelyLights\Prosetta\Console\ReviewCommand;
 use LonelyLights\Prosetta\Console\StatsCommand;
 use LonelyLights\Prosetta\Console\SyncCommand;
 use LonelyLights\Prosetta\Console\TranslateCommand;
+use LonelyLights\Prosetta\Content\ForgetApprovedContent;
 use LonelyLights\Prosetta\Contracts\LocaleSource;
 use LonelyLights\Prosetta\Contracts\TranslationDriver;
 use LonelyLights\Prosetta\Enums\Ability;
+use LonelyLights\Prosetta\Events\TranslationApproved;
 use LonelyLights\Prosetta\Locales\DatabaseLocaleSource;
 use LonelyLights\Prosetta\Resilience\LogResilienceEvents;
 
@@ -64,7 +67,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
 
             $this->publishesMigrations([__DIR__.'/../database/migrations/locales' => database_path('migrations')], 'prosetta-locales-migration');
             $this->commands([
-                InstallCommand::class, SyncCommand::class, TranslateCommand::class, ReviewCommand::class,
+                InstallCommand::class, SyncCommand::class, ContentImportCommand::class, TranslateCommand::class, ReviewCommand::class,
                 ExportCommand::class, RenameCommand::class, StatsCommand::class,
                 ResumeCommand::class, CircuitCommand::class, CycleCommand::class, HealthCommand::class,
             ]);
@@ -77,6 +80,7 @@ final class ProsettaServiceProvider extends ServiceProvider {
         RateLimiter::for('prosetta-ai', fn (): Limit => Limit::perMinute(max(1, (int) config('prosetta.queue.rate_per_minute', 60))));
 
         Event::subscribe(LogResilienceEvents::class);
+        Event::listen(TranslationApproved::class, ForgetApprovedContent::class);
 
         $every = config('prosetta.resilience.resume_every');
 

@@ -30,6 +30,7 @@ final readonly class QueueItem {
         public ?string $origin,
         public ?string $updatedAt,
         public ?string $fingerprint,
+        public bool $editable,
     ) {}
 
     public static function from(TranslationKey $key, ?Translation $translation, string $locale, string $reason): self {
@@ -56,6 +57,7 @@ final readonly class QueueItem {
             $translation?->origin->value,
             $translation?->updated_at?->toIso8601String(),
             $translation === null ? null : ReviewService::fingerprint($translation),
+            Viewer::editable($key),
         );
     }
 

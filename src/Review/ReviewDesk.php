@@ -39,12 +39,18 @@ final readonly class ReviewDesk {
      * @throws Throwable when a database transaction fails
      */
     public function approveMatching(Viewer $viewer, array $filters, bool $includeWarnings = false): BatchReport {
-        $this->unlocked($viewer);
         $report = new BatchReport;
         $expected = [];
 
         foreach ($this->queue->all($viewer, $filters) as $item) {
             if ($item->translationId === null || $item->candidate === null || ! in_array($item->reason, ['draft', 'flagged', 'pending'], true) || ! $viewer->canReview($item->locale)) {
+                continue;
+            }
+
+            if (! $item->editable) {
+                $report->skipped[$item->translationId] = 'locked';
+                $report->locked++;
+
                 continue;
             }
 
@@ -71,8 +77,6 @@ final readonly class ReviewDesk {
      * @throws Throwable when a database transaction fails
      */
     public function approveMany(Viewer $viewer, array $expected): BatchReport {
-        $this->unlocked($viewer);
-
         return $this->approveChunks($viewer, $expected, new BatchReport);
     }
 
@@ -81,7 +85,6 @@ final readonly class ReviewDesk {
      * @throws Throwable when a database transaction fails
      */
     public function rejectMany(Viewer $viewer, array $expected, string $note): BatchReport {
-        $this->unlocked($viewer);
         $report = new BatchReport;
 
         foreach ($this->admissible($viewer, $expected, $report) as $id => $fingerprint) {
@@ -163,15 +166,23 @@ final readonly class ReviewDesk {
      */
     private function admissible(Viewer $viewer, array $expected, BatchReport $report): array {
         $model = Settings::model('translation');
-        $locales = $model::query()->whereIn('id', array_map('intval', array_keys($expected)))->pluck('locale', 'id')->all();
+        $translations = $model::query()->with('key.file')->whereIn('id', array_map('intval', array_keys($expected)))->get()->keyBy('id');
         $allowed = [];
 
         foreach ($expected as $id => $fingerprint) {
-            $locale = $locales[(int) $id] ?? null;
+            $translation = $translations->get((int) $id);
 
-            if ($locale === null || ! $viewer->canReview((string) $locale)) {
-                $report->skipped[(int) $id] = $locale === null ? 'missing' : 'forbidden';
+            if ($translation === null || ! $viewer->canReview((string) $translation->locale)) {
+                $report->skipped[(int) $id] = $translation === null ? 'missing' : 'forbidden';
                 $report->forbidden++;
+
+                continue;
+            }
+
+            # Read-Only Here: File Translations Wait for an Environment Whose Approvals Reach the Lang Files
+            if ($viewer->user !== null && ! Viewer::editable($translation->key)) {
+                $report->skipped[(int) $id] = 'locked';
+                $report->locked++;
 
                 continue;
             }

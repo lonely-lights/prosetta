@@ -12,6 +12,7 @@ use LonelyLights\Prosetta\Data\LocaleDescriptor;
 use LonelyLights\Prosetta\Discovery\LangReader;
 use LonelyLights\Prosetta\Discovery\LangRoot;
 use LonelyLights\Prosetta\Discovery\RootDiscovery;
+use LonelyLights\Prosetta\Enums\FileFormat;
 use LonelyLights\Prosetta\Enums\ReviewAction;
 use LonelyLights\Prosetta\Enums\TranslationOrigin;
 use LonelyLights\Prosetta\Enums\TranslationStatus;
@@ -117,7 +118,7 @@ final readonly class Syncer {
         }
 
         # A Group Whose Source File Disappeared: Every Key in It Becomes Obsolete
-        $fileModel::query()->where('namespace', $root->namespace)->whereKeyNot($seen)->get()
+        $fileModel::query()->where('namespace', $root->namespace)->where('format', '!=', FileFormat::Database->value)->whereKeyNot($seen)->get()
             ->each(function (TranslationFile $file) use ($report, &$pending): void {
                 $this->syncKeys($file, [], $report, $pending);
             });
@@ -136,7 +137,7 @@ final readonly class Syncer {
         $fileModel = Settings::model('file');
         $discovered = array_values(array_unique(array_map(fn (LangRoot $root) => $root->namespace, $roots)));
 
-        $fileModel::query()->whereNotIn('namespace', $discovered)->get()
+        $fileModel::query()->whereNotIn('namespace', $discovered)->where('format', '!=', FileFormat::Database->value)->get()
             ->each(function (TranslationFile $file) use ($report, &$pending): void {
                 $this->syncKeys($file, [], $report, $pending);
             });
