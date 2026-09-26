@@ -124,7 +124,13 @@ final readonly class ContentKeys {
     private function keys(TranslationFile $file, string $record): Collection {
         $keyModel = Settings::model('key');
 
-        return $keyModel::query()->where('file_id', $file->getKey())->get()
+        # Narrowed in SQL (a folder can hold thousands of records' keys), Then Checked Exactly Here, Since LIKE's Case Rules Vary by Database
+        $prefix = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $record).'.%';
+
+        $query = $keyModel::query();
+        $column = $query->getQuery()->getGrammar()->wrap('key');
+
+        return $query->where('file_id', $file->getKey())->whereRaw("$column like ? escape '!'", [$prefix])->get()
             ->filter(fn (TranslationKey $key) => str_starts_with($key->key, "$record."))
             ->keyBy('key');
     }
