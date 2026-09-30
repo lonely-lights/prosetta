@@ -8,11 +8,12 @@ use Illuminate\Filesystem\Filesystem;
 use LonelyLights\Prosetta\Enums\FileFormat;
 use LonelyLights\Prosetta\Exceptions\LangFileException;
 use LonelyLights\Prosetta\Support\KeyRef;
+use LonelyLights\Prosetta\Support\PathFilter;
 use Throwable;
 
 /** Reads lang files the way Laravel loads them, flattened to dot keys in source order. */
 final readonly class LangReader {
-    public function __construct(private Filesystem $files) {}
+    public function __construct(private Filesystem $files, private PathFilter $filter) {}
 
     /** @return list<array{group: string, format: FileFormat}> */
     public function groups(LangRoot $root, string $locale): array {
@@ -21,7 +22,8 @@ final readonly class LangReader {
 
         if (is_dir($directory)) {
             foreach ($this->files->allFiles($directory) as $file) {
-                if ($file->getExtension() !== 'php') {
+                # exclude_paths Applies File by File Too, e.g. 'lang/*/legal.php' Keeps One File in the Source Language
+                if ($file->getExtension() !== 'php' || $this->filter->excluded($file->getPathname())) {
                     continue;
                 }
 
@@ -32,7 +34,7 @@ final readonly class LangReader {
 
         usort($groups, fn (array $a, array $b) => strcmp($a['group'], $b['group']));
 
-        if ($root->isRoot() && is_file($root->path.'/'.$locale.'.json')) {
+        if ($root->isRoot() && is_file($root->path.'/'.$locale.'.json') && ! $this->filter->excluded($root->path.'/'.$locale.'.json')) {
             $groups[] = ['group' => KeyRef::JSON_GROUP, 'format' => FileFormat::Json];
         }
 

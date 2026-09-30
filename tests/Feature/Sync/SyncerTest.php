@@ -246,3 +246,16 @@ it('updates a key\'s context and kept tokens when only the comment or the config
         ->and($report->changed)->toBe([])
         ->and(WorkState::isStale($key(), translationFor('auth.failed', 'es')))->toBeFalse();
 });
+
+it('leaves out a lang file listed in exclude_paths, in every language, and retires keys it already had', function () {
+    app(Syncer::class)->sync();
+    $active = fn () => TranslationKey::query()->whereNull('obsolete_at')->whereHas('file', fn ($q) => $q->where('group', 'auth'))->count();
+    expect($active())->toBeGreaterThan(0);
+
+    config(['prosetta.exclude_paths' => [...config('prosetta.exclude_paths'), $this->fixture.'/lang/*/auth.php']]);
+    $report = app(Syncer::class)->sync();
+
+    expect($active())->toBe(0)
+        ->and($report->obsoleted)->toContain('auth.failed')
+        ->and(TranslationKey::query()->whereNull('obsolete_at')->whereHas('file', fn ($q) => $q->where('group', 'messages'))->count())->toBeGreaterThan(0);
+});

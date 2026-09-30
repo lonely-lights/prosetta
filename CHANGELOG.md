@@ -4,6 +4,12 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-30
+
+### Fixed
+
+- `exclude_paths` now leaves out single lang files, not only whole lang folders, as its documentation says: `'lang/*/legal.php'` keeps that file in the source language everywhere, and a sync retires the keys it already had. In 0.1.1 the docs recommended this before it worked.
+
 ## [0.1.1] - 2026-09-30
 
 Lessons from the first site translated end to end with Prosetta (lonelylights.com, 15 languages).
@@ -47,6 +53,7 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/lonely-lights/prosetta/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/lonely-lights/prosetta/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lonely-lights/prosetta/releases/tag/v0.1.0
