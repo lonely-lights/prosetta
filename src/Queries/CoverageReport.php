@@ -7,7 +7,7 @@ namespace LonelyLights\Prosetta\Queries;
 /** Coverage per language and the automation's health, for an overview page. */
 final readonly class CoverageReport {
     /**
-     * @param list<array{code: string, name: string, nativeName: string, mode: string, keys: int, approved: int, draft: int, flagged: int, pending: int, stale: int, missing: int, held: int, tokensThisMonth: int, costThisMonth: float, unpricedTokensThisMonth: int}> $languages
+     * @param list<array{code: string, name: string, nativeName: string, mode: string, keys: int, approved: int, draft: int, flagged: int, pending: int, stale: int, missing: int, held: int, tokensThisMonth: int, costThisMonth: float, unpricedTokensThisMonth: int, unpricedModelsThisMonth: list<string>}> $languages
      * @param array<string, mixed>|null $lastReport
      * @param list<array{name: string, state: string, reason: ?string, until: ?int}> $circuits
      * @param array<string, array{used: int, limit: ?int}> $budget

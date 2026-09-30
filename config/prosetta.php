@@ -20,6 +20,11 @@ return [
     | Lang roots. '*' is lang_path() (PHP groups plus {locale}.json). Other
     | namespaces are discovered from every loadTranslationsFrom() hint the
     | translator knows about; include/exclude filter them by name.
+    |
+    | A namespace is a whole lang root, such as a package's ('billing' for
+    | __('billing::invoice.due')), not one lang file: to leave out
+    | lang/en/legal.php, list it in exclude_paths below. prosetta:sync warns
+    | about a name here that matches no namespace.
     */
     'namespaces' => [
         'discover' => true,
@@ -35,7 +40,9 @@ return [
 
     /*
     | Paths Prosetta skips when reading and refuses when writing. Relative
-    | entries resolve against base_path(); globs are allowed.
+    | entries resolve against base_path(); globs are allowed. To keep one
+    | lang file out of translation in every language, use a star for the
+    | language folder: 'lang/' then '*' then '/legal.php', as one string.
     */
     'exclude_paths' => ['lang/vendor', 'vendor'],
 
@@ -46,12 +53,19 @@ return [
     ],
 
     /*
-    | Tokens a translation must keep exactly, beyond Laravel's :name ones:
-    | regular expressions, e.g. '/\[@\]/' for a "[@]" the host replaces
-    | with a member's name. A translation that drops or alters one is flagged.
+    | Tokens a translation must keep exactly, beyond Laravel's :name ones.
+    | A translation that drops or alters one is flagged.
+    |
+    | patterns: regular expressions, e.g. '/\[@\]/' for a "[@]" the host
+    |           replaces with a member's name, or '/<\/?[a-z][^>]*>/' to
+    |           guard HTML tags.
+    | terms:    words never translated, such as product and brand names:
+    |           ['Acme', 'Acme Cloud']. Whole words, matched in any case, so
+    |           an "ACME" heading is kept as written too.
     */
     'placeholders' => [
         'patterns' => [],
+        'terms' => [],
     ],
 
     /*
@@ -87,6 +101,8 @@ return [
         'model' => env('PROSETTA_AI_MODEL'),
         'models' => [],
         # Per Million Tokens, by the Model Name the Driver Reports: 'claude-sonnet-5' => ['input' => 3.0, 'output' => 15.0]
+        # None Ship, as Providers Change Them: Until a Model Has One, Its Cost Shows as Unknown and the Coverage
+        # Report's unpricedModelsThisMonth Names It (Budgets Count Tokens, So They Work Either Way)
         # (Bind LonelyLights\Prosetta\Contracts\PriceCatalogue to Read Prices From Elsewhere)
         'prices' => [],
         'currency' => env('PROSETTA_AI_CURRENCY', 'USD'),

@@ -4,6 +4,19 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+Lessons from the first site translated end to end with Prosetta (lonelylights.com, 15 languages).
+
+### Added
+
+- **`placeholders.terms`**: product and brand names that stay as written in every language, as plain words rather than regular expressions. Whole words, any case, so an all-caps heading is kept too.
+- **Comments as context.** The comment above a key in a source PHP lang file becomes that key's context, sent to the AI and shown to reviewers, so a short string like "Copy" can say it's a button.
+- **`Cost::$unpricedModels`** and the coverage report's `unpricedModelsThisMonth`: the model names that had no price, so "cost unknown" can say what to add to `prosetta.ai.prices`.
+- `prosetta:sync` warns when `namespaces.include` or `namespaces.exclude` names no namespace, and when the name is a lang file, says to use `exclude_paths` instead.
+
+### Fixed
+
+- A key's kept tokens were only worked out again when its English changed, so adding a placeholder pattern did nothing for existing keys. `prosetta:sync` now refreshes them, and a key's context, without marking its translations as needing an update.
+
 ## [0.1.0] - 2026-09-26
 
 The first public release: a rebuild of Prosetta as a headless translation workflow.

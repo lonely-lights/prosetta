@@ -87,3 +87,18 @@ it('finds a price for the provider\'s versioned or dotted model name', function 
         ->and($catalogue->price('claude-sonnet-5-20260101')?->output)->toBe(15.0)
         ->and($catalogue->price('gpt-4.1-mini'))->toBeNull();
 });
+
+it('names the models it could not price, so the fix is one config line', function () {
+    $ledger = app(UsageLedger::class);
+    $ledger->record(null, 'default', 'es', 2_000, 1_000, 'mystery-model');
+    $ledger->record(null, 'default', 'es', 1_000, 1_000, 'claude-sonnet-5');
+    $ledger->record(null, 'default', 'fr', 1_000, 1_000, 'another-model');
+    $ledger->record(null, 'default', 'fr', 1_000, 1_000, null);
+
+    app(Authorizer::class)->using(fn () => true);
+    $report = app(Coverage::class)->for(Viewer::for(new GenericUser(['id' => 'u1'])))->toArray();
+
+    expect($ledger->cost()->unpricedModels)->toBe(['another-model', 'mystery-model'])
+        ->and($ledger->cost(locale: 'es')->unpricedModels)->toBe(['mystery-model'])
+        ->and(collect($report['languages'])->firstWhere('code', 'es')['unpricedModelsThisMonth'])->toBe(['mystery-model']);
+});

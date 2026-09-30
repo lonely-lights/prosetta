@@ -116,6 +116,30 @@ final readonly class SourceComments {
         return new self($header === [] ? null : implode("\n", $header), $keys);
     }
 
+    /**
+     * The comment above a key as plain text, for translators and reviewers:
+     * without the //, # or /* markers and a docblock's leading stars.
+     */
+    public function plain(string $key): ?string {
+        if (! isset($this->keys[$key])) {
+            return null;
+        }
+
+        $lines = [];
+
+        foreach (explode("\n", $this->keys[$key]) as $line) {
+            $line = trim($line);
+            $line = (string) preg_replace(['~^(//+|#+|/\*+)~', '~\*+/$~', '~^\*+(?!/)~'], '', $line);
+            $line = trim($line);
+
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+
+        return $lines === [] ? null : implode("\n", $lines);
+    }
+
     /** @param list<array{0: int, 1: string, 2: int}|string> $tokens */
     private static function nextIsArrow(array $tokens, int $at): bool {
         for ($j = $at + 1, $count = count($tokens); $j < $count; $j++) {

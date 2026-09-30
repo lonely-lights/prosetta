@@ -63,6 +63,7 @@ final readonly class UsageLedger {
 
         $amount = 0.0;
         $unpriced = 0;
+        $unpricedModels = [];
 
         foreach ($query->groupBy('model')->selectRaw('model, sum(input_tokens) as input, sum(output_tokens) as output')->get() as $row) {
             $input = (int) $row->input;
@@ -72,12 +73,18 @@ final readonly class UsageLedger {
             if ($price === null) {
                 $unpriced += $input + $output;
 
+                if ($row->model !== null) {
+                    $unpricedModels[] = (string) $row->model;
+                }
+
                 continue;
             }
 
             $amount += $price->of($input, $output);
         }
 
-        return new Cost(round($amount, 6), $unpriced, $this->prices->currency());
+        sort($unpricedModels);
+
+        return new Cost(round($amount, 6), $unpriced, $this->prices->currency(), $unpricedModels);
     }
 }

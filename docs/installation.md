@@ -83,6 +83,39 @@ By default Prosetta reads:
 
 It never reads or writes `lang/vendor` or `vendor`. You can narrow which namespaces it reads, add paths by hand, or exclude more paths under `namespaces`, `paths` and `exclude_paths` in the config.
 
+A namespace is a whole lang folder, such as a package's or a module's, not one file. To keep a single lang file in English, say your privacy policy, exclude its path in every language:
+
+```php
+'exclude_paths' => ['lang/vendor', 'vendor', 'lang/*/legal.php'],
+```
+
+Listing `legal` under `namespaces.exclude` would change nothing, and `prosetta:sync` warns when a name there matches no namespace.
+
+## Names that stay as they are
+
+Product and brand names shouldn't be translated. List them, and a draft that changes one is flagged like a broken placeholder:
+
+```php
+'placeholders' => [
+    'terms' => ['Acme', 'Acme Cloud'],
+],
+```
+
+Terms match whole words in any case, so an `ACME` heading is kept as written too.
+
+## Context for translators
+
+A comment directly above a key in your source lang file travels with it, to the AI and to reviewers. Use it wherever a short string could mean two things:
+
+```php
+return [
+    // The button that copies the address to the clipboard.
+    'copy' => 'Copy',
+];
+```
+
+Changing a comment, or the terms and patterns in the config, takes effect on the next `prosetta:sync` without marking any translation as needing an update.
+
 ## Next
 
 [The workflow](workflow.md) walks through translating your first language.

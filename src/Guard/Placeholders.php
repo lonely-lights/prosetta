@@ -6,8 +6,9 @@ namespace LonelyLights\Prosetta\Guard;
 
 /**
  * Laravel's ":name" replacement tokens, plus any the host lists in
- * prosetta.placeholders.patterns (e.g. a "[@]" it swaps for a name).
- * Case matters: :name, :Name and :NAME format differently.
+ * prosetta.placeholders.patterns (e.g. a "[@]" it swaps for a name) and the
+ * words in prosetta.placeholders.terms (product and brand names). Case
+ * matters: :name, :Name and :NAME format differently.
  */
 final readonly class Placeholders {
     private const string PATTERN = '/:[A-Za-z_][A-Za-z0-9_]*/';
@@ -31,8 +32,20 @@ final readonly class Placeholders {
     /** @return list<string> */
     private static function hostPatterns(): array {
         $patterns = config('prosetta.placeholders.patterns', []);
+        $terms = config('prosetta.placeholders.terms', []);
 
-        return is_array($patterns) ? array_values(array_filter($patterns, 'is_string')) : [];
+        return [
+            ...(is_array($patterns) ? array_values(array_filter($patterns, 'is_string')) : []),
+            ...(is_array($terms) ? array_map(self::termPattern(...), array_values(array_filter($terms, fn ($term) => is_string($term) && $term !== ''))) : []),
+        ];
+    }
+
+    /**
+     * A whole-word, any-case match, so "UNDAUNTED" in a heading counts and
+     * "Undauntedly" does not; the source's own spelling is what must be kept.
+     */
+    private static function termPattern(string $term): string {
+        return '/(?<![\p{L}\p{N}])'.preg_quote($term, '/').'(?![\p{L}\p{N}])/iu';
     }
 
     /** @return list<string> */

@@ -89,4 +89,4 @@ If your app swaps its own tokens into text (say `[@]` becomes a member's name), 
 ],
 ```
 
-A translation that drops or changes one is then flagged.
+A translation that drops or changes one is then flagged. For plain words such as product names, list them under `placeholders.terms` instead of writing a pattern (see [installation](installation.md#names-that-stay-as-they-are)).

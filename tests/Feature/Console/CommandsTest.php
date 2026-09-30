@@ -68,3 +68,20 @@ it('publishes config and workflow migrations on install, leaving an existing loc
         }
     }
 });
+
+it('warns when namespaces.exclude names a lang file rather than a namespace, and says how to leave it out', function () {
+    config(['prosetta.namespaces.exclude' => ['auth', 'identity']]);
+
+    $this->artisan('prosetta:sync')
+        ->expectsOutputToContain('"auth" in prosetta.namespaces.exclude is a lang file, not a namespace, so it is still translated. To leave it out, add lang/*/auth.php to prosetta.exclude_paths.')
+        ->doesntExpectOutputToContain('"identity"')
+        ->assertSuccessful();
+});
+
+it('warns when namespaces.include or exclude names no namespace at all', function () {
+    config(['prosetta.namespaces.exclude' => ['nope']]);
+
+    $this->artisan('prosetta:sync')
+        ->expectsOutputToContain('"nope" in prosetta.namespaces.exclude matches no namespace.')
+        ->assertSuccessful();
+});

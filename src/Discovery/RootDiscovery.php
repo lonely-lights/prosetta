@@ -20,22 +20,7 @@ final readonly class RootDiscovery {
      * @return list<LangRoot>
      */
     public function roots(?array $only = null): array {
-        $candidates = [KeyRef::ROOT => lang_path()];
-
-        if (config('prosetta.namespaces.discover', true)) {
-            $loader = app('translator')->getLoader();
-
-            if (method_exists($loader, 'namespaces')) {
-                foreach ($loader->namespaces() as $namespace => $path) {
-                    $candidates[(string) $namespace] = (string) $path;
-                }
-            }
-        }
-
-        foreach ((array) config('prosetta.paths', []) as $namespace => $path) {
-            $candidates[(string) $namespace] = (string) $path;
-        }
-
+        $candidates = $this->candidates();
         $include = (array) config('prosetta.namespaces.include', ['*']);
         $exclude = (array) config('prosetta.namespaces.exclude', []);
         $roots = [];
@@ -65,5 +50,53 @@ final readonly class RootDiscovery {
         }
 
         return $roots;
+    }
+
+    /**
+     * A plain-language warning for each name in namespaces.include or
+     * namespaces.exclude that matches no namespace, e.g. a lang file such as
+     * "legal" listed as though it were one: it is still translated.
+     *
+     * @return list<string>
+     */
+    public function misnamed(): array {
+        $candidates = $this->candidates();
+        $source = (string) config('prosetta.source_locale', 'en');
+        $warnings = [];
+
+        foreach (['include', 'exclude'] as $list) {
+            foreach ((array) config("prosetta.namespaces.$list", []) as $name) {
+                if (! is_string($name) || $name === '*' || array_key_exists($name, $candidates)) {
+                    continue;
+                }
+
+                $warnings[] = is_file(lang_path("$source/$name.php"))
+                    ? "\"$name\" in prosetta.namespaces.$list is a lang file, not a namespace, so it is still translated. To leave it out, add lang/*/$name.php to prosetta.exclude_paths."
+                    : "\"$name\" in prosetta.namespaces.$list matches no namespace.";
+            }
+        }
+
+        return $warnings;
+    }
+
+    /** @return array<string, string> every namespace Prosetta could read, before include, exclude and exclude_paths */
+    private function candidates(): array {
+        $candidates = [KeyRef::ROOT => lang_path()];
+
+        if (config('prosetta.namespaces.discover', true)) {
+            $loader = app('translator')->getLoader();
+
+            if (method_exists($loader, 'namespaces')) {
+                foreach ($loader->namespaces() as $namespace => $path) {
+                    $candidates[(string) $namespace] = (string) $path;
+                }
+            }
+        }
+
+        foreach ((array) config('prosetta.paths', []) as $namespace => $path) {
+            $candidates[(string) $namespace] = (string) $path;
+        }
+
+        return $candidates;
     }
 }

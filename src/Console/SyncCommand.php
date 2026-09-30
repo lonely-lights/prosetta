@@ -6,6 +6,7 @@ namespace LonelyLights\Prosetta\Console;
 
 use Illuminate\Console\Command;
 use LonelyLights\Prosetta\Console\Concerns\ReadsInput;
+use LonelyLights\Prosetta\Discovery\RootDiscovery;
 use LonelyLights\Prosetta\ProsettaManager;
 use Throwable;
 
@@ -19,7 +20,11 @@ final class SyncCommand extends Command {
     protected $description = "Read the source-language files and bring Prosetta's keys and imported translations up to date.";
 
     /** @throws Throwable when a database transaction fails */
-    public function handle(ProsettaManager $prosetta): int {
+    public function handle(ProsettaManager $prosetta, RootDiscovery $discovery): int {
+        foreach ($discovery->misnamed() as $warning) {
+            $this->components->warn($warning);
+        }
+
         $namespaces = $this->texts('namespace');
         $check = (bool) $this->option('check');
         $report = $prosetta->sync($namespaces === [] ? null : $namespaces, $check);

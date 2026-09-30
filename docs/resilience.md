@@ -54,7 +54,7 @@ Reaching a budget never opens a circuit.
 
 ## What the AI costs
 
-Every call records which model spent its tokens. Give Prosetta the list prices, per million tokens, by the model name your driver reports:
+Every call records which model spent its tokens. Prosetta ships no prices, because providers change them and rename models often, so until you add one a model's cost shows as unknown (budgets still work: they count tokens). Give Prosetta the list prices, per million tokens, by the model name your driver reports:
 
 ```php
 'ai' => [
@@ -77,7 +77,10 @@ $cost = app(UsageLedger::class)->cost(from: now()->startOfMonth(), locale: 'es')
 $cost->amount;          // e.g. 4.18
 $cost->currency;        // 'USD'
 $cost->unpricedTokens;  // tokens from models with no price, so you can say "about"
+$cost->unpricedModels;  // e.g. ['gpt-5.6-terra']: the names to add to prosetta.ai.prices
 ```
+
+Not sure what name your driver reports? Run one translation, then read `unpricedModels` (or `unpricedModelsThisMonth` in the coverage report): it lists the exact names that need a price.
 
 The [coverage report](review-ui.md#coverage) carries each language's cost this month too.
 

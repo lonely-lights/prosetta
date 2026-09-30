@@ -65,6 +65,7 @@ final readonly class Coverage {
                 'tokensThisMonth' => $this->usage->sum(from: now()->startOfMonth(), locale: $code),
                 'costThisMonth' => ($cost = $this->usage->cost(from: now()->startOfMonth(), locale: $code))->amount,
                 'unpricedTokensThisMonth' => $cost->unpricedTokens,
+                'unpricedModelsThisMonth' => $cost->unpricedModels,
             ];
         }
 

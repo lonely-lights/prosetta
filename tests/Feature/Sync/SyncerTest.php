@@ -207,3 +207,42 @@ it('dispatches events after the transaction, unless quiet', function () {
     Event::assertDispatched(KeyChanged::class, fn (KeyChanged $event) => $event->previousValue === 'These credentials do not match our records.');
     Event::assertDispatched(SyncCompleted::class);
 });
+
+it('gives each key the comment written above it, as context for translators', function () {
+    file_put_contents($this->fixture.'/lang/en/auth.php', <<<'PHP'
+        <?php
+
+        // Sign-in messages.
+
+        return [
+            // Shown under the form when the email or password is wrong.
+            'failed' => 'These credentials do not match our records.',
+            /* The copy-to-clipboard button
+             * beside the recovery code. */
+            'copy' => 'Copy',
+            'throttle' => 'Too many login attempts. Please try again in :seconds seconds.', // not this: it trails a line
+        ];
+        PHP);
+
+    app(Syncer::class)->sync();
+    $context = fn (string $key) => TranslationKey::query()->withKey($key)->whereHas('file', fn ($q) => $q->where('group', 'auth'))->first()->context;
+
+    expect($context('failed'))->toBe('Shown under the form when the email or password is wrong.')
+        ->and($context('copy'))->toBe("The copy-to-clipboard button\nbeside the recovery code.")
+        ->and($context('throttle'))->toBeNull();
+});
+
+it('updates a key\'s context and kept tokens when only the comment or the config changes, without calling it changed', function () {
+    app(Syncer::class)->sync();
+    $key = fn () => TranslationKey::query()->withKey('failed')->whereHas('file', fn ($q) => $q->where('group', 'auth'))->first();
+    expect($key()->placeholders)->toBe([]);
+
+    config(['prosetta.placeholders.terms' => ['credentials']]);
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php return [\n    // On the sign-in form.\n    'failed' => 'These credentials do not match our records.',\n    'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',\n];");
+    $report = app(Syncer::class)->sync();
+
+    expect($key()->placeholders)->toBe(['credentials'])
+        ->and($key()->context)->toBe('On the sign-in form.')
+        ->and($report->changed)->toBe([])
+        ->and(WorkState::isStale($key(), translationFor('auth.failed', 'es')))->toBeFalse();
+});

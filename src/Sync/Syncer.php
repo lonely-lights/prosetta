@@ -20,6 +20,7 @@ use LonelyLights\Prosetta\Events\KeyAdded;
 use LonelyLights\Prosetta\Events\KeyChanged;
 use LonelyLights\Prosetta\Events\KeyObsoleted;
 use LonelyLights\Prosetta\Events\SyncCompleted;
+use LonelyLights\Prosetta\Export\SourceComments;
 use LonelyLights\Prosetta\Guard\Issue;
 use LonelyLights\Prosetta\Guard\PlaceholderGuard;
 use LonelyLights\Prosetta\Guard\Placeholders;
@@ -107,10 +108,12 @@ final readonly class Syncer {
 
         foreach ($this->reader->groups($root, $source) as ['group' => $group, 'format' => $format]) {
             $values = $this->reader->read($root, $source, $group, $format);
+            # The Comment Above Each Key Is Its Context for Translators (a JSON File Has None)
+            $comments = SourceComments::fromFile($this->reader->path($root, $source, $group, $format));
             /** @var TranslationFile $file */
             $file = $fileModel::query()->firstOrCreate(['namespace' => $root->namespace, 'group' => $group], ['format' => $format]);
             $seen[] = $file->getKey();
-            $keys = $this->syncKeys($file, $values, $report, $pending);
+            $keys = $this->syncKeys($file, $values, $report, $pending, $comments);
 
             foreach ($targets as $locale) {
                 $this->importTarget($root, $file, $keys, $locale, $report);
@@ -148,7 +151,7 @@ final readonly class Syncer {
      * @param list<object> $pending
      * @return Collection<string, TranslationKey>
      */
-    private function syncKeys(TranslationFile $file, array $values, SyncReport $report, array &$pending): Collection {
+    private function syncKeys(TranslationFile $file, array $values, SyncReport $report, array &$pending, ?SourceComments $comments = null): Collection {
         $keyModel = Settings::model('key');
         $existing = $keyModel::query()->where('file_id', $file->getKey())->get()->keyBy('key');
         $current = new Collection;
@@ -157,20 +160,22 @@ final readonly class Syncer {
             # A Numeric Key Like "404" Arrives as an Int; KeyRef and the key Column Need the String
             $key = (string) $key;
             $hash = Fingerprint::of($value);
+            $placeholders = Placeholders::unique($value);
+            $context = $comments?->plain($key);
             /** @var TranslationKey|null $model */
             $model = $existing->get($key);
 
             if ($model === null) {
                 $model = $keyModel::query()->create([
                     'file_id' => $file->getKey(), 'key' => $key, 'source_value' => $value,
-                    'source_hash' => $hash, 'placeholders' => Placeholders::unique($value),
+                    'source_hash' => $hash, 'placeholders' => $placeholders, 'context' => $context,
                 ]);
                 $model->setRelation('file', $file);
                 $report->added[] = $model->ref()->toString();
                 $pending[] = new KeyAdded($model);
             } elseif ($model->source_hash !== $hash) {
                 $previous = $model->source_value;
-                $model->update(['source_value' => $value, 'source_hash' => $hash, 'placeholders' => Placeholders::unique($value), 'obsolete_at' => null]);
+                $model->update(['source_value' => $value, 'source_hash' => $hash, 'placeholders' => $placeholders, 'context' => $context, 'obsolete_at' => null]);
                 $model->setRelation('file', $file);
                 $report->changed[] = $model->ref()->toString();
                 $pending[] = new KeyChanged($model, $previous);
@@ -178,6 +183,11 @@ final readonly class Syncer {
                 $model->update(['obsolete_at' => null]);
                 $model->setRelation('file', $file);
                 $report->restored[] = $model->ref()->toString();
+            }
+
+            # Same English, New Comment or Kept-Token Config: Refresh Quietly, the Translations Stay Current
+            if (($model->placeholders ?? []) !== $placeholders || $model->context !== $context) {
+                $model->update(['placeholders' => $placeholders, 'context' => $context]);
             }
 
             $current->put($key, $model);

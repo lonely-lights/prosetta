@@ -25,3 +25,20 @@ it('ignores a pattern that is not a valid regular expression rather than breakin
 
     expect(Placeholders::unique('Hi [@]'))->toBe(['[@]']);
 });
+
+it('keeps a listed term, such as a product name, exactly, without writing a pattern', function () {
+    config(['prosetta.placeholders.terms' => ['Undaunted', 'Lonely Lights', 'C++']]);
+
+    expect(Placeholders::unique('Join Undaunted, from Lonely Lights, in C++'))->toBe(['C++', 'Lonely Lights', 'Undaunted'])
+        ->and(Placeholders::unique('UNDAUNTED · 2027'))->toBe(['UNDAUNTED'])
+        ->and(Placeholders::unique('Undauntedly curious'))->toBe([]);
+});
+
+it('flags a translation that translates a listed term', function () {
+    config(['prosetta.placeholders.terms' => ['Undaunted']]);
+
+    $issues = (new PlaceholderGuard)->check('Join Undaunted', 'Únete a Intrépidos', 'es');
+
+    expect(array_map(fn (Issue $issue) => $issue->code, $issues))->toContain('placeholder_missing')
+        ->and((new PlaceholderGuard)->check('Join Undaunted', 'Únete a Undaunted', 'es'))->toBe([]);
+});
