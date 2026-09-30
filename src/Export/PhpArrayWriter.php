@@ -44,7 +44,7 @@ final readonly class PhpArrayWriter {
             $at = $path === '' ? (string) $key : "$path.$key";
             $rendered = is_array($value) ? $this->array($value, $depth + 1, $at, $comments) : $this->string((string) $value);
 
-            if (! $isList && isset($comments[$at])) {
+            if (isset($comments[$at])) {
                 foreach (explode("\n", $comments[$at]) as $line) {
                     $lines[] = $indent.ltrim($line);
                 }

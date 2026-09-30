@@ -259,3 +259,13 @@ it('leaves out a lang file listed in exclude_paths, in every language, and retir
         ->and($report->obsoleted)->toContain('auth.failed')
         ->and(TranslationKey::query()->whereNull('obsolete_at')->whereHas('file', fn ($q) => $q->where('group', 'messages'))->count())->toBeGreaterThan(0);
 });
+
+it('gives a key inside a list the comment above it', function () {
+    file_put_contents($this->fixture.'/lang/en/auth.php', "<?php\n\nreturn [\n    'failed' => 'These credentials do not match our records.',\n    'steps' => [\n        'Open the menu',\n        // A button label\n        'Choose a language',\n    ],\n];\n");
+
+    app(Syncer::class)->sync();
+    $context = fn (string $key) => TranslationKey::query()->withKey($key)->whereHas('file', fn ($q) => $q->where('group', 'auth'))->first()?->context;
+
+    expect($context('steps.1'))->toBe('A button label')
+        ->and($context('steps.0'))->toBeNull();
+});

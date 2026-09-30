@@ -31,8 +31,16 @@ final readonly class SourceComments {
         $header = [];
         $keys = [];
         $pending = [];
-        /** @var list<string|null> $stack the key each open bracket belongs to, or null for a list or the root */
-        $stack = [];
+        /**
+         * One frame per open bracket: the path part it belongs to (its key, its
+         * index in a list, or null for the root), the index its next unkeyed
+         * element will take, and whether the current element is unkeyed.
+         *
+         * @var list<array{part: string|null, next: int, unkeyed: bool}> $frames
+         */
+        $frames = [];
+        # Whether the Next Token Begins an Element: Right After "[" or ","
+        $elementStart = false;
         $returned = false;
         $lastKey = null;
         $afterArrow = false;
@@ -75,20 +83,50 @@ final readonly class SourceComments {
                 continue;
             }
 
+            $top = array_key_last($frames);
+
             if ($text === '[') {
-                $stack[] = $afterArrow ? $lastKey : null;
+                $part = null;
+
+                if ($afterArrow) {
+                    $part = $lastKey;
+                } elseif ($top !== null && $elementStart) {
+                    # An Unkeyed Array Inside a List Takes the Next Index, as PHP Numbers It
+                    $part = (string) $frames[$top]['next'];
+                    $frames[$top]['unkeyed'] = true;
+                }
+
+                $frames[] = ['part' => $part, 'next' => 0, 'unkeyed' => false];
                 $afterArrow = false;
+                $elementStart = true;
                 $pending = [];
 
                 continue;
             }
 
             if ($text === ']') {
-                array_pop($stack);
+                array_pop($frames);
+                $afterArrow = false;
+                $elementStart = false;
                 $pending = [];
 
                 continue;
             }
+
+            if ($text === ',') {
+                if ($top !== null && $frames[$top]['unkeyed']) {
+                    $frames[$top]['next']++;
+                    $frames[$top]['unkeyed'] = false;
+                }
+
+                $afterArrow = false;
+                $elementStart = true;
+                $pending = [];
+
+                continue;
+            }
+
+            $parts = array_values(array_filter(array_column($frames, 'part'), fn ($part) => $part !== null));
 
             if (($type === T_CONSTANT_ENCAPSED_STRING || $type === T_LNUMBER) && self::nextIsArrow($tokens, $i)) {
                 $key = match (true) {
@@ -97,19 +135,34 @@ final readonly class SourceComments {
                     str_starts_with($text, "'") => strtr(substr($text, 1, -1), ['\\\\' => '\\', "\\'" => "'"]),
                     default => stripcslashes(substr($text, 1, -1)),
                 };
-                $path = implode('.', [...array_filter($stack, fn ($part) => $part !== null), $key]);
+                $path = implode('.', [...$parts, $key]);
 
                 if ($pending !== []) {
                     $keys[$path] = implode("\n", $pending);
                 }
 
                 $lastKey = $key;
+                $elementStart = false;
+                $pending = [];
+
+                continue;
+            }
+
+            # A Plain Value Opening an Element Is a List Item: Its Path Ends in Its Index
+            if (($type === T_CONSTANT_ENCAPSED_STRING || $type === T_LNUMBER) && $elementStart && $top !== null) {
+                if ($pending !== []) {
+                    $keys[implode('.', [...$parts, (string) $frames[$top]['next']])] = implode("\n", $pending);
+                }
+
+                $frames[$top]['unkeyed'] = true;
+                $elementStart = false;
                 $pending = [];
 
                 continue;
             }
 
             $afterArrow = $type === T_DOUBLE_ARROW;
+            $elementStart = false;
             $pending = [];
         }
 

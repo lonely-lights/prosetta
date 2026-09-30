@@ -2,6 +2,7 @@
 
 use LonelyLights\Prosetta\Export\JsonWriter;
 use LonelyLights\Prosetta\Export\PhpArrayWriter;
+use LonelyLights\Prosetta\Export\SourceComments;
 
 it('writes readable PHP with short arrays and a header', function () {
     $php = (new PhpArrayWriter)->render(['title' => 'Ajustes', 'steps' => ['Abre el menú', 'Elige un idioma']], "Line one\nLine two");
@@ -49,4 +50,13 @@ it('writes JSON with readable unicode and slashes, always as an object', functio
     expect((new JsonWriter)->render(['Save changes' => 'Guardar cambios', 'a/b' => 'ñ']))
         ->toBe("{\n    \"Save changes\": \"Guardar cambios\",\n    \"a/b\": \"ñ\"\n}\n")
         ->and((new JsonWriter)->render([]))->toBe("{}\n");
+});
+
+it('carries the source comments over, on list items as well as keys', function () {
+    $comments = SourceComments::fromSource("<?php\n\nreturn [\n    // The page title\n    'title' => 'Settings',\n    'names' => [\n        'Light',\n        // A name: keep it\n        'Undaunted',\n    ],\n];\n");
+
+    $php = (new PhpArrayWriter)->render(['title' => 'Ajustes', 'names' => ['Luz', 'Undaunted']], '', $comments);
+
+    expect($php)->toContain("    // The page title\n    'title' => 'Ajustes',")
+        ->and($php)->toContain("        'Luz',\n        // A name: keep it\n        'Undaunted',");
 });

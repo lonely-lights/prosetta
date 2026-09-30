@@ -51,3 +51,37 @@ it('reads a single-quoted key literally, as PHP does', function () {
 
     expect(array_keys($comments->keys))->toBe(['a\\nb']);
 });
+
+it('reads comments inside lists by index, as Laravel and the writer number them', function () {
+    $source = <<<'PHP'
+<?php
+
+return [
+    'scenes' => [
+        [
+            'k' => 'The light',
+        ],
+        [
+            // The people of Undaunted
+            'k' => 'The Undaunted',
+            'h' => 'Heading',
+        ],
+    ],
+    'names' => [
+        'The light',
+        // A name: keep it
+        'The Undaunted',
+    ],
+    'after' => [
+        // Still keyed
+        'x' => 'y',
+    ],
+];
+PHP;
+
+    expect(SourceComments::fromSource($source)->keys)->toBe([
+        'scenes.1.k' => '// The people of Undaunted',
+        'names.1' => '// A name: keep it',
+        'after.x' => '// Still keyed',
+    ]);
+});
