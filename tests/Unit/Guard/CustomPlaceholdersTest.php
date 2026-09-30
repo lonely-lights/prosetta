@@ -42,3 +42,19 @@ it('flags a translation that translates a listed term', function () {
     expect(array_map(fn (Issue $issue) => $issue->code, $issues))->toContain('placeholder_missing')
         ->and((new PlaceholderGuard)->check('Join Undaunted', 'Únete a Undaunted', 'es'))->toBe([]);
 });
+
+it('finds a term written against another script, as Japanese and Korean do without spaces', function () {
+    config(['prosetta.placeholders.terms' => ['Undaunted']]);
+
+    expect(Placeholders::unique('Undauntedは物語を設計図に変える。'))->toBe(['Undaunted'])
+        ->and(Placeholders::unique('Undaunted는 이야기를 바꿉니다.'))->toBe(['Undaunted'])
+        ->and(Placeholders::unique('Присоединяйтесь к Undaunted!'))->toBe(['Undaunted'])
+        ->and(Placeholders::unique('Undauntedly curious'))->toBe([])
+        ->and(Placeholders::unique('reUndaunted'))->toBe([]);
+});
+
+it('needs no boundary beside a term\'s punctuation', function () {
+    config(['prosetta.placeholders.terms' => ['C++']]);
+
+    expect(Placeholders::unique('C++は速い'))->toBe(['C++']);
+});

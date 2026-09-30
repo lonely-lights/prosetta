@@ -13,6 +13,9 @@ namespace LonelyLights\Prosetta\Guard;
 final readonly class Placeholders {
     private const string PATTERN = '/:[A-Za-z_][A-Za-z0-9_]*/';
 
+    /** Scripts a term's edge letter is matched against; any other letter falls back to \p{L}. */
+    private const array SCRIPTS = ['Latin', 'Cyrillic', 'Greek', 'Armenian', 'Georgian', 'Hebrew', 'Arabic', 'Devanagari', 'Bengali', 'Thai', 'Hangul', 'Hiragana', 'Katakana', 'Han'];
+
     /** @return list<string> */
     public static function extract(string $value): array {
         $tokens = [];
@@ -43,9 +46,27 @@ final readonly class Placeholders {
     /**
      * A whole-word, any-case match, so "UNDAUNTED" in a heading counts and
      * "Undauntedly" does not; the source's own spelling is what must be kept.
+     * Only letters of the term's own script break the word: Japanese and
+     * Korean write "Undauntedは" with no space, and that is still the name.
      */
     private static function termPattern(string $term): string {
-        return '/(?<![\p{L}\p{N}])'.preg_quote($term, '/').'(?![\p{L}\p{N}])/iu';
+        # An Edge That Isn't a Letter or Digit ("C++") Needs No Boundary on That Side
+        $edge = fn (string $char): ?string => preg_match('/^[\p{L}\p{N}]$/u', $char) === 1 ? '[\p{'.self::script($char).'}\p{N}]' : null;
+        $before = $edge(mb_substr($term, 0, 1));
+        $after = $edge(mb_substr($term, -1));
+
+        return '/'.($before === null ? '' : "(?<!$before)").preg_quote($term, '/').($after === null ? '' : "(?!$after)").'/iu';
+    }
+
+    /** The Unicode script a character belongs to, or L (any letter) for one outside the common scripts. */
+    private static function script(string $char): string {
+        foreach (self::SCRIPTS as $script) {
+            if (preg_match('/^\p{'.$script.'}$/u', $char) === 1) {
+                return $script;
+            }
+        }
+
+        return 'L';
     }
 
     /** @return list<string> */

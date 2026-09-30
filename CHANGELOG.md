@@ -4,6 +4,12 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-30
+
+### Fixed
+
+- `placeholders.terms` no longer flags a correct translation in a language written without spaces: Japanese and Korean put the name straight against the next word (`Undauntedは`), and only letters of the term's own script now count as part of the same word. A term that starts or ends with punctuation (`C++`) needs no word boundary on that side.
+
 ## [0.1.2] - 2026-09-30
 
 ### Fixed
@@ -53,7 +59,8 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/lonely-lights/prosetta/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/lonely-lights/prosetta/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/lonely-lights/prosetta/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lonely-lights/prosetta/releases/tag/v0.1.0
