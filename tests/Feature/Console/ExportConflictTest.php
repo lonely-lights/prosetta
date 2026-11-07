@@ -55,3 +55,17 @@ it('still reports an unknown key whose value Prosetta never wrote', function () 
 
     $this->artisan('prosetta:export --locale=es')->expectsOutputToContain('addedByHand')->assertFailed();
 });
+
+it('drops a key the source removed from a file it generated instead of failing', function () {
+    $this->artisan('prosetta:sync')->assertSuccessful();
+    $this->artisan('prosetta:export --locale=es')->assertSuccessful();
+    $target = $this->fixture.'/lang/es/auth.php';
+    file_put_contents($target, str_replace('return [', "return [\n    'retired' => 'Retirado',", file_get_contents($target)));
+
+    $this->artisan('prosetta:export --locale=es')
+        ->expectsOutputToContain('retired')
+        ->doesntExpectOutputToContain('Conflict')
+        ->assertSuccessful();
+
+    expect(require $target)->not->toHaveKey('retired');
+});

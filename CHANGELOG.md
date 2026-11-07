@@ -4,6 +4,12 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-07
+
+### Fixed
+
+- `prosetta:export` no longer stops on a key your source removed. In a file Prosetta generated, a key the source no longer has is dropped and named (`Dropped from lang/es/settings.php (no longer in the source): groups.limits.`), and the report lists it under `dropped`. Before, once the database was rebuilt (`migrate:fresh`), such a value had no translation row, sync could never import it, and every export reported a conflict until it was run with `--force`. Files without Prosetta's header, and JSON files, still report unknown keys as conflicts.
+
 ## [0.1.4] - 2026-09-30
 
 ### Fixed
@@ -65,7 +71,8 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/lonely-lights/prosetta/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/lonely-lights/prosetta/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/lonely-lights/prosetta/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/lonely-lights/prosetta/compare/v0.1.1...v0.1.2

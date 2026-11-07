@@ -129,10 +129,17 @@ final readonly class Exporter {
             return;
         }
 
-        if (! $force && ($conflicts = $this->conflicts($root, $file, $locale)) !== []) {
+        # Keys Gone From the Source, in a File Prosetta Generated: Nothing Can Import Them, So They Go, and Are Named
+        $retired = $this->retired($root, $file, $order, $locale, $path);
+
+        if (! $force && ($conflicts = array_values(array_diff($this->conflicts($root, $file, $locale), $retired))) !== []) {
             $report->conflicts[$path] = $conflicts;
 
             return;
+        }
+
+        if ($retired !== []) {
+            $report->dropped[$path] = $retired;
         }
 
         $translationModel = Settings::model('translation');
@@ -228,6 +235,30 @@ final readonly class Exporter {
         }
 
         return array_keys(array_diff_key($unknown, $this->moved($unknown, $keys, $onDisk, $locale)));
+    }
+
+    /**
+     * Keys in a target file Prosetta generated that its source file no longer
+     * has. Sync never imports a key without a source, so after the source key
+     * is removed (and the database rebuilt) such a value could never be synced;
+     * the export drops it and reports it. Files without Prosetta's header, and
+     * JSON files, keep every unknown key as a conflict.
+     *
+     * @param  list<string>  $order
+     * @return list<string>
+     */
+    private function retired(LangRoot $root, TranslationFile $file, array $order, string $locale, string $path): array {
+        if ($file->format !== FileFormat::Php || ! is_file($path) || ! $this->generated($path)) {
+            return [];
+        }
+
+        try {
+            $onDisk = array_map('strval', array_keys($this->reader->read($root, $locale, $file->group, $file->format)));
+        } catch (LangFileException) {
+            return [];
+        }
+
+        return array_values(array_diff($onDisk, $order));
     }
 
     /**

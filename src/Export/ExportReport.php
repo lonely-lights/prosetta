@@ -20,6 +20,9 @@ final class ExportReport {
     /** @var array<string, list<string>> path => keys whose on-disk value Prosetta did not write; the file was left alone */
     public array $conflicts = [];
 
+    /** @var array<string, list<string>> path => keys its source no longer has, dropped from a file Prosetta generated */
+    public array $dropped = [];
+
     /** @var list<string> target files whose source group no longer exists; left untouched */
     public array $orphaned = [];
 
@@ -36,6 +39,6 @@ final class ExportReport {
 
     /** @return array<string, mixed> */
     public function toArray(): array {
-        return ['dry_run' => $this->dryRun, 'disabled' => $this->disabled, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'orphaned' => $this->orphaned, 'held' => $this->held, 'hand_written' => $this->handWritten];
+        return ['dry_run' => $this->dryRun, 'disabled' => $this->disabled, 'written' => $this->written, 'unchanged' => $this->unchanged, 'refused' => $this->refused, 'keys' => $this->keys, 'conflicts' => $this->conflicts, 'dropped' => $this->dropped, 'orphaned' => $this->orphaned, 'held' => $this->held, 'hand_written' => $this->handWritten];
     }
 }

@@ -253,3 +253,31 @@ it('leaves the target files of a removed source group alone and reports them', f
     expect($report->orphaned)->toContain($this->fixture.'/lang/es/auth.php')
         ->and(file_get_contents($this->fixture.'/lang/es/auth.php'))->toBe($before);
 });
+
+it('drops keys the source no longer has from a file it generated, and reports them', function () {
+    app(Exporter::class)->export(['es']);
+    $path = $this->fixture.'/lang/es/auth.php';
+    file_put_contents($path, str_replace('return [', "return [\n    'retired' => 'Retirado',", file_get_contents($path)));
+
+    $preview = app(Exporter::class)->export(['es'], dryRun: true);
+
+    expect($preview->dropped[$path])->toBe(['retired'])
+        ->and(require $path)->toHaveKey('retired');
+
+    $report = app(Exporter::class)->export(['es']);
+
+    expect($report->conflicts)->toBe([])
+        ->and($report->dropped[$path])->toBe(['retired'])
+        ->and(require $path)->toBe(['failed' => 'Estas credenciales no coinciden con nuestros registros.']);
+});
+
+it('still refuses a hand edit to a live key in a file it generated', function () {
+    app(Exporter::class)->export(['es']);
+    $path = $this->fixture.'/lang/es/auth.php';
+    file_put_contents($path, str_replace('Estas credenciales no coinciden con nuestros registros.', 'Credenciales incorrectas.', file_get_contents($path)));
+
+    $report = app(Exporter::class)->export(['es']);
+
+    expect($report->conflicts[$path])->toBe(['failed'])
+        ->and($report->dropped)->toBe([]);
+});

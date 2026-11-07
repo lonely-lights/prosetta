@@ -65,6 +65,8 @@ Export writes the approved text for each language into its lang files, in the sa
 
 Export won't overwrite work it doesn't know about. If a translated file holds something Prosetta didn't write (a hand edit not synced yet, a file never synced, or a key your source doesn't have), it leaves the file alone, reports a conflict and exits 1. Run `prosetta:sync` to import the edit, or pass `--force` to overwrite it.
 
+One exception: in a file Prosetta generated (it starts with Prosetta's header), a key your source no longer has is dropped instead, and the export names it. Sync can't import a key without a source, so after you remove a source key and rebuild the database, that leftover value could never be synced and would block every export. Files without the header, and JSON files, still report such keys as conflicts.
+
 Comments in your source PHP lang files are copied too: the heading comment above `return`, and any comment directly above a key, appear in every translated file above the same keys.
 
 Commit the exported files like any other change.

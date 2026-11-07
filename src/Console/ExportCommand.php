@@ -42,6 +42,10 @@ final class ExportCommand extends Command {
             $this->components->warn("Left alone: $path (its source group no longer exists; delete it by hand if it is no longer needed).");
         }
 
+        foreach ($report->dropped as $path => $keys) {
+            $this->components->warn(($dryRun ? 'Would drop' : 'Dropped').' from '.$path.' (no longer in the source): '.implode(', ', $keys).'.');
+        }
+
         foreach ($report->conflicts as $path => $keys) {
             $this->components->error("Conflict, left alone: $path holds values Prosetta did not write (".implode(', ', $keys).'). Run prosetta:sync to import them, or use --force to overwrite.');
         }
