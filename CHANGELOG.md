@@ -10,6 +10,7 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 - Plural checks now ask which counts a translation covers, not whether it repeats the source's exact range markers. Arabic's `{0}|{1}|{2}|[3,10]|[11,*]` and Chinese's `{0}|[1,*]` both cover English's `{0}|{1}|[2,*]`, so they pass. A count the translation really leaves out is still `plural_range_missing`, named by the source marker it falls in. A fully marked translation of an unmarked source (`:count day|:count days`) must cover every count from 0 up.
 - A plural form for one exact count (`{1}`, `{2}`) may spell the number out instead of using `:count` (Arabic `{1} يوم واحد`, `{2} يومان`). Every other placeholder is still required in that form.
+- A plain plural with as many segments as the language has forms (Chinese 1, Arabic 6) no longer warns `plural_segments_differ`; the warning stays for counts that match neither the source nor the language.
 - Placeholders in explicit plural forms are checked against every source form whose counts they share, so a language may split or merge ranges.
 
 Before, these correct translations stayed in review with errors, their approvals were lost on each `migrate:fresh`, and `prosetta:export` left them out of the generated files.

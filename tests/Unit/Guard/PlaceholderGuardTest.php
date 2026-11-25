@@ -64,8 +64,9 @@ it('checks plain plural segments against the target language', function () {
     expect($guard->check($source, 'Una manzana|:count manzanas', 'es'))->toBe([])
         ->and(codes($guard->check($source, ':count manzanas', 'es')))->toBe(['plural_missing'])
         ->and(codes($guard->check($source, 'a|b|:count c', 'es')))->toBe(['plural_segments_excess'])
-        ->and(codes($guard->check($source, 'a|b|c|d|e|:count f', 'ar')))->toBe(['plural_segments_differ'])
-        ->and(codes($guard->check($source, ':count 个苹果', 'zh-CN')))->toBe(['plural_segments_differ']);
+        ->and(codes($guard->check($source, 'a|b|c|d|e|:count f', 'ar')))->toBe([])
+        ->and(codes($guard->check($source, 'a|b|:count c', 'ar')))->toBe(['plural_segments_differ'])
+        ->and(codes($guard->check($source, ':count 个苹果', 'zh-CN')))->toBe([]);
 });
 
 it('matches placeholders by range in explicit plural forms', function () {
@@ -100,7 +101,7 @@ it('allows a placeholder found in only some source segments to land anywhere in 
     $source = 'One apple|:count apples';
     $candidate = 'تفاحة واحدة|:count تفاحتان|:count تفاحات|:count تفاحات|:count تفاحات|:count تفاحة';
 
-    expect(codes((new PlaceholderGuard)->check($source, $candidate, 'ar')))->toBe(['plural_segments_differ']);
+    expect(codes((new PlaceholderGuard)->check($source, $candidate, 'ar')))->toBe([]);
 });
 
 it('requires a placeholder found in every source segment to survive in every unmarked plural segment', function () {

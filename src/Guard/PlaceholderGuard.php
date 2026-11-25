@@ -255,7 +255,7 @@ final readonly class PlaceholderGuard {
             return [Issue::error('plural_segments_excess', "$count plural segments, but $locale has only $forms forms.")];
         }
 
-        if ($count !== count($sourceSegments)) {
+        if ($count !== count($sourceSegments) && $count !== $forms) {
             return [Issue::warning('plural_segments_differ', "$count plural segments where the source has ".count($sourceSegments).'.')];
         }
 
