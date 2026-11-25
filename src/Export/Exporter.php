@@ -77,7 +77,9 @@ final readonly class Exporter {
         foreach ($this->discovery->roots($namespaces === [] ? null : $namespaces) as $root) {
             foreach ($fileModel::query()->where('namespace', $root->namespace)->orderBy('group')->get() as $file) {
                 /** @var TranslationFile $file */
-                $order = array_map('strval', array_keys($this->reader->read($root, $source, $file->group, $file->format)));
+                $shape = $this->reader->shape($root, $source, $file->group, $file->format);
+                $order = array_map('strval', array_keys($shape));
+                $emptyLists = array_values(array_map('strval', array_keys(array_filter($shape, fn ($value) => $value === []))));
                 $keys = $file->keys()->whereNull('obsolete_at')->get()->keyBy(fn (TranslationKey $key) => $key->key);
 
                 foreach ($targets as $locale) {
@@ -95,7 +97,7 @@ final readonly class Exporter {
                         continue;
                     }
 
-                    $this->exportFile($root, $file, $order, $keys, $source, $locale, $includeDrafts, $force, $report);
+                    $this->exportFile($root, $file, $order, $keys, $source, $locale, $includeDrafts, $force, $report, $emptyLists);
                 }
             }
         }
@@ -110,8 +112,9 @@ final readonly class Exporter {
     /**
      * @param list<string> $order
      * @param Collection<string, TranslationKey> $keys
+     * @param list<string> $emptyLists the source's empty arrays, by dotted key
      */
-    private function exportFile(LangRoot $root, TranslationFile $file, array $order, Collection $keys, string $source, string $locale, bool $includeDrafts, bool $force, ExportReport $report): void {
+    private function exportFile(LangRoot $root, TranslationFile $file, array $order, Collection $keys, string $source, string $locale, bool $includeDrafts, bool $force, ExportReport $report, array $emptyLists = []): void {
         $path = $this->reader->path($root, $locale, $file->group, $file->format);
 
         if ($this->filter->excluded($path)) {
@@ -177,7 +180,8 @@ final readonly class Exporter {
 
         $content = $file->format === FileFormat::Json
             ? $this->json->render($values)
-            : $this->php->render(Arr::undot($values), $this->header($file, $source), SourceComments::fromFile($this->reader->path($root, $source, $file->group, $file->format)));
+            # The Source's Empty Arrays Hold Nothing to Translate, but Code Reading the Key Still Expects Them
+            : $this->php->render(Arr::undot($this->withEmptyLists($order, $values, $emptyLists)), $this->header($file, $source), SourceComments::fromFile($this->reader->path($root, $source, $file->group, $file->format)));
 
         if ($exists && file_get_contents($path) === $content) {
             $report->unchanged[] = $path;
@@ -327,6 +331,29 @@ final readonly class Exporter {
         }
 
         return $values;
+    }
+
+    /**
+     * Puts the source's empty arrays back, in source order. Only a key no
+     * translated value sits under is added, so nothing written is replaced.
+     *
+     * @param list<string> $order
+     * @param array<array-key, string> $values
+     * @param list<string> $emptyLists
+     * @return array<array-key, string|array{}>
+     */
+    private function withEmptyLists(array $order, array $values, array $emptyLists): array {
+        $ordered = [];
+
+        foreach ($order as $key) {
+            if (array_key_exists($key, $values)) {
+                $ordered[$key] = $values[$key];
+            } elseif (in_array($key, $emptyLists, true)) {
+                $ordered[$key] = [];
+            }
+        }
+
+        return $ordered + $values;
     }
 
     /**

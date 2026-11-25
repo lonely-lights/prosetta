@@ -58,6 +58,24 @@ final readonly class LangReader {
         return $format === FileFormat::Json ? $this->readJson($path) : $this->flatten($this->readPhp($path));
     }
 
+    /**
+     * The source file's shape for export: every string under its dotted key, and
+     * every empty array (`'events' => []`) as an empty array, in file order. An
+     * empty array holds nothing to translate, so read() leaves it out; a target
+     * file still needs it, or code that reads the key finds it missing.
+     *
+     * @return array<array-key, string|array{}>
+     */
+    public function shape(LangRoot $root, string $locale, string $group, FileFormat $format): array {
+        $path = $this->path($root, $locale, $group, $format);
+
+        if (! is_file($path)) {
+            return [];
+        }
+
+        return $format === FileFormat::Json ? $this->readJson($path) : $this->shapeOf($this->readPhp($path));
+    }
+
     /** @return array<array-key, mixed> */
     private function readPhp(string $path): array {
         # Under FPM or Octane a file Prosetta just wrote can come back stale from OPcache
@@ -113,6 +131,30 @@ final readonly class LangReader {
 
             if (is_array($value)) {
                 $values += $this->flatten($value, $full);
+            } elseif (is_string($value)) {
+                $values[$full] = $value;
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * Like flatten(), but an empty array stays as itself under its dotted key.
+     *
+     * @param array<array-key, mixed> $data
+     * @return array<array-key, string|array{}>
+     */
+    private function shapeOf(array $data, string $prefix = ''): array {
+        $values = [];
+
+        foreach ($data as $key => $value) {
+            $full = $prefix === '' ? (string) $key : $prefix.'.'.$key;
+
+            if ($value === []) {
+                $values[$full] = [];
+            } elseif (is_array($value)) {
+                $values += $this->shapeOf($value, $full);
             } elseif (is_string($value)) {
                 $values[$full] = $value;
             }

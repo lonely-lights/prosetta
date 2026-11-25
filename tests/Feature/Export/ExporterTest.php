@@ -281,3 +281,13 @@ it('still refuses a hand edit to a live key in a file it generated', function ()
     expect($report->conflicts[$path])->toBe(['failed'])
         ->and($report->dropped)->toBe([]);
 });
+
+it('keeps the source file\'s empty arrays in exported files, in source order', function () {
+    $source = $this->fixture.'/lang/en/auth.php';
+    file_put_contents($source, str_replace('return [', "return [\n    'events' => [],", file_get_contents($source)));
+    app(Syncer::class)->sync();
+
+    app(Exporter::class)->export(['es']);
+
+    expect(require $this->fixture.'/lang/es/auth.php')->toBe(['events' => [], 'failed' => 'Estas credenciales no coinciden con nuestros registros.']);
+});

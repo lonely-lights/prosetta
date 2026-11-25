@@ -4,6 +4,12 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-25
+
+### Fixed
+
+- `prosetta:export` keeps the source file's empty arrays (`'events' => []`) in the files it writes, in source order. An empty array has nothing to translate, so sync never makes a key for it, and export used to leave it out; code reading that key in a target locale then found nothing, and a key-parity test failed.
+
 ## [0.1.7] - 2026-11-25
 
 ### Fixed
@@ -90,7 +96,8 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/lonely-lights/prosetta/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/lonely-lights/prosetta/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/lonely-lights/prosetta/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/lonely-lights/prosetta/compare/v0.1.4...v0.1.5
