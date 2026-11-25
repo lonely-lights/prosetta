@@ -8,7 +8,7 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ### Fixed
 
-- Approving re-runs the guard instead of trusting the issues saved when the value was imported or drafted, so a candidate held by an older check is approved once the guard accepts it (and a stored verdict that's out of date is replaced).
+- Approving re-runs the guard instead of trusting the issues saved when the value was imported or drafted, so a candidate held by an older check is approved once the guard accepts it. Only the guard's own issue codes (`PlaceholderGuard::CODES`) are re-checked; issues from other checks (glossary, reports, refusals, large rewrites) still block as stored, and nothing is written by the check.
 
 Before, translations held by 0.1.5's plural check stayed held after upgrading to 0.1.6, because approval read the stored issues.
 

@@ -137,6 +137,16 @@ it('re-checks stored issues before approving, so an improved guard releases a he
 
     $report = app(ReviewService::class)->approveClean('es', 'identity', by: $this->user());
 
-    expect($report->approved)->toBe([$held->id])
-        ->and($held->refresh()->issues)->toBeNull();
+    expect($report->approved)->toBe([$held->id]);
+});
+
+it('keeps blocking issues from other checks when it re-checks the guard', function () {
+    $flagged = draftFor('identity::onboarding.toast.accessCode.capReached', 'es', 'Límite de :minutes minutos.');
+    $flagged->update(['issues' => [['code' => 'glossary_banned', 'severity' => 'error', 'message' => 'a banned term']]]);
+
+    $report = app(ReviewService::class)->approveClean('es', 'identity', by: $this->user());
+
+    expect($report->approved)->toBe([])
+        ->and($report->skipped)->toBe([$flagged->id => 'issues'])
+        ->and($flagged->refresh()->issues)->toBe([['code' => 'glossary_banned', 'severity' => 'error', 'message' => 'a banned term']]);
 });

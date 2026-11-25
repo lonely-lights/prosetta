@@ -12,6 +12,12 @@ namespace LonelyLights\Prosetta\Guard;
 final readonly class PlaceholderGuard {
     private const string RANGE = '/^\s*[\{\[][-?\d|*,\.*]*[\}\]]/';
 
+    /** The issue codes this guard produces; a stored issue with any other code belongs to another check. */
+    public const array CODES = [
+        'empty_value', 'pipe_count', 'placeholder_case', 'placeholder_missing', 'placeholder_unexpected', 'placeholder_count',
+        'plural_range_missing', 'plural_missing', 'plural_segments_excess', 'plural_segments_differ', 'html_mismatch',
+    ];
+
     /** @return list<Issue> */
     public function check(string $source, string $candidate, string $locale): array {
         if (trim($source) !== '' && trim($candidate) === '') {

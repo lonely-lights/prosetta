@@ -284,18 +284,19 @@ final readonly class ReviewService {
     }
 
     /**
-     * Re-runs the guard before approving, so issues stored by an older check (or
-     * against an older source) neither block a value the guard now accepts nor let
-     * through one it now refuses. A changed verdict is saved on the translation.
+     * Whether a candidate is blocked right now: the guard's own verdict is re-run, so
+     * issues it stored under an older check neither block a value it now accepts nor
+     * let through one it now refuses, while issues from other checks (glossary,
+     * reports, refusals, large rewrites) are kept as stored. Nothing is written.
      */
     private function blockedNow(Translation $translation): bool {
-        $current = Issue::store($this->guard->check($translation->key->source_value, (string) $translation->value, $translation->locale));
+        $others = array_values(array_filter(
+            $translation->issues ?? [],
+            fn (array $row) => ! in_array($row['code'] ?? null, PlaceholderGuard::CODES, true),
+        ));
+        $current = Issue::store($this->guard->check($translation->key->source_value, (string) $translation->value, $translation->locale)) ?? [];
 
-        if ($current !== $translation->issues) {
-            $translation->update(['issues' => $current]);
-        }
-
-        return Issue::anyBlocking($current);
+        return Issue::anyBlocking([...$others, ...$current]);
     }
 
     private function refusal(Translation $translation, ?Authenticatable $by): ?string {
