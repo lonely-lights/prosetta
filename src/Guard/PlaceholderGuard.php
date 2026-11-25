@@ -102,43 +102,73 @@ final readonly class PlaceholderGuard {
     }
 
     /**
-     * Matches source and candidate segments by their range marker ({0}, {1}, [2,*], ...).
-     * A marker missing from the candidate entirely is already reported by plurals() as
-     * plural_range_missing, so it's skipped here to avoid reporting it twice.
+     * Checks each marked candidate segment against the source segments whose counts it
+     * shares, so a language may split or merge ranges (Arabic's {2} and [3,10] both sit
+     * inside English's [2,*]). A placeholder found in every one of those source segments
+     * must survive; one found in only some of them may; anything else is unexpected. A
+     * segment for one exact count ({1}, {2}) may spell the number out instead of :count.
+     * Counts left uncovered are reported once, by plurals(), as plural_range_missing.
      *
      * @param list<string> $sourceSegments
      * @param list<string> $candidateSegments
      * @return list<Issue>
      */
     private function rangedPluralPlaceholders(array $sourceSegments, array $candidateSegments): array {
-        $candidateByRange = [];
+        $sources = [];
 
-        foreach ($candidateSegments as $segment) {
-            if (preg_match(self::RANGE, $segment, $match) === 1) {
-                $candidateByRange[trim($match[0])] = $segment;
+        foreach ($sourceSegments as $segment) {
+            $marker = PluralRanges::marker($segment);
+
+            if ($marker !== null) {
+                $sources[] = ['marker' => $marker, 'interval' => PluralRanges::interval($marker), 'tokens' => Placeholders::unique($segment)];
             }
         }
 
         $issues = [];
 
-        foreach ($sourceSegments as $segment) {
-            if (preg_match(self::RANGE, $segment, $match) !== 1) {
+        foreach ($candidateSegments as $segment) {
+            $marker = PluralRanges::marker($segment);
+
+            if ($marker === null) {
                 continue;
             }
 
-            $range = trim($match[0]);
+            $interval = PluralRanges::interval($marker);
+            $shared = array_values(array_filter($sources, fn (array $source) => $interval !== null && $source['interval'] !== null
+                ? PluralRanges::overlaps($interval, $source['interval'])
+                : $source['marker'] === $marker));
 
-            if (! array_key_exists($range, $candidateByRange)) {
+            if ($shared === []) {
                 continue;
             }
 
             $issues = [
                 ...$issues,
-                ...$this->comparePlaceholders(Placeholders::unique($segment), Placeholders::unique($candidateByRange[$range]), " from the $range form"),
+                ...$this->compareShared(array_column($shared, 'tokens'), Placeholders::unique($segment), PluralRanges::isExact($marker), " from the $marker form"),
             ];
         }
 
         return $issues;
+    }
+
+    /**
+     * @param list<list<string>> $sharedTokens the placeholders of each source segment this candidate segment covers
+     * @param list<string> $actual
+     * @return list<Issue>
+     */
+    private function compareShared(array $sharedTokens, array $actual, bool $exact, string $context): array {
+        $required = count($sharedTokens) === 1 ? $sharedTokens[0] : array_values(array_intersect(...$sharedTokens));
+        $allowed = array_values(array_unique(array_merge(...$sharedTokens)));
+
+        if ($exact) {
+            $required = array_values(array_filter($required, fn (string $token) => $token !== ':count'));
+        }
+
+        $requiredLower = array_map('strtolower', $required);
+        $optionalLower = array_diff(array_map('strtolower', $allowed), $requiredLower);
+        $checked = array_values(array_filter($actual, fn (string $token) => ! in_array(strtolower($token), $optionalLower, true)));
+
+        return $this->comparePlaceholders($required, $checked, $context);
     }
 
     /**
@@ -172,6 +202,12 @@ final readonly class PlaceholderGuard {
 
         foreach ($everySegment as $token) {
             foreach ($perCandidateSegment as $index => $tokens) {
+                $marker = PluralRanges::marker($candidateSegments[$index]);
+
+                if ($token === ':count' && $marker !== null && PluralRanges::isExact($marker)) {
+                    continue;
+                }
+
                 if (! in_array($token, $tokens, true)) {
                     $segment = $index + 1;
                     $issues[] = Issue::error('placeholder_missing', "Placeholder $token is missing from segment $segment.");
@@ -199,9 +235,13 @@ final readonly class PlaceholderGuard {
         $ranges = $this->ranges($sourceSegments);
 
         if ($ranges !== []) {
-            $missing = array_diff($ranges, $this->ranges($candidateSegments));
+            return $this->rangeCoverage($sourceSegments, $candidateSegments);
+        }
 
-            return $missing === [] ? [] : [Issue::error('plural_range_missing', 'Plural ranges missing: '.implode(', ', $missing).'.')];
+        if (PluralRanges::allMarked($candidateSegments)) {
+            $gaps = PluralRanges::uncovered([0, PHP_INT_MAX], $this->intervals($candidateSegments));
+
+            return $gaps === [] ? [] : [Issue::error('plural_range_missing', 'Plural ranges leave out these counts: '.implode(', ', array_map(PluralRanges::describe(...), $gaps)).'.')];
         }
 
         $forms = PluralForms::count($locale);
@@ -220,6 +260,53 @@ final readonly class PlaceholderGuard {
         }
 
         return [];
+    }
+
+    /**
+     * Every count a source marker covers must be covered by some candidate marker; the
+     * markers themselves may differ. A source marker that isn't a readable range still
+     * has to appear as written.
+     *
+     * @param list<string> $sourceSegments
+     * @param list<string> $candidateSegments
+     * @return list<Issue>
+     */
+    private function rangeCoverage(array $sourceSegments, array $candidateSegments): array {
+        $covering = $this->intervals($candidateSegments);
+        $candidateMarkers = $this->ranges($candidateSegments);
+        $missing = [];
+
+        foreach ($this->ranges($sourceSegments) as $marker) {
+            $interval = PluralRanges::interval($marker);
+            $covered = $interval === null
+                ? in_array($marker, $candidateMarkers, true)
+                : PluralRanges::uncovered($interval, $covering) === [];
+
+            if (! $covered) {
+                $missing[] = $marker;
+            }
+        }
+
+        return $missing === [] ? [] : [Issue::error('plural_range_missing', 'Plural ranges missing: '.implode(', ', $missing).'.')];
+    }
+
+    /**
+     * @param list<string> $segments
+     * @return list<array{0: int, 1: int}>
+     */
+    private function intervals(array $segments): array {
+        $intervals = [];
+
+        foreach ($segments as $segment) {
+            $marker = PluralRanges::marker($segment);
+            $interval = $marker === null ? null : PluralRanges::interval($marker);
+
+            if ($interval !== null) {
+                $intervals[] = $interval;
+            }
+        }
+
+        return $intervals;
     }
 
     /**

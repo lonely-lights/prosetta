@@ -139,3 +139,33 @@ it('treats a pipe without plural markers or :count as literal text', function ()
         ->and(codes($guard->check('Home | :app', 'ホーム :app', 'ja')))->toBe(['pipe_count'])
         ->and($guard->check('Home | :app', 'ホーム :app', 'ja')[0]->severity)->toBe(Severity::Warning);
 });
+
+it('accepts plural ranges that cover the same counts with different markers', function () {
+    $guard = new PlaceholderGuard;
+    $source = '{0} No invitations left|{1} 1 invitation left|[2,*] :count invitations left';
+
+    expect($guard->check($source, '{0} لم تبقَ لديك دعوات|{1} بقيت لديك دعوة واحدة|{2} بقيت لديك دعوتان|[3,10] بقيت لديك :count دعوات|[11,*] بقيت لديك :count دعوة', 'ar'))->toBe([])
+        ->and($guard->check($source, '{0} 没有剩余邀请|[1,*] 还剩 :count 份邀请', 'zh-CN'))->toBe([]);
+});
+
+it('still reports counts the translated ranges leave out', function () {
+    $source = '{0} No invitations left|{1} 1 invitation left|[2,*] :count invitations left';
+    $issues = (new PlaceholderGuard)->check($source, '{0} لا دعوات|{1} دعوة واحدة|[3,*] :count دعوات', 'ar');
+
+    expect(codes($issues))->toBe(['plural_range_missing'])
+        ->and($issues[0]->message)->toContain('[2,*]');
+});
+
+it('lets a form for one exact count spell the number out instead of :count', function () {
+    $guard = new PlaceholderGuard;
+    $source = ':count day|:count days';
+
+    expect($guard->check($source, '{0} :count يوم|{1} يوم واحد|{2} يومان|[3,10] :count أيام|[11,*] :count يومًا', 'ar'))->toBe([])
+        ->and(codes($guard->check($source, '{0} :count يوم|{1} يوم واحد|{2} يومان|[3,10] أيام|[11,*] :count يومًا', 'ar')))->toBe(['placeholder_missing'])
+        ->and(codes($guard->check($source, '{1} يوم واحد|[3,*] :count أيام', 'ar')))->toBe(['plural_range_missing']);
+});
+
+it('still flags more plain plural forms than the language has', function () {
+    expect(codes((new PlaceholderGuard)->check(':count day|:count days', ':count 天|:count 天', 'zh-CN')))->toBe(['plural_segments_excess'])
+        ->and(codes((new PlaceholderGuard)->check(':count day|:count days', ':count 天', 'zh-CN')))->not->toContain('plural_segments_excess');
+});

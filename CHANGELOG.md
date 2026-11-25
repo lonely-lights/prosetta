@@ -4,6 +4,16 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-25
+
+### Fixed
+
+- Plural checks now ask which counts a translation covers, not whether it repeats the source's exact range markers. Arabic's `{0}|{1}|{2}|[3,10]|[11,*]` and Chinese's `{0}|[1,*]` both cover English's `{0}|{1}|[2,*]`, so they pass. A count the translation really leaves out is still `plural_range_missing`, named by the source marker it falls in. A fully marked translation of an unmarked source (`:count day|:count days`) must cover every count from 0 up.
+- A plural form for one exact count (`{1}`, `{2}`) may spell the number out instead of using `:count` (Arabic `{1} يوم واحد`, `{2} يومان`). Every other placeholder is still required in that form.
+- Placeholders in explicit plural forms are checked against every source form whose counts they share, so a language may split or merge ranges.
+
+Before, these correct translations stayed in review with errors, their approvals were lost on each `migrate:fresh`, and `prosetta:export` left them out of the generated files.
+
 ## [0.1.5] - 2026-11-07
 
 ### Fixed
@@ -71,7 +81,8 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/lonely-lights/prosetta/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/lonely-lights/prosetta/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/lonely-lights/prosetta/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/lonely-lights/prosetta/compare/v0.1.2...v0.1.3
