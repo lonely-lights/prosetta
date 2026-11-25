@@ -112,9 +112,9 @@ it('checks the locale on every action', function () {
 });
 
 it('bulk-approves every clean current candidate for a locale', function () {
-    $good = draftFor('identity::onboarding.toast.accessCode.capReached', 'es', 'Límite de :minutes minutos.');
-    $bad = draftFor('identity::onboarding.toast.accessCode.timedOut', 'es', 'x');
-    $bad->update(['issues' => [['code' => 'empty_value', 'severity' => 'error', 'message' => 'x']]]);
+    $good = draftFor('identity::onboarding.toast.accessCode.timedOut', 'es', 'El registro se pausó.');
+    $bad = draftFor('identity::onboarding.toast.accessCode.capReached', 'es', 'Sin marcador.');
+    $bad->update(['issues' => [['code' => 'placeholder_missing', 'severity' => 'error', 'message' => 'x']]]);
 
     $report = app(ReviewService::class)->approveClean('es', 'identity', by: $this->user());
 
@@ -129,4 +129,14 @@ it('authorizes every locale in a bulk approval before approving any', function (
     expect(fn () => app(ReviewService::class)->approve([$spanish->id, $arabic->id], $this->user()))
         ->toThrow(AuthorizationException::class)
         ->and($spanish->fresh()->status)->toBe(TranslationStatus::Draft);
+});
+
+it('re-checks stored issues before approving, so an improved guard releases a held candidate', function () {
+    $held = draftFor('identity::onboarding.toast.accessCode.capReached', 'es', 'Límite de :minutes minutos.');
+    $held->update(['issues' => [['code' => 'plural_range_missing', 'severity' => 'error', 'message' => 'from an older check']]]);
+
+    $report = app(ReviewService::class)->approveClean('es', 'identity', by: $this->user());
+
+    expect($report->approved)->toBe([$held->id])
+        ->and($held->refresh()->issues)->toBeNull();
 });

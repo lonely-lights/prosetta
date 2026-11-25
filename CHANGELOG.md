@@ -4,6 +4,14 @@ All notable changes to Prosetta are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-25
+
+### Fixed
+
+- Approving re-runs the guard instead of trusting the issues saved when the value was imported or drafted, so a candidate held by an older check is approved once the guard accepts it (and a stored verdict that's out of date is replaced).
+
+Before, translations held by 0.1.5's plural check stayed held after upgrading to 0.1.6, because approval read the stored issues.
+
 ## [0.1.6] - 2026-11-25
 
 ### Fixed
@@ -82,7 +90,8 @@ The first public release: a rebuild of Prosetta as a headless translation workfl
 
 - The Blade UI, the legacy file-writing services, the queue table and the statistics seeder.
 
-[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/lonely-lights/prosetta/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/lonely-lights/prosetta/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/lonely-lights/prosetta/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/lonely-lights/prosetta/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/lonely-lights/prosetta/compare/v0.1.3...v0.1.4
